@@ -229,19 +229,34 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 
 - Navigation is good, but not perfect - the buddy can still get stuck sometimes.
 - It will not follow you on a spacewalk, and it dies if it ends up in space.
-- Doors may misbehave during special events.
+- Sometimes, doors may not close behind NPCs.
 - Room names in the HUD are unreliable - you may see `Front_M00` for most of the ship. The game has no room volumes; a "room" is whichever doorway sensor you last walked through. Cosmetic only, and not fixable.
 
 ---
 
 ## Plans
 
-- Make meaningful room names instead of node numbers for buddy_goto.
-- Add translation into Russian and other languages.
-- Wear an EVA suit in a dangerous atmosphere, space walk through FuelStation (redrawn pilot suit texture is needed, since the game does not have an isolated suit skin for the player model, only as an item texture <_<).
-- Support for multiple NPCs.
-- Funny, strange, or scary events involving the NPC.
-- Converting the mod into a public library for NPC mods.
+**Priority 0 - Fixes**
+- Fix DebugVisuals. Switching works in the config, but not through the console.
+- Check the wall next to the ShipyardStation sales area that leads to the stairs. NavProbe doesn’t always seem to detect it.
+- Limit the number of trash boxes for sale at transit stations. The sales area for OxygenStation, SolarStation, and FuelStation is smaller than at ShipyardStation.
+
+**Priority 1 - Improvements**
+- Clean up the Debug HUD. Reduce the amount of information slightly or remove duplicates.
+- Use meaningful room names instead of node numbers for `buddy_goto`.
+- Remove redundant ladder checks. Not sure all of them are needed.
+- Add a `snack` command to BuddyDialogCommands. Also, It’s also worth comparing it to how often the player eats, I think 20 minutes is too long.
+- Improve footstep sounds. They can be heard from too far away, and they don’t change based on the floor under the NPC (need to determine which index corresponds to a specific floor in the serialized `footstepEvents` array).
+- Check optimization and profile navigation performance. In particular, consider changing how rooms adjacent to NPC are loaded.
+
+**Priority 2 - Major features**
+- Add support for multiple NPCs.
+- Add EVA suit support for dangerous atmospheres and space walks through FuelStation. A redrawn pilot suit texture is needed, since the game doesn’t have an isolated suit skin for the player model, only an item texture (I can't do that yet).
+- Convert the mod into a public library for NPC mods.
+
+**Priority 3 - Other**
+- Add Russian and other language translations.
+- Add funny, strange, or scary events involving the NPC.
 
 ---
 
@@ -253,3 +268,17 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 - If the AI needs improvement (the main focus is on navigation, the set of supported actions, and behavior).
 
 If you encounter bugs, please report them on the [issue tracker](https://github.com/bytenull1/yourbuddy-inhl/issues) (or the mod's discussion thread). You can also make changes to the mod yourself by creating a PR - see [CONTRIBUTING.md](CONTRIBUTING.md) for how to report bugs usefully, build, and test. Technical documentation is in [docs/](docs/README.md).
+
+---
+
+## Showcase
+
+[Watch the mod showcase on YouTube](https://www.youtube.com/watch?v=zlu82lW7UME)
+
+![The order window with the list of commands](docs/images/commands.png)
+
+![The buddy carrying a trash box to the sell station, with the HUD showing what it is thinking](docs/images/selling.png)
+
+![The buddy wandering along the nav graph, with debug visuals and the HUD enabled](docs/images/navigation.png)
+
+![The node editor overlay: nodes as blue crosses, connections as yellow lines](docs/images/node-map.png)
