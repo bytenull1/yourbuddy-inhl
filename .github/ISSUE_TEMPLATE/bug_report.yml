@@ -1,0 +1,38 @@
+name: Bug report
+description: The buddy did something wrong, got stuck, or the mod broke.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        More on capturing logs: [docs/logging.md](https://github.com/bytenull1/yourbuddy-inhl/blob/main/docs/logging.md).
+        Common symptoms and what to look for: [docs/troubleshooting.md](https://github.com/bytenull1/yourbuddy-inhl/blob/main/docs/troubleshooting.md).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and where
+      description: Station or ship, room, and what the buddy was doing (following, tidying, fleeing...). A screenshot with `buddy_hud on` helps a lot.
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Mod version (the log line "Loading [YourBuddy Mod x.y.z]") and game version.
+      placeholder: YourBuddy 1.0.7, Isolated Inhale v0.8.9
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        In the game console run `debug_level 2`, reproduce the problem, then attach `BepInEx/LogOutput.log`.
+        If you can, trim it first: `python tools/trimlog.py BepInEx/LogOutput.log --fold > capture.txt`,
+        and add a note in the file where things went wrong ("here it walks into the wall").
+      placeholder: Drag the log file here.
+    validations:
+      required: true
