@@ -241,6 +241,7 @@ namespace YourBuddy
                             plan = null;
                             navPlan = null;
                             navPathIndex = 0;
+                            routeSkippedWaypoint = false;
                             entryBlockedCount = 0;
                             entryBlockedWindowStart = Time.time;
                         }
@@ -261,6 +262,8 @@ namespace YourBuddy
                             {
                                 navPlan = plan;
                                 navPathIndex = 0;
+                                // A plan walked from the top has skipped nothing yet.
+                                routeSkippedWaypoint = false;
                             }
                             navPathGoal = goal;
                             hasNavPathGoal = true;
@@ -690,6 +693,7 @@ namespace YourBuddy
                     wanderPickFailures = 0;
                     navPlan = plan;
                     navPathIndex = 0;
+                    routeSkippedWaypoint = false;
                     return true;
                 }
 
@@ -780,8 +784,26 @@ namespace YourBuddy
             return toWaypoint.normalized * moveSpeed;
         }
 
+        /// <summary>
+        /// Abandons the waypoint underway. A route that runs out this way did not arrive,
+        /// so FinishRoute must not call it done: docs/invariants.md#a-skipped-waypoint-is-not-an-arrival
+        /// </summary>
+        private void SkipRouteWaypoint(string why)
+        {
+            routeSkippedWaypoint = true;
+            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1 && navPlan is { } plan && navPathIndex < plan.Count)
+            {
+                YourBuddyPlugin.Log.LogInfo(
+                    $"[ai] Skipping waypoint {navPathIndex + 1}/{plan.Count} at {plan[navPathIndex]:0.0} - {why}");
+            }
+            navPathIndex++;
+        }
+
         private void FinishRoute()
         {
+            // Every waypoint was skipped rather than reached: the buddy is not there.
+            bool abandoned = routeSkippedWaypoint && navPathIndex > 0;
+            Vector3 goal = routeGoal;
             DropPlan();
             DropReachTask();
             // Arriving is what a goto order asked for, so it ends here. docs/behaviour.md
@@ -790,6 +812,14 @@ namespace YourBuddy
             mode = ModeAfterTask;
 
             decideAt = 0f;
+            if (abandoned)
+            {
+                YourBuddyPlugin.Log.LogWarning(
+                    $"[ai] Gave up on the route to {goal:0.0} - the last waypoint could not be reached" +
+                    (ordered ? " (the goto order is not done)" : "") + ", switching to " + mode + " mode");
+                return;
+            }
+
             YourBuddyPlugin.Log.LogInfo("[ai] Route finished" + (ordered ? " (the goto order is done)" : "") +
                                         ", switching to " + mode + " mode");
         }
@@ -813,6 +843,7 @@ namespace YourBuddy
 
             navPlan = plan;
             navPathIndex = 0;
+            routeSkippedWaypoint = false;
             routeGoal = goal;
             mode = BuddyMode.Route;
             YourBuddyPlugin.Log.LogInfo($"[ai] Walking path ({plan.Count} waypoints)");
@@ -845,6 +876,7 @@ namespace YourBuddy
             hasNavPathGoal = false;
             entryBlockedCount = 0;
             hasLastDepartedWaypoint = false;
+            routeSkippedWaypoint = false;
         }
 
         private bool HasRoute()

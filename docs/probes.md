@@ -42,13 +42,20 @@ hit collider
        LocalAxes: |depth| >= GateOpeningHalfDepth ... next gate
                   across = |dot(delta, right)|
        else:      across = XZ distance to the gate
-       across < HalfWidth ........................... ignore (audited)
+       across >= HalfWidth .......................... next gate
+       chord given and it crosses the gate's plane
+         outside the opening ........................ next gate (audited)
+       else ......................................... ignore (audited)
      no gate matched ................................ SOLID
 ```
 
+The **chord** is the whole line a sight probe is testing, passed only by `WalkLos` and `ThinLos`.
+Without it the hit point alone decides, which lets a line clip a doorway's jamb and cross the wall
+beside it unseen ([a-doorway-is-crossed-not-grazed](invariants.md#a-doorway-is-crossed-not-grazed)).
+
 | Caller | Entry point | Notes |
 |---|---|---|
-| `WalkLos`, `ThinLos` | `IsEdgeProbeIgnorable` | `requireOpenGate: false` - doors open at walk time |
+| `WalkLos`, `ThinLos` | `IsEdgeProbeIgnorable` + chord | `requireOpenGate: false` - doors open at walk time |
 | `TryFloor` | `IsBodyCollider`, then `IsEdgeProbeIgnorable` | the full filter picks the preferred floor; the highest solid hit is the fallback ([doorway-floor-survives-the-filter](invariants.md#doorway-floor-survives-the-filter)) |
 | `TryAnyLayerFloor` | `IsBodyCollider` | bodies only |
 | `CanSee` | `IsBodyCollider`, then `IsDoorGeometryNearOpenGate` | shut gates checked before the cast |
@@ -197,6 +204,14 @@ At `debug_level 2`:
           doorway, this gate's opening is too wide.
   ```
 
+- every chord-test rejection is logged the same way, and names the doorway the buddy will now walk
+  around rather than through:
+
+  ```
+  [probe] Gate-frame rule keeping a hit on 'BlockWall' 0,62m across gate 'Door02'
+          (opening 0,85m): the line only grazes the jamb and crosses the wall elsewhere.
+  ```
+
 - a **gate inventory** is dumped after each gate rescan, and by `buddy_gates`:
 
   ```
@@ -215,6 +230,7 @@ Start with `buddy_gates`.
 | Symptom | Look for | Meaning |
 |---|---|---|
 | walks **through** a wall | `FindPath: goal is …m and clear`, then the audit naming that wall | some gate's opening reaches it |
+| paces at a wall **beside** a doorway, on a plan whose leg crosses it diagonally | a `keeping a hit` line for that wall and gate | the chord test is doing its job; the plan predates it, or the leg is genuinely the only one |
 | paces in front of an **open** doorway | `Blocked by '…' … distance 0,3` at the door; waypoints beyond it barred | that gate carves nothing, or too little |
 
 A door reported with `0 leaves` means the passage test misfired. A passage that still fails needs a

@@ -20,6 +20,8 @@ often the answer.
 | `[nav] FindPath: no clear entry seed, falling back to nearest active node` repeated | it keeps entering the route somewhere it can't walk to | [entry-seeds-on-own-deck](invariants.md#entry-seeds-on-own-deck) |
 | `[ai] Stuck near … while moving to …` with `[ai] Blocked by '…'` nearby | a collider is in the way; the `Blocked by` line names it | [navigation.md §5](navigation.md#recovery-ladder) |
 | `[ai] Stuck but nothing blocking ahead - AI logic issue` | it wants to move and nothing blocks it - a planning bug, worth a report | [navigation.md §5](navigation.md#recovery-ladder) |
+| `[ai] Blocked by '…Walls/…'` beside a doorway, then `[ai] Gave up on the route to …` | the plan's leg crossed the wall next to the door, not the door | [a-doorway-is-crossed-not-grazed](invariants.md#a-doorway-is-crossed-not-grazed) |
+| `[ai] Skipping waypoint N/M at …` more than once on one plan | recovery is eating the plan; the route will end as a failure, not an arrival | [a-skipped-waypoint-is-not-an-arrival](invariants.md#a-skipped-waypoint-is-not-an-arrival) |
 | `[ai] Cannot reach the player right now, stepping off` repeating | the step-off keeps firing without a new route | [step-off-applies-in-every-mode](invariants.md#step-off-applies-in-every-mode) |
 | nothing at all while it stands on furniture | a perched stall | [idle-above-the-floor-plane-is-a-stall](invariants.md#idle-above-the-floor-plane-is-a-stall) |
 

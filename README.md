@@ -239,15 +239,16 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 **Priority 0 - Fixes**
 - [x] Fix DebugVisuals. Switching works in the config, but not through the console.
 - [x] Fix the sell task: limit trash boxes for intermediate stations, order from player ignores skip list, more precise placement, sales queue. Fix the physics and overall levitation.
-- [ ] Check the wall next to the ShipyardStation sales area that leads to the stairs. NavProbe doesn’t always seem to detect it.
+- [x] Check the wall next to the ShipyardStation sales area that leads to the stairs. NavProbe doesn’t always seem to detect it.
 
 **Priority 1 - Improvements**
 - [ ] Clean up the Debug HUD. Reduce the amount of information slightly or remove duplicates, move HUD to the background so it doesn't cover the console.
 - [ ] Use meaningful room names instead of node numbers for `buddy_goto`.
 - [ ] Add a `snack` command to BuddyDialogCommands. Need comparing it to how often the player eats, I think 20 minutes is too long.
+- [ ] Simplify NodeEditor. Automatic connections and connections like Block and Priority should be removed, as they are inefficient, outdated workarounds, or unused functionality.
 - [ ] Improve footstep sounds. They can be heard from too far away, and they don’t change based on the floor under the NPC. Need to determine which index corresponds to a specific floor in the serialized `footstepEvents` array.
 - [ ] Experiment with longer distance tasks. If stability is low, add intermediate logistics points to the planning.
-- [ ] Remove redundant ladder checks. Not sure all of them are needed.
+- [ ] Remove redundant stairs checks. Not sure all of them are needed.
 - [ ] Check optimization and analyze performance. In particular, consider changing how rooms adjacent to NPC are loaded.
 
 **Priority 2 - Major features**

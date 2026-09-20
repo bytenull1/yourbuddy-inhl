@@ -366,7 +366,7 @@ namespace YourBuddy
                 // Give up on unreachable goals after a while.
                 if (mode == BuddyMode.Route && stuckSeconds > 2.4f && HasRoute())
                 {
-                    navPathIndex++;
+                    SkipRouteWaypoint("stuck against something");
                     stuckSeconds = 0f;
                 }
                 else if (mode == BuddyMode.Wander && stuckSeconds > 2.4f)
@@ -477,7 +477,7 @@ namespace YourBuddy
                 }
                 else if (mode == BuddyMode.Route && HasRoute())
                 {
-                    navPathIndex++;
+                    SkipRouteWaypoint("no progress toward it");
                     noProgressSeconds = 0f;
                 }
                 else if (mode == BuddyMode.Flee && fleePhase == FleePhase.Retreat)

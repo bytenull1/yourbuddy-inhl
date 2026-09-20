@@ -242,7 +242,11 @@ reasons and empty searches at level 2 (every 15 s).
 [mind] Order 'Stay' expired after 90s - deciding for myself again
 [mind] Order 'Follow' revoked - deciding for myself
 [ai] Route finished (the goto order is done), switching to Follow mode
+[ai] Gave up on the route to (7.4, 1.0, 30.6) - the last waypoint could not be reached (the goto order is not done), switching to Follow mode
 ```
+
+A route ends one of those two ways, never both: a plan whose waypoints were skipped rather than
+reached did not arrive ([a-skipped-waypoint-is-not-an-arrival](invariants.md#a-skipped-waypoint-is-not-an-arrival)).
 
 A `Chose` with no `Decided:` after it, then another `Chose`, is an impossible urge being redrawn; the
 level-2 line between says why.

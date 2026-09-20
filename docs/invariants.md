@@ -210,6 +210,23 @@ size-based passage tests - all three were tried ([known-issues.md](known-issues.
 
 **Enforced in.** `NavProbe.MeasureOpening`, `HitIsGateOpening`.
 
+### a-doorway-is-crossed-not-grazed
+
+**Rule.** For `WalkLos` and `ThinLos`, a hit is forgiven by the carve-out only when the **whole
+line under test** crosses the gate's plane inside the opening. A line whose ends lie on the same
+side never passes through, so its hit point alone decides. `TryFloor` (vertical casts) and the
+whiskers (probes that stop in the doorway) keep the point-only test.
+
+**Why.** The carve-out is wider than the hole it stands for - a station doorway is 1.25 m across
+and the slot is 1.70 m - and the wall blocks beside it are 1.25 m deep. The jamb face therefore
+lies *inside* the slot along its whole depth. A line that clips that face reports its one entry
+hit there, Unity reports nothing for the sub-casts that start inside the block, and 1.5 m of solid
+wall becomes invisible. A\* then buys a straight finish leg through the wall, and the buddy paces
+in front of it. Widening the hit-point test cannot fix this: the hit point is genuinely in the
+opening. Only the line's own crossing tells doorway from jamb.
+
+**Enforced in.** `NavProbe.ChordCrossesOpening`, `HitIsGateOpening`, `WalkLos`, `ThinLos`.
+
 ### doorway-floor-survives-the-filter
 
 **Rule.** When the edge filter rejects every hit, the floor probe falls back to the highest solid
@@ -486,6 +503,19 @@ consume a stair node from above and hand over a leg the buddy was off - the `Shi
 flight only ever failed going down for this reason.
 
 **Enforced in.** `BuddyBehaviour.AdvancePastReachedWaypoints`.
+
+### a-skipped-waypoint-is-not-an-arrival
+
+**Rule.** A Route waypoint abandoned for being unreachable marks the plan. When such a plan runs
+out of waypoints, the route ends as a failure - a warning naming the goal, and an order that is
+reported *not* done. Only a plan walked to its end is an arrival.
+
+**Why.** Stuck and no-progress recovery skip the waypoint underway. Skipping the last one falls
+straight into `FinishRoute`, which said "the goto order is done" and cleared the order, so a
+buddy that never left the wall it was pacing reported success. A recovery that hides a wrong plan
+is how the [gate carve-out](known-issues.md#the-gate-carve-out) stayed hidden once already.
+
+**Enforced in.** `BuddyBehaviour.SkipRouteWaypoint`, `FinishRoute`, `DropPlan`, `StartRoute`.
 
 ### a-stair-leg-is-walked-not-improvised
 

@@ -615,6 +615,29 @@ namespace YourBuddy
         }
 
         /// <summary>
+        /// The other half of the audit: a hit that sits in the opening but whose line
+        /// passes through the wall beside it. This is the doorway the buddy will now
+        /// walk around rather than through, so it is as worth reading as an ignore.
+        /// docs/invariants.md#a-doorway-is-crossed-not-grazed
+        /// </summary>
+        private static void AuditGateFrameGraze(Collider collider, Gate gate, float across, float allowed)
+        {
+            if (YourBuddyPlugin.ConfigDebugLevel.Value < 2) return;
+
+            string name = collider.gameObject.name;
+            string key = "graze|" + name + "|" + gate.gameObject.name;
+            if (AuditLoggedAt.TryGetValue(key, out float last) && Time.time - last < AuditPairCooldown) return;
+            if (AuditLoggedAt.Count >= AuditMaxPairs) AuditLoggedAt.Clear();
+
+            AuditLoggedAt[key] = Time.time;
+            YourBuddyPlugin.Log.LogInfo(
+                "[probe] Gate-frame rule keeping a hit on '" + name + "' " +
+                across.ToString("0.00") + "m across gate '" + gate.gameObject.name +
+                "' (opening " + allowed.ToString("0.00") + "m): the line only grazes " +
+                "the jamb and crosses the wall elsewhere.");
+        }
+
+        /// <summary>
         /// One line per gate: what the carve-out rule decided, and from what. Dumped once
         /// after each rescan of the gate set, and on demand from 'buddy_gates'.
         /// </summary>
@@ -697,11 +720,56 @@ namespace YourBuddy
         }
 
         /// <summary>
+        /// The whole line a line-of-sight probe is testing, so the carve-out can ask
+        /// where that line crosses a gate as well as where it touched a collider.
+        /// docs/invariants.md#a-doorway-is-crossed-not-grazed
+        /// </summary>
+        private readonly struct ProbeChord
+        {
+            internal readonly Vector3 From;
+            internal readonly Vector3 To;
+
+            internal ProbeChord(Vector3 from, Vector3 to)
+            {
+                From = from;
+                To = to;
+            }
+        }
+
+        /// <summary>
+        /// True when the line crosses this gate's plane inside its opening, or never
+        /// crosses it at all - a probe that stops short of the wall has only its hit
+        /// point to be judged by. docs/invariants.md#a-doorway-is-crossed-not-grazed
+        /// </summary>
+        private static bool ChordCrossesOpening(ProbeChord chord, GateProbe g)
+        {
+            // A cylinder carve-out (an unmeasured gate) has no passage plane to cross.
+            if (!g.Opening.LocalAxes) return true;
+
+            Vector3 fromDelta = chord.From - g.Position;
+            Vector3 toDelta = chord.To - g.Position;
+            float fromDepth = Vector3.Dot(fromDelta, g.Forward);
+            float toDepth = Vector3.Dot(toDelta, g.Forward);
+            // Both ends the same side of the wall: this line does not pass through here.
+            if (fromDepth * toDepth > 0f) return true;
+
+            float span = fromDepth - toDepth;
+            if (Mathf.Abs(span) < 0.0001f) return true;
+
+            float t = fromDepth / span;
+            float across = Mathf.Abs(Mathf.Lerp(Vector3.Dot(fromDelta, g.Right),
+                Vector3.Dot(toDelta, g.Right), t));
+            return across < g.Opening.HalfWidth;
+        }
+
+        /// <summary>
         /// True when the point a probe touched is doorway rather than wall. `hitPoint`
         /// Must be the cast's contact point (docs/invariants.md#gate-frame-hit-point);
-        /// `requireOpenGate` is what the whiskers want, edge probes pass false.
+        /// `requireOpenGate` is what the whiskers want, edge probes pass false. `chord`
+        /// is the whole line under test, which a wall grazed at its jamb fails.
         /// </summary>
-        private static bool HitIsGateOpening(Collider collider, Vector3 hitPoint, bool requireOpenGate)
+        private static bool HitIsGateOpening(Collider collider, Vector3 hitPoint, bool requireOpenGate,
+            ProbeChord? chord = null)
         {
             EnsureFrameGates();
 
@@ -731,6 +799,16 @@ namespace YourBuddy
 
                 if (across >= g.Opening.HalfWidth) continue;
 
+                // The hit point is in the opening, but the line it came from may only
+                // have clipped the jamb on its way into the wall beside it: a thick
+                // block's jamb face lies inside the carve-out along its whole depth.
+                // docs/invariants.md#a-doorway-is-crossed-not-grazed
+                if (chord is { } line && !ChordCrossesOpening(line, g))
+                {
+                    AuditGateFrameGraze(collider, g.Gate, across, g.Opening.HalfWidth);
+                    continue;
+                }
+
                 AuditGateFrameIgnore(collider, g.Gate, across, g.Opening.HalfWidth);
                 return true;
             }
@@ -752,7 +830,8 @@ namespace YourBuddy
         /// restriction volumes, passable interfaces, door leaves, and hits inside a
         /// doorway. `hitPoint` is the cast's contact point.
         /// </summary>
-        private static bool IsEdgeProbeIgnorable(Collider collider, Vector3 hitPoint)
+        private static bool IsEdgeProbeIgnorable(Collider collider, Vector3 hitPoint,
+            ProbeChord? chord = null)
         {
             if (collider == null) return true;
 
@@ -771,7 +850,7 @@ namespace YourBuddy
 
             // Frame proxies around a gate. Judged per hit point, so a wall that merely
             // Parents a gate keeps blocking everywhere except at its doorway.
-            return HitIsGateOpening(collider, hitPoint, requireOpenGate: false);
+            return HitIsGateOpening(collider, hitPoint, requireOpenGate: false, chord);
         }
 
         /// <summary>
@@ -862,6 +941,9 @@ namespace YourBuddy
             Vector3 dir = delta / dist;
 
             int steps = Mathf.Max(1, Mathf.CeilToInt(dist / GroundSampleStep));
+            // The whole line, not this sample: the sub-cast that grazes a jamb usually
+            // stops short of the door's own plane.
+            ProbeChord chord = new(kneeA, kneeB);
             Vector3 previous = kneeA;
             for (int s = 1; s <= steps; s++)
             {
@@ -874,7 +956,7 @@ namespace YourBuddy
                         ProbeLayers, QueryTriggerInteraction.Ignore);
                     for (int i = 0; i < count; i++)
                     {
-                        if (IsEdgeProbeIgnorable(LosHits[i].collider, ContactPoint(LosHits[i], previous))) continue;
+                        if (IsEdgeProbeIgnorable(LosHits[i].collider, ContactPoint(LosHits[i], previous), chord)) continue;
                         // A tread or a ramp underfoot is not a wall.
                         if (LosHits[i].distance > 0f &&
                             Vector3.Angle(LosHits[i].normal, Vector3.up) <= MaxWalkableSlope)
@@ -1088,6 +1170,9 @@ namespace YourBuddy
 
             float stepLen = Mathf.Clamp(dist / 8f, 1f, 4f);
             int steps = Mathf.Max(1, Mathf.CeilToInt(dist / stepLen));
+            // The whole line, not this sample: the sub-cast that grazes a jamb usually
+            // stops short of the door's own plane.
+            ProbeChord chord = new(eyeA, eyeB);
             Vector3 prevEye = eyeA;
             for (int s = 1; s <= steps; s++)
             {
@@ -1100,7 +1185,7 @@ namespace YourBuddy
                         ProbeLayers, QueryTriggerInteraction.Ignore);
                     for (int i = 0; i < count; i++)
                     {
-                        if (IsEdgeProbeIgnorable(LosHits[i].collider, ContactPoint(LosHits[i], prevEye))) continue;
+                        if (IsEdgeProbeIgnorable(LosHits[i].collider, ContactPoint(LosHits[i], prevEye), chord)) continue;
 
                         return false;
                     }

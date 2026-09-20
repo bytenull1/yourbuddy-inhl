@@ -258,6 +258,24 @@ At `debug_level 2`:
 - **identical repeated lines with a frozen `buddy`** - a commitment livelock
   ([one-entry-predicate](invariants.md#one-entry-predicate)).
 
+### Log coordinates are world, stored ones are owner-local
+
+A node's stored `P` is local to its owner (`OwnerSnapshot.WorldOf` puts it through
+`OwnerTransform`); every log line prints world. **The offset between the two is not the one the
+scene file was authored with** - captures taken at a station disagree with the authored placement,
+and with each other. Never map a capture onto scene or node coordinates by assuming it.
+
+Two ways to anchor a capture:
+
+- **`buddy_gates`** prints every gate's live **world** position. Any gate whose local position the
+  scene gives you then fixes the offset for that moment.
+- **the seed distances** - `#241(1,4m, -0,1y)` is `Vector3.Distance(start, world[id])`. Four or
+  five seeds fix the start point in owner-local space from a capture you already have.
+
+Better still, prefer conclusions that need no offset at all. Node-to-node distances, which wall a
+leg crosses, and `total Xm via #A -> goal` (which decomposes as `dist(start, #A) +
+GoalCost(#A, goal)`) are all frame-independent.
+
 Stair legs add:
 
 ```

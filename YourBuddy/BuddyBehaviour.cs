@@ -64,6 +64,11 @@ namespace YourBuddy
         // docs/invariants.md#force-and-priority-have-no-los
         private BuddyNodeGraph.NavPath? navPlan = null;
         private int navPathIndex = 0;
+        /// <summary>
+        /// A waypoint on this plan was abandoned rather than reached, so running out of
+        /// waypoints is a failure: docs/invariants.md#a-skipped-waypoint-is-not-an-arrival
+        /// </summary>
+        private bool routeSkippedWaypoint = false;
         private float navPathRecalcAt = 0f;
         private bool hasNavPathGoal = false;
 
