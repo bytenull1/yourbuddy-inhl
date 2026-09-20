@@ -237,8 +237,8 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 ## Plans
 
 **Priority 0 - Fixes**
-- [ ] Fix DebugVisuals. Switching works in the config, but not through the console.
-- [ ] Limit the number of trash boxes for sale at transit stations. The sales area for OxygenStation, SolarStation, and FuelStation is smaller than at ShipyardStation.
+- [x] Fix DebugVisuals. Switching works in the config, but not through the console.
+- [x] Fix the sell task: limit trash boxes for intermediate stations, order from player ignores skip list, more precise placement, sales queue. Fix the physics and overall levitation.
 - [ ] Check the wall next to the ShipyardStation sales area that leads to the stairs. NavProbe doesn’t always seem to detect it.
 
 **Priority 1 - Improvements**

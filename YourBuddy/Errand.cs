@@ -117,7 +117,16 @@ namespace YourBuddy
             string? busy = Body.BusyForCommand();
             if (busy != null) return busy;
 
-            return TryStart(out string report) ? "Buddy " + report : refused + report;
+            // An order is not held back by what failed or was skipped earlier.
+            Skips.Ignore = true;
+            try
+            {
+                return TryStart(out string report) ? "Buddy " + report : refused + report;
+            }
+            finally
+            {
+                Skips.Ignore = false;
+            }
         }
 
         /// <summary>

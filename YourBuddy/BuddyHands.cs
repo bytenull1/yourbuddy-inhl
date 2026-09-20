@@ -99,7 +99,45 @@ namespace YourBuddy
             reachTo = null;
             reachSpeed = 0f;
             Item = item;
+            // Resting items are kinematic: whatever lay on this one would hover. The game wakes them when
+            // the player takes an item (EquipmentSystem), and the colliders are already off.
+            item.AwakeNearItems();
+            if (measured) WakeStackedOn(item, bounds);
             return true;
+        }
+
+        /// <summary>
+        /// AwakeNearItems only reaches what the item's own detector zone covers, so a box on top may stay
+        /// frozen in mid-air. Everything resting on `taken`'s old place - and on that in turn - is woken,
+        /// and its body with it: a sleeping body is not woken by the collider under it going away.
+        /// </summary>
+        private void WakeStackedOn(Grabbable taken, Bounds bounds)
+        {
+            const int maxItems = 16;
+            const float side = 0.04f;
+            const float above = 0.15f;
+            List<Grabbable> woken = [taken];
+            Queue<Bounds> below = new();
+            below.Enqueue(bounds);
+            while (below.Count > 0 && woken.Count < maxItems)
+            {
+                Bounds under = below.Dequeue();
+                Vector3 halfExtents = new(under.extents.x + side, above * 0.5f, under.extents.z + side);
+                Vector3 centre = new(under.center.x, under.max.y + above * 0.5f - 0.02f, under.center.z);
+                foreach (Collider collider in Physics.OverlapBox(centre, halfExtents, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    Grabbable? other = collider.GetComponentInParent<Grabbable>();
+                    if (other == null || woken.Contains(other) || other.restrictGrab || other.IsGrabbed) continue;
+
+                    woken.Add(other);
+                    // Bounds before it starts to fall: whatever lies on it is next.
+                    if (Items.ColliderBounds(other.gameObject, out Bounds next)) below.Enqueue(next);
+
+                    other.AwakePhysics();
+                    Rigidbody rb = other.CachedRigidbody;
+                    if (!rb.isKinematic) rb.WakeUp();
+                }
+            }
         }
 
         /// <summary>

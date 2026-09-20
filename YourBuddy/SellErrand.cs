@@ -37,8 +37,18 @@ namespace YourBuddy
         /// </summary>
         private const int SellMaxBoxes = 4;
         private const int SellZoneMaxItems = 4;
+        /// <summary>
+        /// The transit stations' sales area (Oxygen, Solar, Fuel) is smaller than the Shipyard's: fewer boxes at once.
+        /// </summary>
+        private const int SellMaxBoxesTransit = 2;
         private static readonly float[] SellLoadStandOffs = [1.35f, 1.6f];
         private const float SellLoadReach = 1.8f;
+        /// <summary>
+        /// Slots for boxes in the zone: clear of its walls, apart from each other, and let go this high above the floor or the box below.
+        /// </summary>
+        private const float SellSlotMargin = 0.02f;
+        private const float SellSlotGap = 0.02f;
+        private const float SellDropHeight = 0.03f;
         /// <summary>
         /// Loading: held in the zone until the ItemDetector lists it, at most this long; then let go and left to settle.
         /// </summary>
@@ -110,6 +120,21 @@ namespace YourBuddy
             }
 
             public bool Holds(Grabbable item) => Detector.Items.Contains(item);
+
+            /// <summary>
+            /// Boxes per run: SellMaxBoxes at the Shipyard, fewer at the transit stations, whose stations live
+            /// under a root named for them (StaticObjects/OxygenStationParts, ...); the Shipyard's is ShipyardStationParts.
+            /// </summary>
+            public int MaxBoxes => InShipyard() ? SellMaxBoxes : SellMaxBoxesTransit;
+
+            private bool InShipyard()
+            {
+                for (Transform? t = Station.transform; t != null; t = t.parent)
+                {
+                    if (t.name.StartsWith("ShipyardStationParts")) return true;
+                }
+                return false;
+            }
 
             /// <summary>
             /// The box stands in the cage whether or not the ItemDetector noticed it: its list only
@@ -232,6 +257,10 @@ namespace YourBuddy
             /// Where the held box is going in the item zone; it is let go only once there.
             /// </summary>
             public Vector3 DropPoint;
+            /// <summary>
+            /// How the box lies when let go: square to the zone, whichever way the buddy turns meanwhile.
+            /// </summary>
+            public Quaternion DropRotation = Quaternion.identity;
 
             public SellStationParts Parts => Run.Parts;
             /// <summary>
@@ -394,7 +423,7 @@ namespace YourBuddy
         private static SellRun BuildSellRun(SellStationParts parts, Grabbable first)
         {
             SellRun run = new(parts);
-            int room = Mathf.Min(SellMaxBoxes, SellZoneMaxItems - parts.Detector.Items.Count);
+            int room = Mathf.Min(parts.MaxBoxes, SellZoneMaxItems - parts.Detector.Items.Count);
             foreach (SellCandidate other in SellCandidates)
             {
                 if (other.Box == null) continue;
@@ -580,7 +609,14 @@ namespace YourBuddy
                     {
                         if (!WaitForStation(task, task.Parts.Gate.FullyOpened ? null : "its gate to open")) return Face(task);
 
-                        task.DropPoint = LoadDropPoint(task);
+                        if (!LoadPlacement(task, out Vector3 dropPoint, out Quaternion dropRotation))
+                        {
+                            AbandonBox(task, "leaving the trash box - there is no room for it in the sell station", SellRetrySeconds);
+                            return Vector3.zero;
+                        }
+                        task.DropPoint = dropPoint;
+                        task.DropRotation = dropRotation;
+                        Body.Hands.Turn(dropRotation);
                         Body.Hands.ReachTo(task.DropPoint);
                         task.Phase = SellPhase.Hold;
                         task.PhaseUntil = Time.time + SellLoadSeconds;
@@ -589,6 +625,7 @@ namespace YourBuddy
                     PressButton(task);
                     break;
                 case SellPhase.Hold:
+                    Body.Hands.Turn(task.DropRotation);
                     // Listed from the first touch of the zone's edge: let go only at the drop point, or
                     // the box can rest across the edge, under the closing gate's AntiCrasher.
                     if (task.Parts.Holds(task.Box) && Body.Hands.DistanceTo(task.DropPoint) < SellDropArrival)
@@ -652,17 +689,79 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Low enough in the zone that it rests on the station's floor, pulled toward the buddy so the reach is short.
+        /// Where the box is let go and how it lies: upright and square to the zone, in the first free slot
+        /// of a grid of box footprints (stacked when the zone is tall enough). A box across the zone's edge or
+        /// at an angle is not sold - the transit stations' zone is a 0.5 m cube, a box 0.375 x 0.25 m. docs/items.md §4
         /// </summary>
-        private Vector3 LoadDropPoint(SellTask task)
+        private bool LoadPlacement(SellTask task, out Vector3 point, out Quaternion rotation)
         {
             Bounds zone = task.Parts.Zone.bounds;
-            Vector3 toBuddy = Here - zone.center;
-            toBuddy.y = 0f;
-            float inset = Mathf.Min(zone.extents.x, zone.extents.z) * 0.4f;
-            Vector3 point = zone.center + (toBuddy.sqrMagnitude > 0.0001f ? toBuddy.normalized * inset : Vector3.zero);
-            point.y = Mathf.Min(zone.center.y, zone.min.y + Body.Hands.Extents.y + 0.1f);
-            return point;
+            Vector3 size = BoxSize(task.Box);
+            // Long side along x (yaw 0) or along z (yaw 90): whichever the zone takes more boxes in.
+            int cellsX = Mathf.FloorToInt((zone.size.x - 2f * SellSlotMargin + SellSlotGap) / (size.x + SellSlotGap));
+            int cellsZ = Mathf.FloorToInt((zone.size.z - 2f * SellSlotMargin + SellSlotGap) / (size.z + SellSlotGap));
+            int turnedX = Mathf.FloorToInt((zone.size.x - 2f * SellSlotMargin + SellSlotGap) / (size.z + SellSlotGap));
+            int turnedZ = Mathf.FloorToInt((zone.size.z - 2f * SellSlotMargin + SellSlotGap) / (size.x + SellSlotGap));
+            bool turned = turnedX * turnedZ > cellsX * cellsZ;
+            rotation = Quaternion.Euler(0f, turned ? 90f : 0f, 0f);
+            Vector3 footprint = turned ? new Vector3(size.z, size.y, size.x) : size;
+            int columns = turned ? turnedX : cellsX;
+            int rows = turned ? turnedZ : cellsZ;
+            int layers = Mathf.FloorToInt((zone.size.y + SellSlotGap) / (size.y + SellSlotGap));
+            point = default;
+            if (columns < 1 || rows < 1 || layers < 1) return false;
+
+            // Free of the boxes already in the zone, the nearest to the buddy first: lowest layer, then the short reach.
+            List<Bounds> taken = [];
+            foreach (Grabbable other in task.Run.Loaded) AddTaken(taken, other, task.Box);
+            foreach (Grabbable other in task.Parts.Detector.Items) AddTaken(taken, other, task.Box);
+
+            float bestReach = float.MaxValue;
+            bool found = false;
+            for (int layer = 0; layer < layers && !found; layer++)
+            {
+                for (int column = 0; column < columns; column++)
+                {
+                    for (int row = 0; row < rows; row++)
+                    {
+                        Vector3 centre = new(
+                            zone.center.x + (column - (columns - 1) * 0.5f) * (footprint.x + SellSlotGap),
+                            zone.min.y + footprint.y * 0.5f + layer * (footprint.y + SellSlotGap) + SellDropHeight,
+                            zone.center.z + (row - (rows - 1) * 0.5f) * (footprint.z + SellSlotGap));
+                        Bounds slot = new(centre, footprint - Vector3.one * 0.02f);
+                        if (taken.Exists(other => other.Intersects(slot))) continue;
+
+                        float reach = FlatDistanceSq(centre, Here);
+                        if (reach >= bestReach) continue;
+
+                        bestReach = reach;
+                        point = centre;
+                        found = true;
+                    }
+                }
+            }
+            return found;
+        }
+
+        private static void AddTaken(List<Bounds> taken, Grabbable other, Grabbable self)
+        {
+            if (other == null || other == self || !ColliderBounds(other.gameObject, out Bounds bounds)) return;
+
+            taken.Add(bounds);
+        }
+
+        /// <summary>
+        /// The box's own size, turned or not: its collider's, scaled.
+        /// </summary>
+        private static Vector3 BoxSize(Grabbable box)
+        {
+            BoxCollider? collider = box.GetComponentInChildren<BoxCollider>();
+            if (collider != null)
+            {
+                Vector3 scale = collider.transform.lossyScale;
+                return new Vector3(collider.size.x * Mathf.Abs(scale.x), collider.size.y * Mathf.Abs(scale.y), collider.size.z * Mathf.Abs(scale.z));
+            }
+            return ColliderBounds(box.gameObject, out Bounds bounds) ? bounds.size : new Vector3(0.375f, 0.1875f, 0.25f);
         }
 
         /// <summary>
@@ -773,8 +872,18 @@ namespace YourBuddy
                 Player? player = Body.PilotPlayer();
                 int earned = player != null ? player.CashSystem.Cash - run.CashBefore : 0;
                 DueAt = Time.time + SellCheckInterval;
-                Last = $"sold {SellRun.Count(sold)} for {earned}";
+                string result = $"sold {SellRun.Count(sold)} for {earned}";
+                Last = result;
                 YourBuddyPlugin.Log.LogInfo($"[ai] Sold {SellRun.Count(sold)} for {earned}");
+                // Boxes left over (a station takes only a few at once): straight on to the next trip.
+                // Walk replaces this leg, as tidying chains its pieces; FinishRoute would end the errand.
+                if (TryStart(out string next))
+                {
+                    YourBuddyPlugin.Log.LogInfo("[ai] Selling: more trash boxes about - another trip");
+                    return;
+                }
+                Trace($"no further trip: {next}");
+                Last = result;
                 Body.FinishRoute();
                 return;
             }

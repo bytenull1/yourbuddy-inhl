@@ -174,14 +174,7 @@ namespace YourBuddy
                     BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
                     if (buddy == null) { Print(console, "No buddy exists"); return; }
 
-                    if (args.Length > 0 && bool.TryParse(args[0], out bool enable))
-                    {
-                        YourBuddyPlugin.ConfigDebugVisuals.Value = enable;
-                    }
-                    else
-                    {
-                        YourBuddyPlugin.ConfigDebugVisuals.Value = !YourBuddyPlugin.ConfigDebugVisuals.Value;
-                    }
+                    YourBuddyPlugin.ConfigDebugVisuals.Value = Toggle(args, 0, YourBuddyPlugin.ConfigDebugVisuals.Value);
 
                     buddy.EnsureDebugVisuals(YourBuddyPlugin.ConfigDebugVisuals.Value);
                     Print(console, "Debug visuals: " + (YourBuddyPlugin.ConfigDebugVisuals.Value ? "ON (yellow=path, green/red=probe, cyan=target)" : "OFF"));

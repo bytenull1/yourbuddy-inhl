@@ -13,7 +13,12 @@ namespace YourBuddy
 
         public void Skip(Transform what, float seconds) => until[what] = Time.time + seconds;
 
-        public bool Has(Transform what) => until.TryGetValue(what, out float end) && Time.time < end;
+        /// <summary>
+        /// While set, nothing counts as skipped: an order from the player looks at everything again.
+        /// </summary>
+        public bool Ignore;
+
+        public bool Has(Transform what) => !Ignore && until.TryGetValue(what, out float end) && Time.time < end;
 
         /// <summary>
         /// Seconds left before `what` is tried again; zero when it is not skipped.

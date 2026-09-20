@@ -126,11 +126,15 @@ loads all the boxes it can and presses once. `SellRun` holds the station, the `Q
    `ItemDetector` **or** inside the zone bounds: the detector's list is cleared by every sale, so a
    box can sit there unlisted. A loose box needs a station within `SellStationRadius`.
 2. **The run** (`BuildSellRun`): the chosen box plus every other candidate for the same station,
-   capped by `SellMaxBoxes` (4) and by the room left in the zone (`SellZoneMaxItems`). Boxes already
+   capped by `SellMaxBoxes` (4; `SellMaxBoxesTransit` (2) at the Oxygen, Solar and Fuel stations, whose sales area is smaller) and by the room left in the zone (`SellZoneMaxItems`). Boxes already
    inside go straight into `Loaded`.
 3. **Before setting off:** the station holds nothing sellable but trash boxes, and both the load
    point and the button have a reach node with a stand point **outside** the station.
 4. **Box leg**, up close like tidying: 0.5 s, `PickUp`. Big items are held clear of the body.
+   `PickUp` calls `Grabbable.AwakeNearItems` (as the game does when the player takes an item): resting
+   items are kinematic, so whatever lay on the box would hover instead of falling. That call only covers the
+   item's own detector zone, so `WakeStackedOn` also wakes, body included, everything lying on the box's
+   old place and on that in turn (`AwakePhysics` + `Rigidbody.WakeUp`).
 5. **Load leg:** stand points 1.35 / 1.6 m from the zone centre, reach 1.8 m, never within 0.35 m of
    the zone. Wait for the gate to be fully open (up to 20 s). The box reaches into the zone until the
    `ItemDetector` lists it (1.5 s max), is let go, and settles 1 s. Then fetch the next box
@@ -143,7 +147,16 @@ loads all the boxes it can and presses once. `SellRun` holds the station, the `Q
    - then `Button.Interact(pilot)` - your press, your money.
 7. **Confirm:** every loaded box destroyed within 10 s → `Sold 3 trash boxes for N`. The gate open
    again 1.5 s after the press with boxes still there means something was under it; that station is
-   skipped for `SellRetrySeconds`.
+   skipped for `SellRetrySeconds`. Boxes still about afterwards: `ConfirmSale` calls `TryStart` at once
+   for another trip (three runs of two at a transit station), with no `SellCheckInterval` wait; none
+   left, or no way to them, ends the errand.
+
+**Placement** (`LoadPlacement`). The Oxygen, Solar and Fuel zones are a 0.5 m cube and a trash box is
+0.375 x 0.1875 x 0.25 m: one box per layer, two stacked. A box at an angle or across the edge is not sold,
+so each box is turned upright and square to the zone (yaw 0, or 90 where that takes more boxes) and put in
+the first free slot of a grid of box footprints - lowest layer first, then nearest the buddy - with 2 cm
+clear of the walls and of its neighbours. No free slot: that box is left (`SellRetrySeconds`). The
+Shipyard's 1.85 x 1.5 x 1.85 m zone uses the same grid.
 
 **Letting go.** A box is released only when its centre is within 5 cm of the drop point. Before
 pressing, each box is re-seated once at most (`SellRun.Reseated`):
