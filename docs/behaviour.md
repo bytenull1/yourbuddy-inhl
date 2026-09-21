@@ -251,8 +251,10 @@ reached did not arrive ([a-skipped-waypoint-is-not-an-arrival](invariants.md#a-s
 A `Chose` with no `Decided:` after it, then another `Chose`, is an impossible urge being redrawn; the
 level-2 line between says why.
 
-HUD `Orders:` shows `none - deciding for itself`, `none (autonomy off)`, `Stay, until revoked`,
-`Follow, 42s left`, or `Goto, until it arrives`.
+HUD `Orders:` appears only while an order stands: `Stay, until revoked`, `Follow, 42s left`, or
+`Goto, until it arrives`. `buddy_mind` and the HUD leave out what another line already says: a stand-down
+for the task shown in `Mode:` or for the order in force has no `Mind:` line, and `Why:` (the scored urges)
+is dropped while the decider is standing down.
 
 ---
 

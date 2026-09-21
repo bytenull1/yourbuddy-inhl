@@ -85,6 +85,9 @@ The project is an SDK-style class library targeting **.NET Standard 2.1**, so no
 
 General settings (section `General` unless noted; the node editor keys live in section `NodeEditor`, documented in the Usage section below):
 
+<details>
+<summary>Show all settings</summary>
+
 | Setting | Section | Default | Description |
 |-----------------------|-----------|---------|-------------|
 | `SaveSupport` | General | `true` | Writes/reads the buddy's location to a sidecar `.buddy` file next to your save. |
@@ -111,16 +114,21 @@ General settings (section `General` unless noted; the node editor keys live in s
 | `ItemPlayIntervalMinutes` | General | `5` | Roughly how many minutes pass between play sessions (25% more or less each time). |
 | `DebugLevel` | General | `1` | Debug log verbosity: `0` quiet (warnings only), `1` normal (stuck diagnostics, door logs), `2` thinking (path planning details, the gate inventory and gate-frame audit), `3` obstacle diagnostics (per-tick obstacle reports). Also changeable at runtime with `debug_level`. |
 | `DebugVisuals` | General | `false` | Draws navigation probes, target markers, and path lines. |
-| `ShowHud` | General | `false` | Displays an on‑screen status panel (mode, orders, fear, room, environment, threat, target). |
+| `ShowHud` | General | `false` | Displays an on‑screen status panel (mode, orders, position, room, environment, fear, mind, errand timers, target); hidden while the console is open. |
 | `MoveSpeed` | General | `3.5` | Default movement speed in m/s. |
 | `MaxEdgeDist` | Navigation | `80` | Maximum distance (m) at which two nav nodes auto-connect. Manual Force links work at any distance. |
 | `BundledGraph` | Navigation | `true` | Use the ready-made nav graph shipped with the mod for any ship or station you have not edited yourself. |
+
+</details>
 
 You can change these values in the config file or via console commands (see below).
 
 ---
 
 ## Console Commands Reference
+
+<details>
+<summary>Show all console commands</summary>
 
 | Command | Arguments | Description |
 |---------|-----------|-------------|
@@ -151,6 +159,8 @@ You can change these values in the config file or via console commands (see belo
 | `debug_level` | `<0-3>` | Set debug log verbosity at runtime. |
 | `buddy_debug` | `[on/off]` | Toggle debug visuals (path, probes, target markers). |
 | `buddy_hud` | `[on/off]` | Toggle status HUD. |
+
+</details>
 
 ---
 
@@ -242,7 +252,7 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 - [x] Check the wall next to the ShipyardStation sales area that leads to the stairs. NavProbe doesn’t always seem to detect it.
 
 **Priority 1 - Improvements**
-- [ ] Clean up the Debug HUD. Reduce the amount of information slightly or remove duplicates, move HUD to the background so it doesn't cover the console.
+- [x] Clean up the Debug HUD. Reduce the amount of information slightly or remove duplicates, move HUD to the background so it doesn't cover the console.
 - [ ] Use meaningful room names instead of node numbers for `buddy_goto`.
 - [ ] Add a `snack` command to BuddyDialogCommands. Need comparing it to how often the player eats, I think 20 minutes is too long.
 - [ ] Simplify NodeEditor. Automatic connections and connections like Block and Priority should be removed, as they are inefficient, outdated workarounds, or unused functionality.

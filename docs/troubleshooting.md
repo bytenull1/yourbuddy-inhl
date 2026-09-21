@@ -51,7 +51,7 @@ The `OxygenStation` stairwell has its own notes: [navigation.md §8](navigation.
 
 | Symptom | Log line | Read |
 |---|---|---|
-| HUD shows `On: world` while the buddy is aboard | `[ai] Riding 'world' now` - the floor under it belongs to no ship or station, so it rides the world container and can be carried off on undock | [the-buddy-rides-its-own-floor](invariants.md#the-buddy-rides-its-own-floor) |
+| HUD's `Pos:` line ends `on world` while the buddy is aboard | `[ai] Riding 'world' now` - the floor under it belongs to no ship or station, so it rides the world container and can be carried off on undock | [the-buddy-rides-its-own-floor](invariants.md#the-buddy-rides-its-own-floor) |
 | buddy missing after undock | `[ai] Undocked with nothing underfoot - moved to the ship airlock` | [game-model.md](game-model.md) |
 | no buddy on a new game | `[mgr] New game: …, … - no buddy. Use 'spawn_buddy'.` | [reference.md §2](reference.md#2-debug-commands) |
 

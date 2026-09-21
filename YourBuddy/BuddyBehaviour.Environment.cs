@@ -236,7 +236,7 @@ namespace YourBuddy
         internal string TrackedRoomName => currentRoomRef != null ? currentRoomRef.gameObject.name : "none";
 
         /// <summary>
-        /// Room, environment and life threat, for the HUD.
+        /// Room and environment, and the life threat only while there is one, for the HUD.
         /// </summary>
         private string DescribeSurroundings()
         {
@@ -253,7 +253,11 @@ namespace YourBuddy
             {
                 text += "\nEnv: none" + (currentlyInSpace ? " [EXPOSED TO SPACE]" : "");
             }
-            return text + "\nLife threat: " + lifeThreatLevel + "/10, death " + deathCounter + "/5" + (lifeThreat ? " [!]" : "");
+            if (lifeThreatLevel > 0 || deathCounter > 0 || lifeThreat)
+            {
+                text += "\nLife threat: " + lifeThreatLevel + "/10, death " + deathCounter + "/5" + (lifeThreat ? " [!]" : "");
+            }
+            return text;
         }
 
         /// <summary>

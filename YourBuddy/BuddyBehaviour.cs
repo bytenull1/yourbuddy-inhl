@@ -533,6 +533,9 @@ namespace YourBuddy
 
             if (GameManager.Instance == null) return;
 
+            // The console is a uGUI menu, which IMGUI always draws over: the panel steps aside instead.
+            if (BuddyNodeEditor.ConsoleOpen()) return;
+
             string text = StatusText();
             // Measured only when the cached text changes: docs/invariants.md#read-only-panels-build-on-repaint
             if (!ReferenceEquals(text, hudMeasuredText))
@@ -564,11 +567,11 @@ namespace YourBuddy
             string text = "Mode: " + (parked ? "parked" : Asleep ? "asleep" : mode.ToString()) +
                           (DescribeReachTask() is { } task ? " (" + task + ")" : "") +
                           (IsDead ? " [DEAD]" : "");
-            text += "\nOrders: " + DescribeOrders();
-            if (CurrentOwner != null) text += "\nOn: " + CurrentOwner + (parked ? " (unloaded)" : "");
+            // "none" is the resting state, not news: the Mind line already says it is deciding.
+            if (orderedMode.HasValue) text += "\nOrders: " + DescribeOrders();
 
-            text += "\nPos: " + transform.position.ToString("0.00");
-            text += "\nSpeed: " + moveSpeed.ToString("0.0") + " m/s";
+            text += "\nPos: " + transform.position.ToString("0.00") +
+                    (CurrentOwner != null ? ", on " + CurrentOwner + (parked ? " (unloaded)" : "") : "");
             text += "\n" + DescribeSurroundings();
             // The timers are deadlines on Time.time: printed for a dead buddy they count down with nothing behind them.
             if (IsDead)
@@ -578,12 +581,15 @@ namespace YourBuddy
             else
             {
                 text += "\nFear: " + DescribeFear();
-                text += "\n" + DescribeTimers();
+                if (DescribeHudMind() is { } mind) text += "\n" + mind;
+                text += "\nAir: " + lifeSupport.Describe() + "\nSnack: " + snacks.Describe() +
+                        "\nTidy: " + tidying.Describe() + "\nSell: " + selling.Describe() + "\nPlay: " + play.Describe();
             }
-            text += "\nTarget: " + (hasMoveTarget
-                ? currentMoveTarget.ToString("0.0") + " (" + Vector3.Distance(transform.position, currentMoveTarget).ToString("0.0") + "m)"
-                : "none");
-            if (BuddyNodeGraph.NodeCount > 0) text += "\nNav nodes: " + BuddyNodeGraph.DescribeNodes();
+            if (hasMoveTarget)
+            {
+                text += "\nTarget: " + currentMoveTarget.ToString("0.0") + " (" +
+                        Vector3.Distance(transform.position, currentMoveTarget).ToString("0.0") + "m)";
+            }
 
             statusText = text;
             return text;

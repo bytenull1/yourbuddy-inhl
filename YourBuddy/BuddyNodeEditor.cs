@@ -54,7 +54,7 @@ namespace YourBuddy
             return shortcut.MainKey != KeyCode.None ? shortcut.MainKey.ToString() : "<unset>";
         }
 
-        private static bool ConsoleOpen()
+        internal static bool ConsoleOpen()
         {
             try
             {

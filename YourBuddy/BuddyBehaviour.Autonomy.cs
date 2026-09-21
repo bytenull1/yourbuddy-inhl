@@ -275,6 +275,25 @@ namespace YourBuddy
             "\nPlay: " + play.Describe();
 
         /// <summary>
+        /// The HUD's Mind and Why lines, without repeating what the Mode and Orders lines already say:
+        /// a stand-down for the task in Mode's brackets or for the order in force is left out, and the
+        /// Why line (the scored urges) is left out while the decider is standing down, since it would
+        /// only copy the reason. Null when there is nothing to add.
+        /// </summary>
+        private string? DescribeHudMind()
+        {
+            string mind = DescribeMind();
+            const string StandingDown = "standing down - ";
+            if (mind.StartsWith(StandingDown))
+            {
+                string reason = mind.Substring(StandingDown.Length);
+                bool shownElsewhere = reason == DescribeReachTask() || reason.StartsWith("order '");
+                return shownElsewhere ? null : "Mind: " + mind;
+            }
+            return "Mind: " + mind + (urgeReport.Length > 0 && !urgeReport.StartsWith(StandingDown) ? "\nWhy: " + urgeReport : "");
+        }
+
+        /// <summary>
         /// buddy_bout: the bout being timed is over now, so the decider's next look switches Follow and Wander.
         /// </summary>
         internal string EndBoutNow()
