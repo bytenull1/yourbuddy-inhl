@@ -776,6 +776,50 @@ namespace YourBuddy
             return ValidIndex(index) ? new OwnerSnapshot().WorldOf(Nodes[index]) : Vector3.zero;
         }
 
+        /// <summary>
+        /// Every node the owner holds, index and world position, resolved through one snapshot.
+        /// </summary>
+        internal static List<(int Index, Vector3 World)> WorldNodesOf(string owner)
+        {
+            EnsureLoaded();
+            OwnerSnapshot owners = new();
+            List<(int, Vector3)> result = [];
+            for (int i = 0; i < Nodes.Count; i++)
+            {
+                if (Nodes[i].Owner == owner) result.Add((i, owners.WorldOf(Nodes[i])));
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// The station the player ship is docked to: the owner name its nodes carry, and its rooms.
+        /// </summary>
+        internal static bool TryDockedStation(out string owner, [NotNullWhen(true)] out Room[]? rooms)
+        {
+            owner = "";
+            rooms = null;
+            GameManager gm = GameManager.Instance;
+            if (gm == null || gm.PlayerShip == null) return false;
+
+            RefreshSpaceObjects();
+            for (int i = 0; i < SpaceObjects.Count; i++)
+            {
+                SpaceObject so = SpaceObjects[i];
+                string? name = SpaceObjectNames[i];
+                if (so == null || name == null || so is not SpaceStation station) continue;
+
+                Docker docker = station.Docker;
+                if (docker == null || docker.DockedShip != gm.PlayerShip) continue;
+
+                rooms = GameInternals.SpaceStationAccess.GetRooms(station);
+                if (rooms == null) continue;
+
+                owner = name;
+                return true;
+            }
+            return false;
+        }
+
         // ----------------------------------------------------------------
         // Node metadata (type / owner) for editor and console
         // ----------------------------------------------------------------

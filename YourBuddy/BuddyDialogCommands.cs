@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace YourBuddy
@@ -16,6 +17,8 @@ namespace YourBuddy
         internal static readonly string[] Names =
             ["Follow", "Wander", "Stay", "Hide", "Tidy", "Sell", "Play", "Goto", "Decide", "Password"];
 
+        private static readonly string[] GotoWords = ["goto", "go to", "walk", "move to"];
+
         internal static string Run(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return "...";
@@ -24,6 +27,15 @@ namespace YourBuddy
 
             // First: "decide for yourself whether to follow" is not a follow order.
             if (Has(lower, "decide", "yourself", "autonom", "your call", "own mind")) return BuddyCommands.DecideForYourself();
+
+            // Before the rest, so "go to the workshop" is not a wander order ("work"). A goto that
+            // names no room falls through, so "stay, do not walk" is still a stay order.
+            if (Has(lower, GotoWords) && BuddyRooms.TryResolve(lower, out BuddyRooms.Entry? room, out List<BuddyRooms.Entry>? several))
+            {
+                return room != null
+                    ? BuddyCommands.GoToRoom(room)
+                    : "Which one? " + BuddyRooms.Join(several!); // several is set when room is not
+            }
 
             // Before Follow, so "come and hide" is not a follow order.
             if (Has(lower, "hide", "closet", "locker", "conceal")) return BuddyCommands.Hide();
@@ -41,12 +53,7 @@ namespace YourBuddy
 
             if (Has(lower, "play", "toy")) return BuddyCommands.Play();
 
-            if (Has(lower, "goto", "go to", "walk", "node", "move to"))
-            {
-                return TryNumber(lower, out int node)
-                    ? BuddyCommands.GoToNode(node)
-                    : "Which node? Try 'goto 12'.";
-            }
+            if (Has(lower, GotoWords)) return BuddyRooms.Prompt();
 
             if (Has(lower, "password", "code", "pin", "key"))
             {

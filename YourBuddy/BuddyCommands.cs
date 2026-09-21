@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace YourBuddy
@@ -10,6 +11,7 @@ namespace YourBuddy
     public static class BuddyCommands
     {
         private const string NoBuddy = "No living buddy exists";
+        private const int MaxRoomTries = 4;
         /// <summary>
         /// An order given mid-flee is kept for afterward. docs/invariants.md#fear-owns-the-buddy
         /// </summary>
@@ -47,6 +49,9 @@ namespace YourBuddy
             return buddy.ApplyOrder(BuddyMode.Stay) ? "Buddy stays here" : "Buddy will stay put" + OnceSafe;
         }
 
+        /// <summary>
+        /// The console's goto: one node, by index, for debugging.
+        /// </summary>
         public static string GoToNode(int nodeIndex)
         {
             BuddyBehaviour? buddy = Living();
@@ -56,18 +61,35 @@ namespace YourBuddy
                 return "Node index out of range (0-" + (BuddyNodeGraph.NodeCount - 1) + ")";
             }
 
-            Vector3 target = BuddyNodeGraph.GetNodeWorld(nodeIndex);
-            BuddyNodeGraph.NavPath? plan = BuddyNodeGraph.FindPath(buddy.FloorUnderBuddy(), target);
-            if (plan is not { Count: > 0 })
+            return WalkTo(buddy, [nodeIndex], "node #" + nodeIndex);
+        }
+
+        /// <summary>
+        /// The dialog's goto: a room by name, through the first of its nodes the buddy can reach.
+        /// </summary>
+        internal static string GoToRoom(BuddyRooms.Entry room)
+        {
+            BuddyBehaviour? buddy = Living();
+            return buddy == null ? NoBuddy : WalkTo(buddy, room.Nodes, room.Name);
+        }
+
+        private static string WalkTo(BuddyBehaviour buddy, int[] nodes, string label)
+        {
+            // A dead-end node must not strand a whole room, and a failed search is not free.
+            for (int i = 0; i < Math.Min(nodes.Length, MaxRoomTries); i++)
             {
-                return BuddyNodeGraph.LastPathBlockedByDoor
-                    ? "No way to node #" + nodeIndex + " that avoids a door I cannot open"
-                    : "No path to node #" + nodeIndex + " - are nodes connected?";
+                Vector3 target = BuddyNodeGraph.GetNodeWorld(nodes[i]);
+                BuddyNodeGraph.NavPath? plan = BuddyNodeGraph.FindPath(buddy.FloorUnderBuddy(), target);
+                if (plan is not { Count: > 0 }) continue;
+
+                return buddy.ApplyRouteOrder(plan.Value, target)
+                    ? "Buddy walking to " + label + " (" + plan.Value.Count + " waypoints)"
+                    : "Buddy will walk to " + label + OnceSafe;
             }
 
-            return buddy.ApplyRouteOrder(plan.Value, target)
-                ? "Buddy walking to node #" + nodeIndex + " (" + plan.Value.Count + " waypoints)"
-                : "Buddy will walk to node #" + nodeIndex + OnceSafe;
+            return BuddyNodeGraph.LastPathBlockedByDoor
+                ? "No way to " + label + " that avoids a door I cannot open"
+                : "No path to " + label + " - are nodes connected?";
         }
 
         /// <summary>

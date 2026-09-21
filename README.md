@@ -139,7 +139,7 @@ You can change these values in the config file or via console commands (see belo
 | `buddy_wander` | – | Switch to wander mode (uses nav nodes as points of interest). |
 | `buddy_stay` | – | Hold position until told otherwise. |
 | `buddy_stop` | – | Stop current route/wander and follow. |
-| `buddy_goto` | `<node_index>` | Walk the buddy to a specific nav-graph node. |
+| `buddy_goto` | `<node_index>` | Walk the buddy to a specific nav-graph node (the dialog takes room names instead). |
 | `buddy_snack` | – | Make the buddy get a snack nearby right now (ignores the schedule and the `Snacks` setting). |
 | `buddy_tidy` | – | Make it clear the rubbish nearby into a trash can right now, several pieces in a row. |
 | `buddy_sell` | – | Make it take every trash box nearby to a sell station and sell them in one press. |
@@ -179,7 +179,7 @@ Walk up close, look at it and press **Interact**. Type an order, or pick one fro
 | `follow` | Follows you. |
 | `wander` | Walks between nav nodes, doing its own thing. |
 | `stay` | Holds position. It still steps aside if it is blocking a door. |
-| `goto 12` | Walks to nav node 12. |
+| `goto library` | Walks to a room of the docked station, by the name the debug HUD shows. `goto` alone (or the **Goto** button) lists them. |
 | `decide for yourself` | Cancels your order and lets it choose again. |
 | `hide` | Gets into a closet or locker and stays there until you say something else - another order, or "decide for yourself". |
 | `tidy up` | Clears the rubbish nearby into a trash can, several pieces in a row. |
@@ -253,7 +253,7 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 
 **Priority 1 - Improvements**
 - [x] Clean up the Debug HUD. Reduce the amount of information slightly or remove duplicates, move HUD to the background so it doesn't cover the console.
-- [ ] Use meaningful room names instead of node numbers for `buddy_goto`.
+- [x] Use meaningful room names instead of node numbers for the dialog `goto`; the console keeps node indices.
 - [ ] Add a `snack` command to BuddyDialogCommands. Need comparing it to how often the player eats, I think 20 minutes is too long.
 - [ ] Simplify NodeEditor. Automatic connections and connections like Block and Priority should be removed, as they are inefficient, outdated workarounds, or unused functionality.
 - [ ] Improve footstep sounds. They can be heard from too far away, and they don’t change based on the floor under the NPC. Need to determine which index corresponds to a specific floor in the serialized `footstepEvents` array.

@@ -45,7 +45,8 @@ Other classes reach the buddy through a few `internal` members, never its fields
 | `GameInternals.cs` | **every** reflection accessor into game types | - | [game-model](game-model.md) |
 | `BuddyDialog.cs` | the talk window: interaction hook, sight check, input handover, layout | `DialogSkin`, `BuddyDialogCommands` | [dialog](dialog.md) |
 | `DialogSkin.cs` | how the window is drawn | - | [dialog](dialog.md) |
-| `BuddyDialogCommands.cs` | keyword-matching typed text to an order | `BuddyCommands` | [dialog](dialog.md) |
+| `BuddyDialogCommands.cs` | keyword-matching typed text to an order | `BuddyCommands`, `BuddyRooms` | [dialog](dialog.md) |
+| `BuddyRooms.cs` | the docked station's rooms by name, which nodes stand in each | `BuddyNodeGraph` | [dialog](dialog.md#goto-by-room) |
 | `BuddyCommands.cs` | the orders, shared by dialog and console; the only caller of `ApplyOrder` / `ApplyRouteOrder` / `RevokeOrder` | `BuddyBehaviour`, `BuddyNodeGraph` | [behaviour](behaviour.md) |
 | `BuddyCryoSpawn.cs` | a new game's buddy asleep in a prop cryo capsule until after the player's pod opens | `YourBuddyPlugin`, `BuddyManager`, `GameInternals` | [game-model](game-model.md#the-cryo-room) |
 | `BuddyCorpse.cs` | makes the dead ragdoll carryable, without the game's `Grabbable` | - | [invariants](invariants.md#mod-state-never-enters-the-vanilla-save) |

@@ -1,8 +1,8 @@
 # Dialog - giving the buddy orders
 
-`BuddyDialog.cs` (the window), `DialogSkin.cs` (drawing), `BuddyDialogCommands.cs` (parsing) and
-`BuddyCommands.cs` (the orders). Config: `Dialog` (General, default on). There is no hotkey; the
-game's Interact binding is the only way in.
+`BuddyDialog.cs` (the window), `DialogSkin.cs` (drawing), `BuddyDialogCommands.cs` (parsing),
+`BuddyRooms.cs` (room names) and `BuddyCommands.cs` (the orders). Config: `Dialog` (General, default
+on). There is no hotkey; the game's Interact binding is the only way in.
 
 ---
 
@@ -70,7 +70,9 @@ every event and must **not** be gated on `Repaint`
 both work). A bare number is a door code. Everything calls `BuddyCommands`, the same code the console
 uses.
 
-Matching order matters - it is a substring test ("trash box" contains "trash"):
+Matching order matters - it is a substring test ("trash box" contains "trash"). The one exception
+is a goto that names a room, which is tried right after "decide" ("go to the workshop" contains
+"work"):
 
 | Word | Console | Effect |
 |---|---|---|
@@ -82,7 +84,7 @@ Matching order matters - it is a substring test ("trash box" contains "trash"):
 | sell / trash box / money / cash | `buddy_sell` | sell nearby trash boxes ([items.md §4](items.md#4-selling-trash-boxes)); before tidy |
 | tidy / clean / trash / rubbish / garbage / litter / bin | `buddy_tidy` | a tidying round ([items.md §3](items.md#3-tidying)) |
 | play / toy | `buddy_play` | a play session ([items.md §5](items.md#5-idle-play)) |
-| goto *n* | `buddy_goto <i>` | `FindPath` + `ApplyRouteOrder` |
+| goto *room* | `buddy_goto <i>` (a node, not a room) | `FindPath` + `ApplyRouteOrder` ([below](#goto-by-room)) |
 | password *nnnn* | `buddy_password <code>` | adds the code to `knownPinCodes` |
 
 **Follow, Wander, Stay, Goto and "decide" are orders.** They are recorded as the order in force
@@ -97,6 +99,22 @@ only on the next order ([an-ordered-hide-ends-only-on-an-order](invariants.md#an
 
 `Stay` holds position, but still steps out of a doorway it blocks
 ([step-off-applies-in-every-mode](invariants.md#step-off-applies-in-every-mode)).
+
+### Goto by room
+
+The dialog sends the buddy to a **room**, not a node number; `buddy_goto` keeps node indices for
+debugging. Rooms are those of the station the ship is docked to (`SpaceStation.rooms`), under the
+names the debug HUD shows (`YardLibrary`, `OxygenKitchen`). Case, spaces and the station's common
+prefix are ignored, and so is a partial name that is unique: "goto library", "go to the Yard Library".
+A partial name that fits several rooms is answered with the candidates, and "goto" alone (the
+**Goto** button too) lists the rooms.
+
+A room has no volume ([game-model.md §2](game-model.md#2-there-are-no-room-volumes)) and a station's
+floors are not under its rooms, so `BuddyRooms` gives each node to the room whose furniture (every
+transform under the `Room`) is nearest to it. The room's nodes are tried nearest its middle first, up
+to four, so one dead-end node does not strand it. A room with no node is not listed. The
+`[nav] Rooms at <station>` line names the first node chosen for each room, by the index `buddy_goto`
+takes, so a wrong pick can be tried from the console.
 
 Orders and mode are not saved; a loaded buddy starts in Follow with no order. Door codes are saved.
 The password reply says whether any door in the scene uses that code, so typos show at once.
