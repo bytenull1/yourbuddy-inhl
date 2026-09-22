@@ -211,14 +211,14 @@ namespace YourBuddy
             scroll = Vector2.zero;
             if (lines.Count == 0) Say("Standing by.");
 
-            if (buddy != null) buddy.inDialog = true;
+            if (buddy != null) buddy.InDialog = true;
             SetPlayerInUi(true);
         }
 
         private void Close()
         {
             open = false;
-            if (buddy != null) buddy.inDialog = false;
+            if (buddy != null) buddy.InDialog = false;
             SetPlayerInUi(false);
         }
 
@@ -377,7 +377,9 @@ namespace YourBuddy
             float colW = Mathf.Floor((body.width - 36f - gap) * 0.5f);
             for (int i = 0; i < names.Length; i++)
             {
-                Rect row = new(body.x + 18f + i / rows * (colW + gap), body.y + 14f + i % rows * rowH, colW, rowH);
+                int col = i / rows;
+                int rowIdx = i % rows;
+                Rect row = new(body.x + 18f + col * (colW + gap), body.y + 14f + rowIdx * rowH, colW, rowH);
                 if (!GUI.Button(row, names[i], DialogSkin.Command)) continue;
 
                 showCommands = false;

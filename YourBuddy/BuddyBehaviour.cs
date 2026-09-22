@@ -19,7 +19,6 @@ namespace YourBuddy
         private Collider itemBlocker = null!; // SpawnBuddy calls Init before the first frame
         private CharacterController? playerCharacterController;
 
-        // ReSharper disable RedundantDefaultMemberInitializer
         private BuddyMode mode = BuddyMode.Follow;
         internal bool IsDead { get; private set; }
         /// <summary>
@@ -29,8 +28,8 @@ namespace YourBuddy
         /// <summary>
         /// Set by BuddyDialog while the player has it open: hold still and face them.
         /// </summary>
-        internal bool inDialog = false;
-        internal float moveSpeed = 3.5f;
+        internal bool InDialog = false;
+        internal float MoveSpeed = 3.5f;
         /// <summary>
         /// Which vessel's frame the buddy is riding ("ship", "world" or a station name).
         /// docs/invariants.md#the-buddy-rides-its-own-floor
@@ -60,8 +59,8 @@ namespace YourBuddy
         private EventInstance footstepInstance;
 
         // Node-based navigation. navPlan holds the route plus which segments arrive via
-        // a Force/Priority link; those skip the LOS commitment check by design.
-        // docs/invariants.md#force-and-priority-have-no-los
+        // a graph link; those skip the LOS commitment check by design.
+        // docs/invariants.md#links-have-no-los
         private BuddyNodeGraph.NavPath? navPlan = null;
         private int navPathIndex = 0;
         /// <summary>
@@ -237,7 +236,6 @@ namespace YourBuddy
         // Scene caches
         private List<EntryDetector>? cachedDetectors = null;
         private List<Airlock>? cachedAirlocks = null;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         // Pre-allocated physics buffers: the whisker/diagnostic probes run every frame,
         // so they must not allocate (use the non-allocating NonAlloc methods).
@@ -255,7 +253,7 @@ namespace YourBuddy
             animatedModel = model;
             itemBlocker = blocker;
             playerCharacterController = playerController;
-            moveSpeed = speed;
+            MoveSpeed = speed;
             hands = new BuddyHands(this, blocker, GroundPos, () => currentRoomRef);
         }
 
@@ -394,7 +392,7 @@ namespace YourBuddy
 
             // Being spoken to: hold still and face whoever is talking, whatever the
             // mode says. Walking off mid-sentence is not a conversation. docs/dialog.md
-            if (inDialog)
+            if (InDialog)
             {
                 ApplyMovement(Vector3.zero, false);
                 FacePlayer(player);
@@ -445,7 +443,7 @@ namespace YourBuddy
             else loggedStairLegEnd = Vector3.zero;
 
             // Sidestep maneuver when stuck against an obstacle.
-            if (wantMove && Time.time < sidestepUntil) desired = sidestepDirection * (moveSpeed * 0.8f);
+            if (wantMove && Time.time < sidestepUntil) desired = sidestepDirection * (MoveSpeed * 0.8f);
 
             // Alert or Scared: no step toward the Breathless, whatever the mode wants, and
             // so no door opened that way either. docs/fear.md

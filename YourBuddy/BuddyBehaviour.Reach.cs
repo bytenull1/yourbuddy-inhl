@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using static YourBuddy.ReachTask;
 
 namespace YourBuddy
@@ -130,7 +130,7 @@ namespace YourBuddy
             wantMove = true;
             currentMoveTarget = target;
             hasMoveTarget = true;
-            move = toTarget.normalized * moveSpeed;
+            move = toTarget.normalized * MoveSpeed;
             return false;
         }
 
@@ -170,13 +170,13 @@ namespace YourBuddy
         /// </summary>
         private void DropReachTask()
         {
-            if (reachTask != null) reachTask.End();
+            reachTask?.End();
             reachTask = null;
         }
 
         /// <summary>
         /// For the HUD's Mode line and the decider's stand-down reason.
         /// </summary>
-        internal string? DescribeReachTask() => reachTask != null ? reachTask.Describe() : null;
+        private string? DescribeReachTask() => reachTask?.Describe();
     }
 }

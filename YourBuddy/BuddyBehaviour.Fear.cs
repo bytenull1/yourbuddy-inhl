@@ -10,7 +10,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         private float stress = 0f;
 
         // Fear of the Breathless. Stress runs 0..FearStressCap, rates per second. docs/fear.md
@@ -138,7 +137,6 @@ namespace YourBuddy
         private const float FleeHoldRetryDelay = 1.5f;
         private const float FleeBackAwayDist = 3f;
         private const float FleeBackAwayTime = 1f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         // ------------------------------------------------------------------
         // Stress and state
@@ -250,7 +248,7 @@ namespace YourBuddy
                 // A level, not an edge: a flee held back by the dialog starts once it closes.
                 if (mode != BuddyMode.Flee)
                 {
-                    if (!inDialog) StartFlee(panic);
+                    if (!InDialog) StartFlee(panic);
                 }
                 else if (panic && fleePhase != FleePhase.Retreat && Time.time >= fleeRetryAt)
                 {
@@ -443,7 +441,7 @@ namespace YourBuddy
         /// <summary>
         /// For the HUD.
         /// </summary>
-        internal string DescribeFear()
+        private string DescribeFear()
         {
             string text = fearState + ", stress " + stress.ToString("0.0") + "/" + FearStressCap.ToString("0");
             if (monsterInSight) text += ", in sight " + monsterDist.ToString("0.0") + "m";
@@ -638,7 +636,7 @@ namespace YourBuddy
             wantMove = true;
             currentMoveTarget = navPlan.Value[navPathIndex];
             hasMoveTarget = true;
-            return HeadingAlongPlan() * (moveSpeed * FleeSpeedFactor);
+            return HeadingAlongPlan() * (MoveSpeed * FleeSpeedFactor);
         }
 
         /// <summary>

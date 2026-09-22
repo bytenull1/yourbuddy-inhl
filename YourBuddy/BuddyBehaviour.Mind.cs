@@ -11,7 +11,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         // The utility decider: what the buddy might want, and how much. docs/behaviour.md §3
         private enum Urge { None, Terminal, Snack, Sell, Tidy, Play, Wander, Follow }
 
@@ -25,9 +24,9 @@ namespace YourBuddy
         {
             public readonly int Count = count;
             public readonly float Nearest = nearest;
-            public readonly float MeasuredAt = Time.time;
+            private readonly float measuredAt = Time.time;
 
-            public bool Fresh => MeasuredAt > 0f && Time.time - MeasuredAt < UrgeOpportunityTtl;
+            public bool Fresh => measuredAt > 0f && Time.time - measuredAt < UrgeOpportunityTtl;
         }
 
         /// <summary>
@@ -85,7 +84,6 @@ namespace YourBuddy
         /// starts its clock anyway after DecideCatchUpSeconds.
         /// </summary>
         private const float DecideCaughtUpDist = 4f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         /// <summary>
         /// The fetch-and-carry urges, in the order the scan budget rotates through them.
@@ -96,13 +94,13 @@ namespace YourBuddy
         /// Weighs everything the buddy might want and acts on one of them. True when something started.
         /// Called from UpdateAutonomy once the stand-down reasons have passed.
         /// </summary>
-        private bool ChooseAndAct(Player player)
+        private void ChooseAndAct(Player player)
         {
             ScoreUrges(player);
             if (urgeScores.Count == 0)
             {
                 urgeReport = "nothing worth doing";
-                return false;
+                return;
             }
             urgeScores.Sort((a, b) => b.Score.CompareTo(a.Score));
             BuildUrgeReport();
@@ -123,9 +121,8 @@ namespace YourBuddy
                 if (!ActOn(pick.Urge)) continue;
 
                 lastUrge = pick.Urge;
-                return true;
+                return;
             }
-            return false;
         }
 
         /// <summary>

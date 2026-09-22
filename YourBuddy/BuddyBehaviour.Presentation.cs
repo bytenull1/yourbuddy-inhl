@@ -11,7 +11,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         // Parallel to anims. Animator.parameters allocates on every read, so which driven
         // parameters each controller declares is read once, not every frame.
         private AnimatorParams[]? animParams;
@@ -41,7 +40,6 @@ namespace YourBuddy
         private LineRenderer probeLine = null!;
         private LineRenderer markerLine = null!;
         private LineRenderer jumpLine = null!;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         /// <summary>
         /// Copies footstep event references from the player's CameraAnimator using reflection.
@@ -92,7 +90,7 @@ namespace YourBuddy
             if (!cc.isGrounded || currentAnimSpeed < 0.1f)
                 return;
 
-            float walkShakeSpeed = moveSpeed * 5f;
+            float walkShakeSpeed = MoveSpeed * 5f;
             moveDelta += Time.deltaTime * walkShakeSpeed;
 
             if (moveDelta > 6.2831855f)
@@ -180,7 +178,7 @@ namespace YourBuddy
                     transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
                 }
             }
-            else if (fearState != FearState.Calm && !inDialog)
+            else if (fearState != FearState.Calm && !InDialog)
             {
                 // Standing still with the Breathless about: watch it - unless being talked
                 // to, where Update already faces the player. docs/fear.md

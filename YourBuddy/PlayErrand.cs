@@ -133,12 +133,12 @@ namespace YourBuddy
             /// Where the item lay: its collider centre and rotation, to put it back.
             /// </summary>
             public readonly Vector3 HomeCentre;
-            public readonly Quaternion HomeRotation;
+            private readonly Quaternion homeRotation;
             /// <summary>
             /// A carry's floor spot and the node it is put down from; the item's leg carries them to the spot's leg.
             /// </summary>
             public readonly Vector3 DropAt;
-            public readonly Vector3 DropNode;
+            private readonly Vector3 dropNode;
             public readonly bool ToSpot;
             public PlayPhase Phase = PlayPhase.Walk;
             public float PhaseUntil;
@@ -169,9 +169,9 @@ namespace YourBuddy
                 Kind = kind;
                 ItemLabel = ItemLabelOf(item);
                 HomeCentre = ColliderBounds(item.gameObject, out Bounds bounds) ? bounds.center : item.transform.position;
-                HomeRotation = item.transform.rotation;
+                homeRotation = item.transform.rotation;
                 DropAt = dropAt;
-                DropNode = dropNode;
+                this.dropNode = dropNode;
             }
 
             /// <summary>
@@ -186,12 +186,12 @@ namespace YourBuddy
                 Kind = from.Kind;
                 ItemLabel = from.ItemLabel;
                 HomeCentre = from.HomeCentre;
-                HomeRotation = from.HomeRotation;
+                homeRotation = from.homeRotation;
                 DropAt = from.DropAt;
-                DropNode = from.DropNode;
+                dropNode = from.dropNode;
                 ToSpot = true;
-                Node = from.DropNode;
-                StandPoint = new Vector3(from.DropNode.x, NavProbe.FloorHeight(from.DropNode), from.DropNode.z);
+                Node = from.dropNode;
+                StandPoint = new Vector3(from.dropNode.x, NavProbe.FloorHeight(from.dropNode), from.dropNode.z);
             }
 
             public override string Name => ToSpot ? "the spot to put it down" : $"'{ItemLabel}'";

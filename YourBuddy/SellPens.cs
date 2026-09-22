@@ -27,7 +27,7 @@ namespace YourBuddy
         }
 
         private static readonly List<Pen> Pens = [];
-        private static float pensAt = -1f;
+        private static float _pensAt = -1f;
 
         /// <summary>
         /// Whether a point is inside a sell station's fences, `margin` wider all round. `except` is the
@@ -54,9 +54,9 @@ namespace YourBuddy
         /// </summary>
         private static void EnsurePens()
         {
-            if (pensAt > 0f && Time.time < pensAt) return;
+            if (_pensAt > 0f && Time.time < _pensAt) return;
 
-            pensAt = Time.time + SellPenRefresh;
+            _pensAt = Time.time + SellPenRefresh;
             Pens.Clear();
             foreach (SellStation station in Object.FindObjectsOfType<SellStation>())
             {

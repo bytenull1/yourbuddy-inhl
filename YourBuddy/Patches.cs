@@ -165,8 +165,8 @@ namespace YourBuddy
                         Print(console, "Usage: buddy_speed <meters per second>");
                         return;
                     }
-                    buddy.moveSpeed = Mathf.Clamp(speed, 0.5f, 10f);
-                    Print(console, "Buddy speed set to " + buddy.moveSpeed);
+                    buddy.MoveSpeed = Mathf.Clamp(speed, 0.5f, 10f);
+                    Print(console, "Buddy speed set to " + buddy.MoveSpeed);
                 };
 
                 commands["buddy_debug"] = delegate (string[] args)
@@ -229,10 +229,10 @@ namespace YourBuddy
                     }
                     else if (sub == "link")
                     {
-                        // buddy_node link <a> <b> [force|block|priority|auto]
+                        // buddy_node link <a> <b>
                         if (args.Length < 3 || !int.TryParse(args[1], out int aIdx) || !int.TryParse(args[2], out int bIdx))
                         {
-                            Print(console, "Usage: buddy_node link <a> <b> [force|block|priority|auto]");
+                            Print(console, "Usage: buddy_node link <a> <b>");
                             return;
                         }
                         if (aIdx < 0 || aIdx >= BuddyNodeGraph.NodeCount || bIdx < 0 || bIdx >= BuddyNodeGraph.NodeCount || aIdx == bIdx)
@@ -240,38 +240,9 @@ namespace YourBuddy
                             Print(console, "Invalid index");
                             return;
                         }
-                        string mode = args.Length > 3 ? args[3].ToLowerInvariant() : "force";
-                        switch (mode)
-                        {
-                            case "force":
-                                {
-                                    BuddyNodeGraph.LinkMode? result = BuddyNodeGraph.ToggleLink(aIdx, bIdx, BuddyNodeGraph.LinkMode.Force);
-                                    Print(console, result == null ? "Link removed" : "Force link set: #" + aIdx + " <-> #" + bIdx);
-                                    break;
-                                }
-                            case "block":
-                                {
-                                    BuddyNodeGraph.LinkMode? result = BuddyNodeGraph.ToggleLink(aIdx, bIdx, BuddyNodeGraph.LinkMode.Block);
-                                    Print(console, result == null ? "Link removed" : "Block link set: #" + aIdx + " -x- #" + bIdx);
-                                    break;
-                                }
-                            case "priority":
-                                {
-                                    BuddyNodeGraph.LinkMode? result = BuddyNodeGraph.ToggleLink(aIdx, bIdx, BuddyNodeGraph.LinkMode.Priority);
-                                    Print(console, result == null
-                                        ? "Link removed"
-                                        : "Priority link set: arriving at #" + aIdx + " -> next hop must be #" + bIdx);
-                                    break;
-                                }
-                            case "auto":
-                                Print(console, BuddyNodeGraph.ClearLink(aIdx, bIdx)
-                                    ? "Manual link removed: #" + aIdx + " / #" + bIdx
-                                    : "No manual link existed between #" + aIdx + " and #" + bIdx);
-                                break;
-                            default:
-                                Print(console, "Unknown mode '" + mode + "' (force|block|priority|auto)");
-                                break;
-                        }
+                        Print(console, BuddyNodeGraph.ToggleLink(aIdx, bIdx)
+                            ? "Link created: #" + aIdx + " <-> #" + bIdx
+                            : "Link removed: #" + aIdx + " <-> #" + bIdx);
                     }
                     else if (sub == "unlink")
                     {
@@ -285,7 +256,7 @@ namespace YourBuddy
                             Print(console, "Invalid index");
                             return;
                         }
-                        Print(console, "Node #" + uIdx + ": " + BuddyNodeGraph.ClearLinks(uIdx) + " manual link(s) removed");
+                        Print(console, "Node #" + uIdx + ": " + BuddyNodeGraph.ClearLinks(uIdx) + " link(s) removed");
                     }
                     else if (sub == "type")
                     {
@@ -329,32 +300,11 @@ namespace YourBuddy
                             ? "'" + args[1] + "' handed back to the bundled graph - restart to load it"
                             : "'" + args[1] + "' is not one of yours (see 'buddy_node bundled')");
                     }
-                    else if (sub == "auto")
-                    {
-                        if (args.Length < 3 || !int.TryParse(args[1], out int autoIdx))
-                        {
-                            Print(console, "Usage: buddy_node auto <index> <on|off>");
-                            return;
-                        }
-                        bool on = args[2].Equals("on", StringComparison.OrdinalIgnoreCase);
-                        if (!on && !args[2].Equals("off", StringComparison.OrdinalIgnoreCase))
-                        {
-                            Print(console, "Unknown state '" + args[2] + "' (on|off)");
-                            return;
-                        }
-                        if (autoIdx < 0 || autoIdx >= BuddyNodeGraph.NodeCount)
-                        {
-                            Print(console, "Invalid index");
-                            return;
-                        }
-                        BuddyNodeGraph.SetNodeAutoLink(autoIdx, on);
-                        Print(console, "Node #" + autoIdx + " auto-connect: " + (on ? "ON" : "OFF (manual links only)"));
-                    }
                     else
                     {
                         Print(console, "Usage: buddy_node add | count | clear | save | list | remove <index> | " +
-                                       "link <a> <b> [force|block|priority|auto] | unlink <index> | type <index> <ground|stair> | " +
-                                       "auto <index> <on|off> | bundled | unfork <owner>");
+                                       "link <a> <b> | unlink <index> | type <index> <ground|stair> | " +
+                                       "bundled | unfork <owner>");
                     }
                 };
 
@@ -368,12 +318,9 @@ namespace YourBuddy
                                   KeyName(YourBuddyPlugin.ConfigEditorPlaceKey) + "/Numpad0=place, " +
                                   KeyName(YourBuddyPlugin.ConfigEditorDeleteKey) + "=remove, " +
                                   KeyName(YourBuddyPlugin.ConfigEditorLinksKey) + "=connections, " +
-                                  KeyName(YourBuddyPlugin.ConfigEditorForceLinkKey) + "/" +
-                                  KeyName(YourBuddyPlugin.ConfigEditorBlockLinkKey) + "/" +
-                                  KeyName(YourBuddyPlugin.ConfigEditorPriorityLinkKey) + "=link force/block/priority (2 presses), " +
+                                  KeyName(YourBuddyPlugin.ConfigEditorForceLinkKey) + "=link (2 presses), " +
                                   KeyName(YourBuddyPlugin.ConfigEditorClearLinksKey) + "=clear the node's links, " +
                                   KeyName(YourBuddyPlugin.ConfigEditorTypeKey) + "=node type, " +
-                                  KeyName(YourBuddyPlugin.ConfigEditorAutoLinkKey) + "=auto-connect, " +
                                   KeyName(YourBuddyPlugin.ConfigEditorSaveKey) + "=save");
                 };
 

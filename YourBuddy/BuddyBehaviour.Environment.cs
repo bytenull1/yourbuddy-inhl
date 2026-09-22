@@ -11,7 +11,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         /// <summary>
         /// The player's HealthSystem.deathCounter and threat, for the buddy. docs/game-model.md#atmosphere-kills-by-the-players-rule
         /// </summary>
@@ -55,7 +54,6 @@ namespace YourBuddy
         private float airlocksRefreshAt = 0f;
         private List<Environment>? cachedEnvironments = null;
         private float environmentsRefreshAt = 0f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         private static readonly WaitForSeconds CatchReleaseDelay = new(1.5f);
 

@@ -140,7 +140,7 @@ namespace YourBuddy
             /// The box stands in the cage whether or not the ItemDetector noticed it: its list only
             /// grows on a trigger crossing, and SellStation.Sell clears it outright. docs/items.md §4
             /// </summary>
-            public bool Encloses(Grabbable item)
+            private bool Encloses(Grabbable item)
             {
                 if (item == null) return false;
 
@@ -160,7 +160,7 @@ namespace YourBuddy
             {
                 foreach (Grabbable item in Detector.Items)
                 {
-                    if (item != null && item.CanSell && item.Enabled && item.Signature != TrashBoxSignature) return item;
+                    if (item != null && item is { CanSell: true, Enabled: true } && item.Signature != TrashBoxSignature) return item;
                 }
                 return null;
             }
@@ -485,7 +485,7 @@ namespace YourBuddy
             foreach (SellStation station in Object.FindObjectsOfType<SellStation>())
             {
                 SellStationParts? parts = SellStationParts.Read(station);
-                if (parts != null && parts.Usable) SellStations.Add(parts);
+                if (parts is { Usable: true }) SellStations.Add(parts);
             }
             CollectContainerContents(here, SellSearchRadius + SnackContainerMargin);
             foreach (ItemDetector detector in Object.FindObjectsOfType<ItemDetector>())

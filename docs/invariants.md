@@ -297,15 +297,6 @@ through glass and across decks.
 
 **Enforced in.** `BuddyNodeGraph.MaxSeedDist`, `MaxGoalFinishDist`.
 
-### finish-may-not-change-deck
-
-**Rule.** The straight finish leg uses `SameLevelDeltaY`, not `MaxDirectDeltaY`.
-
-**Why.** At 0.8 m the cap could not tell the 0.63 m railed platform from the deck, and the finish
-beelined through the railing. `MaxDirectDeltaY` is for node-to-node auto edges only.
-
-**Enforced in.** `BuddyNodeGraph.FindPath` finish check.
-
 ### a-clear-short-goal-beats-the-graph
 
 **Rule.** Before seeding, `FindPath` returns a one-waypoint plan when the goal is within
@@ -338,24 +329,15 @@ level change in the game (the 0.63 m railed platform).
 **Enforced in.** `BuddyNodeGraph.SameLevelDeltaY`, `BuddyBehaviour.WaypointAdvanceMaxDeltaY`,
 `FollowSameLevelDeltaY`.
 
-### no-priority-constraint-on-seeds
+### links-have-no-los
 
-**Rule.** A node with no `cameFrom` entry is a seed; priority-exit constraints do not apply to it.
-
-**Why.** A start is not an arrival. Constraining it made a buddy standing on the first stair node
-walk away from the stairs first.
-
-**Enforced in.** `BuddyNodeGraph.FindPath` neighbour expansion.
-
-### force-and-priority-have-no-los
-
-**Rule.** Force and Priority edges skip line of sight by design. Never add a line-of-sight check
-to commitment for a forced segment. Locked doors still block them
+**Rule.** Every graph edge is a link the player drew, and it skips line of sight by design. Never
+add a line-of-sight check to commitment for one. Locked doors still block them
 ([locked-doors-block-edges](#locked-doors-block-edges)).
 
 **Why.** Users draw them exactly where geometry blocks sight (railings, airlock collars). A "next
-stretch blocked" check fired every 0.22 s mid-stair and made Force links useless. Runtime
-blockage is the stuck detector's job.
+stretch blocked" check fired every 0.22 s mid-stair and made links useless. Runtime blockage is
+the stuck detector's job.
 
 **Enforced in.** `NavPath.IsForced`, checked before the commitment probe.
 

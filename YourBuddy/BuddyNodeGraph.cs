@@ -20,28 +20,10 @@ namespace YourBuddy
             Stair = 1
         }
 
-        public enum LinkMode
-        {
-            Force = 0,
-            Block = 1,
-            // Directional rule: whenever a path arrives at the first node of the link
-            // from anywhere else, the only allowed exit is the second node. Arriving
-            // Via the second node leaves all other exits open, so return trips work.
-            Priority = 2
-        }
-
-        public enum EdgeKind
-        {
-            Auto = 0,
-            Forced = 1,
-            Blocked = 2,
-            Priority = 3
-        }
-
         /// <summary>
-        /// A planned route in world space. WaypointIsForced[i]: the edge arriving at i is Force or
-        /// Priority (docs/invariants.md#force-and-priority-have-no-los). WaypointFloorY[i]: the
-        /// deck under i as the search measured it, never the marker's Y (#floor-to-floor).
+        /// A planned route in world space. WaypointIsForced[i]: the edge arriving at i is a graph
+        /// link (docs/invariants.md#links-have-no-los). WaypointFloorY[i]: the deck under i as the
+        /// search measured it, never the marker's Y (#floor-to-floor).
         /// </summary>
         public readonly record struct NavPath(IReadOnlyList<Vector3> Waypoints, IReadOnlyList<bool> WaypointIsForced,
             IReadOnlyList<float> WaypointFloorY)
@@ -77,11 +59,7 @@ namespace YourBuddy
         public const string ShipOwner = "ship";
         public const string WorldOwner = "world";
 
-        // Deck-to-deck span an auto edge may cross; steeper needs a Stair endpoint or a
-        // Force link. Node-to-node only - the finish leg uses SameLevelDeltaY:
-        // docs/invariants.md#finish-may-not-change-deck
-        private const float MaxDirectDeltaY = 0.8f;
-        // With a Stair endpoint, auto edges may climb up to this height.
+        // How far off-level a Stair node may still be entered from, at its foot or head.
         private const float MaxStairDeltaY = 2.0f;
 
         private sealed class Node
@@ -90,7 +68,6 @@ namespace YourBuddy
             public string Owner = null!; // always set by its object initializer
             public Vector3 LocalPos;
             public NodeType Type;
-            public bool AutoLink = true; // false = manual links only for this node
             /// <summary>
             /// Came from the graph shipped inside the DLL, so it is not written to the
             /// user's file and a mod update may replace it. docs/navigation.md
@@ -105,11 +82,10 @@ namespace YourBuddy
             public Vector3 AnchorAt;
         }
 
-        private sealed class ManualLink(int a, int b, LinkMode mode, Vector3 offset)
+        private sealed class ManualLink(int a, int b, Vector3 offset)
         {
             public readonly int A = a;
             public readonly int B = b;
-            public LinkMode Mode = mode; // toggled between modes in place
             /// <summary>
             /// How far A's room had moved relative to B's when the link was drawn; the link holds in
             /// that ship layout only. docs/invariants.md#a-ship-node-rides-its-room
@@ -117,11 +93,10 @@ namespace YourBuddy
             public readonly Vector3 Offset = offset;
         }
 
-        private readonly struct Edge(int to, float cost, EdgeKind kind)
+        private readonly struct Edge(int to, float cost)
         {
             public readonly int To = to;
             public readonly float Cost = cost;
-            public readonly EdgeKind Kind = kind;
         }
 
         // ------------------------------------------------------------------
@@ -133,7 +108,6 @@ namespace YourBuddy
             public int Id;
             public float[]? P;
             public int T;
-            public bool A = true; // AutoLink
             // Node.Anchor / AnchorAt; absent on other owners and on ship nodes not yet anchored.
             [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
             public string? R;
@@ -154,21 +128,26 @@ namespace YourBuddy
         {
             public int A;
             public int B;
-            public int M;
             // ManualLink.Offset; absent when zero, which is every link drawn in the layout its nodes were placed in.
             [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
             public float[]? O;
+            /// <summary>
+            /// Pre-simplification link mode (0 Force, 1 Block, 2 Priority); only Force survived.
+            /// Absent on a file this build writes - kept so a Block/Priority link from an older
+            /// file is dropped instead of silently becoming a live connection.
+            /// </summary>
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public int? M = null; // never constructed in code - only Newtonsoft ever sets it
         }
 
         private sealed class NodeGraphFile
         {
-            // ReSharper disable FieldCanBeMadeReadOnly.Local
-            public int Version = 4;
+            public readonly int Version = 4;
             /// <summary>
             /// Bundled file only: bumped by hand when the shipped graph changes, which
             /// is what makes an update land without touching the user's own file.
             /// </summary>
-            public int BundleVersion = 0;
+            public readonly int BundleVersion = 0;
             /// <summary>
             /// User file only: owners the player has taken over. Kept explicitly so an
             /// owner can be forked and then emptied - "I want no nodes here" is not the
@@ -176,12 +155,10 @@ namespace YourBuddy
             /// </summary>
             [JsonProperty("ForkedOwners")]
             public List<string>? Forked = [];
-            public List<GraphFile?>? Graphs = [];
-            public List<LinkFile?>? Links = [];
-            // ReSharper restore FieldCanBeMadeReadOnly.Local
+            public readonly List<GraphFile?>? Graphs = [];
+            public readonly List<LinkFile?>? Links = [];
         }
 
-        // ReSharper disable RedundantDefaultMemberInitializer
         private static readonly List<Node> Nodes = [];
         private static readonly List<ManualLink> ManualLinks = [];
         private static readonly Dictionary<string, uint> OwnerIds = [];
@@ -206,15 +183,11 @@ namespace YourBuddy
 
         // Cached adjacency lists over active nodes (node id -> outgoing edges).
         private static Dictionary<int, List<Edge>>? _edges = null;
-        // Node id -> set of priority-exit targets: when a path arrives at such a node
-        // from anywhere else, A* may only leave through one of these targets.
-        private static Dictionary<int, HashSet<int>>? _priorityExits = null;
         // Node id -> node, rebuilt with the edge cache. A duplicated id resolves to the first
         // node, as the linear scan this replaced did.
         private static readonly Dictionary<int, Node> NodesById = [];
         private static bool _edgesDirty = true;
         private static string? _lastDockSig = null;
-        private static float _lastMaxEdgeDist = -1f;
 
         // Node id -> how far the marker floats above the floor underneath it.
         // See NodeFloorY for why the hover is cached rather than the floor height.
@@ -234,7 +207,6 @@ namespace YourBuddy
         private static readonly List<string?> SpaceObjectNames = [];
         private static float _spaceObjectsRefreshAt = 0f;
         private static bool _spaceObjectsValid = false;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         // SpaceStation.Rooms reflection access lives in GameInternals.SpaceStationAccess.
 
@@ -366,7 +338,6 @@ namespace YourBuddy
                         Owner = owner,
                         LocalPos = new Vector3(nf.P[0], nf.P[1], nf.P[2]),
                         Type = (NodeType)nf.T,
-                        AutoLink = nf.A,
                         Bundled = bundled,
                         Anchor = owner == ShipOwner && !string.IsNullOrEmpty(nf.R) ? nf.R : null,
                         AnchorAt = nf.S is { Length: >= 3 } ? new Vector3(nf.S[0], nf.S[1], nf.S[2]) : Vector3.zero
@@ -392,6 +363,9 @@ namespace YourBuddy
             foreach (LinkFile? lf in data.Links)
             {
                 if (lf == null) continue;
+                // A Block or Priority link from a file written before the simplification: the
+                // modes are gone, and letting it through would turn "no connection" into one.
+                if (lf.M is > 0) continue;
 
                 int a = lf.A;
                 int b = lf.B;
@@ -407,7 +381,7 @@ namespace YourBuddy
 
                 Vector3 offset = lf.O is { Length: >= 3 } ? new Vector3(lf.O[0], lf.O[1], lf.O[2]) : Vector3.zero;
                 ManualLinks.RemoveAll(l => SamePair(l, a, b) && SameOffset(l, a, offset));
-                ManualLinks.Add(new ManualLink(a, b, (LinkMode)lf.M, offset));
+                ManualLinks.Add(new ManualLink(a, b, offset));
             }
         }
 
@@ -492,7 +466,7 @@ namespace YourBuddy
                     }
                     list.Add(new NodeFile
                     {
-                        Id = n.Id, P = [n.LocalPos.x, n.LocalPos.y, n.LocalPos.z], T = (int)n.Type, A = n.AutoLink,
+                        Id = n.Id, P = [n.LocalPos.x, n.LocalPos.y, n.LocalPos.z], T = (int)n.Type,
                         R = n.Anchor,
                         S = n.Anchor != null && n.AnchorAt != Vector3.zero
                             ? [n.AnchorAt.x, n.AnchorAt.y, n.AnchorAt.z]
@@ -512,7 +486,7 @@ namespace YourBuddy
 
                     data.Links!.Add(new LinkFile
                     {
-                        A = l.A, B = l.B, M = (int)l.Mode,
+                        A = l.A, B = l.B,
                         O = l.Offset != Vector3.zero ? [l.Offset.x, l.Offset.y, l.Offset.z] : null
                     });
                 }
@@ -843,25 +817,6 @@ namespace YourBuddy
             return type;
         }
 
-        public static bool GetNodeAutoLink(int index)
-        {
-            EnsureLoaded();
-            return !ValidIndex(index) || Nodes[index].AutoLink;
-        }
-
-        public static bool SetNodeAutoLink(int index, bool autoLink)
-        {
-            EnsureLoaded();
-            if (ValidIndex(index))
-            {
-                ForkOwnerOf(index);
-                Nodes[index].AutoLink = autoLink;
-                _dirty = true;
-                _edgesDirty = true;
-            }
-            return autoLink;
-        }
-
         public static string? GetNodeOwner(int index)
         {
             EnsureLoaded();
@@ -923,18 +878,18 @@ namespace YourBuddy
         }
 
         // ----------------------------------------------------------------
-        // Manual link control (Force / Block)
+        // Manual link control
         // ----------------------------------------------------------------
 
         /// <summary>
-        /// Toggles a manual link between two nodes (by list index). Returns the
-        /// resulting mode, or null when an existing link with the same mode was
-        /// removed. Callers must validate indices first.
+        /// Toggles a link between two nodes (by list index): creates one if none exists between
+        /// them, removes it if one does. Returns whether a link exists afterwards. Callers must
+        /// validate indices first.
         /// </summary>
-        public static LinkMode? ToggleLink(int indexA, int indexB, LinkMode mode)
+        public static bool ToggleLink(int indexA, int indexB)
         {
             EnsureLoaded();
-            if (!ValidIndex(indexA) || !ValidIndex(indexB) || indexA == indexB) return null;
+            if (!ValidIndex(indexA) || !ValidIndex(indexB) || indexA == indexB) return false;
 
             ForkOwnerOf(indexA);
             ForkOwnerOf(indexB);
@@ -948,24 +903,17 @@ namespace YourBuddy
                 ManualLink l = ManualLinks[i];
                 if (SamePair(l, idA, idB) && SameOffset(l, idA, offset))
                 {
-                    if (l.Mode == mode)
-                    {
-                        ManualLinks.RemoveAt(i);
-                        _edgesDirty = true;
-                        _dirty = true;
-                        return null;
-                    }
-                    l.Mode = mode;
+                    ManualLinks.RemoveAt(i);
                     _edgesDirty = true;
                     _dirty = true;
-                    return l.Mode;
+                    return false;
                 }
             }
 
-            ManualLinks.Add(new ManualLink(idA, idB, mode, offset));
+            ManualLinks.Add(new ManualLink(idA, idB, offset));
             _edgesDirty = true;
             _dirty = true;
-            return mode;
+            return true;
         }
 
         /// <summary>
@@ -981,28 +929,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Removes the manual links between the two nodes (by list index), in every ship layout.
-        /// Returns true when one existed.
-        /// </summary>
-        public static bool ClearLink(int indexA, int indexB)
-        {
-            EnsureLoaded();
-            if (!ValidIndex(indexA) || !ValidIndex(indexB)) return false;
-
-            ForkOwnerOf(indexA);
-            ForkOwnerOf(indexB);
-            int idA = Nodes[indexA].Id;
-            int idB = Nodes[indexB].Id;
-            if (ManualLinks.RemoveAll(l => SamePair(l, idA, idB)) == 0) return false;
-
-            _edgesDirty = true;
-            _dirty = true;
-            return true;
-        }
-
-        /// <summary>
-        /// Removes every manual link touching the node (by list index); auto edges are left
-        /// to its AutoLink flag. Returns how many links were removed.
+        /// Removes every manual link touching the node (by list index). Returns how many were
+        /// removed.
         /// </summary>
         public static int ClearLinks(int index)
         {
@@ -1018,11 +946,6 @@ namespace YourBuddy
             _dirty = true;
             return removed;
         }
-
-        /// <summary>
-        /// Order-independent key for a node pair: a manual link counts in either direction.
-        /// </summary>
-        private static (int, int) PairKey(int idA, int idB) => idA < idB ? (idA, idB) : (idB, idA);
 
         private static bool SamePair(ManualLink l, int idA, int idB) =>
             (l.A == idA && l.B == idB) || (l.A == idB && l.B == idA);
@@ -1611,16 +1534,14 @@ namespace YourBuddy
             AnchorPendingShipNodes();
             string sig = DockSignature();
             int layoutSig = ShipLayoutSignature();
-            float maxDist = YourBuddyPlugin.ConfigMaxEdgeDist.Value;
-            if (_edgesDirty || sig != _lastDockSig || layoutSig != _lastShipLayoutSig ||
-                !Mathf.Approximately(maxDist, _lastMaxEdgeDist))
+            if (_edgesDirty || sig != _lastDockSig || layoutSig != _lastShipLayoutSig)
             {
                 // The dock context or the ship's rooms changed, so the scene's gate set may
-                // have too - the edge rebuild below probes geometry and must not consult a
-                // stale list.
+                // have too - CanReachEntry probes geometry against it right after this rebuild
+                // and must not consult a stale list.
                 NavProbe.InvalidateGates();
                 bool layoutChanged = _lastShipLayoutSig != 0 && layoutSig != _lastShipLayoutSig;
-                RebuildEdges(sig, maxDist);
+                RebuildEdges(sig);
                 _lastShipLayoutSig = layoutSig;
                 if (layoutChanged) LogShipLayoutChange();
             }
@@ -1643,126 +1564,47 @@ namespace YourBuddy
                 dormant + " dormant in rooms not built; edges rebuilt");
         }
 
-        private static void RebuildEdges(string dockSig, float maxDist)
+        private static void RebuildEdges(string dockSig)
         {
-            // Geometry is about to be re-probed; the deck each node stands on may have
-            // changed with it (a station appearing, a ship module unfolding).
+            // The deck each node stands on may have changed (a station appearing, a ship
+            // module unfolding).
             NodeHover.Clear();
             _edges = [];
-            _priorityExits = [];
 
             NodesById.Clear();
             foreach (Node n in Nodes) NodesById.TryAdd(n.Id, n);
 
+            // Every live node gets an adjacency list, even an empty one: FindPath treats
+            // _edges.Keys as the set of nodes it may seed from or route through.
             OwnerSnapshot owners = new();
-            List<int> activeIndices = [];
-            for (int i = 0; i < Nodes.Count; i++)
+            foreach (Node n in Nodes)
             {
-                if (owners.IsLive(Nodes[i]))
-                {
-                    activeIndices.Add(i);
-                    _edges[Nodes[i].Id] = [];
-                }
+                if (owners.IsLive(n)) _edges[n.Id] = [];
             }
 
-            // Once per node rather than once per pair; still fresh for this rebuild.
-            Vector3[] activeWorld = new Vector3[activeIndices.Count];
-            for (int k = 0; k < activeIndices.Count; k++) activeWorld[k] = owners.WorldOf(Nodes[activeIndices[k]]);
-
-            // A lookup instead of scanning every manual link per pair; a pair described twice
-            // keeps the first link, as the scan this replaced did. A link whose ends a ship
-            // upgrade moved apart is left out: docs/invariants.md#a-ship-node-rides-its-room
-            Dictionary<(int, int), LinkMode> manualModes = new(ManualLinks.Count);
+            // The graph has no other source of edges - every connection is a link the
+            // player drew. A pair linked twice keeps the first: docs/invariants.md#a-ship-node-rides-its-room
             foreach (ManualLink l in ManualLinks)
             {
-                Node la = NodesById.GetValueOrDefault(l.A);
-                Node lb = NodesById.GetValueOrDefault(l.B);
-                if (la == null || lb == null || !owners.LinkIsLive(l, la, lb)) continue;
+                Node? la = NodesById.GetValueOrDefault(l.A);
+                Node? lb = NodesById.GetValueOrDefault(l.B);
+                if (la == null || lb == null) continue;
+                if (!_edges.TryGetValue(la.Id, out List<Edge> edgesA) || !_edges.TryGetValue(lb.Id, out List<Edge> edgesB)) continue;
+                if (!owners.LinkIsLive(l, la, lb)) continue;
 
-                manualModes.TryAdd(PairKey(l.A, l.B), l.Mode);
-            }
-
-            for (int a = 0; a < activeIndices.Count; a++)
-            {
-                for (int b = a + 1; b < activeIndices.Count; b++)
-                {
-                    Node na = Nodes[activeIndices[a]];
-                    Node nb = Nodes[activeIndices[b]];
-                    Vector3 wa = activeWorld[a];
-                    Vector3 wb = activeWorld[b];
-                    float dist = Vector3.Distance(wa, wb);
-                    if (dist > maxDist) continue;
-
-                    LinkMode? manual = manualModes.TryGetValue(PairKey(na.Id, nb.Id), out LinkMode linkMode)
-                        ? linkMode
-                        : null;
-                    if (manual == LinkMode.Block) continue;
-
-                    bool forced = manual == LinkMode.Force || manual == LinkMode.Priority;
-                    // AutoLink=false nodes accept manual links only.
-                    if (!forced)
-                    {
-                        if (!na.AutoLink || !nb.AutoLink) continue;
-
-                        if (!AutoEdgeAllowed(na, nb, NodeFloorY(na, wa), NodeFloorY(nb, wb))) continue;
-                        // Thin, not a body sweep: the strict sweep rejected exactly the
-                        // connections the user drew. docs/navigation.md
-                        if (!NavProbe.ThinLos(wa, wb, MaxStairDeltaY)) continue;
-                    }
-
-                    EdgeKind kind = manual == LinkMode.Priority ? EdgeKind.Priority
-                        : forced ? EdgeKind.Forced
-                        : EdgeKind.Auto;
-                    _edges[na.Id].Add(new Edge(nb.Id, dist, kind));
-                    _edges[nb.Id].Add(new Edge(na.Id, dist, kind));
-                }
-            }
-
-            // Directional on purpose: the reverse trip stays free, or stair routes
-            // could not be walked both ways.
-            foreach (ManualLink l in ManualLinks)
-            {
-                if (l.Mode != LinkMode.Priority) continue;
-
-                Node? na = NodeById(l.A);
-                Node? nb = NodeById(l.B);
-                if (na == null || nb == null) continue;
-
-                if (!owners.IsLive(na) || !owners.IsLive(nb) || !owners.LinkIsLive(l, na, nb)) continue;
-
-                if (!_priorityExits.TryGetValue(l.A, out HashSet<int> exits))
-                {
-                    exits = [];
-                    _priorityExits[l.A] = exits;
-                }
-                exits.Add(l.B);
+                float dist = Vector3.Distance(owners.WorldOf(la), owners.WorldOf(lb));
+                edgesA.Add(new Edge(lb.Id, dist));
+                edgesB.Add(new Edge(la.Id, dist));
             }
 
             _edgesDirty = false;
             _lastDockSig = dockSig;
-            _lastMaxEdgeDist = maxDist;
         }
 
         /// <summary>
-        /// Vertical traversal rule: near-flat edges are automatic; a climb is only
-        /// automatic toward a Stair node; anything steeper needs a Force link.
-        /// Measured deck-to-deck, not marker-to-marker (see NodeFloorY).
+        /// World-space lines for editor visualization: every live link.
         /// </summary>
-        private static bool AutoEdgeAllowed(Node a, Node b, float floorA, float floorB)
-        {
-            float deltaY = Mathf.Abs(floorB - floorA);
-            if (deltaY <= MaxDirectDeltaY) return true;
-
-            if (deltaY <= MaxStairDeltaY) return a.Type == NodeType.Stair || b.Type == NodeType.Stair;
-
-            return false;
-        }
-
-        /// <summary>
-        /// World-space lines for editor visualization: cached auto/forced edges plus
-        /// manual Block links (which are not part of the traversable graph).
-        /// </summary>
-        public static void GetEdgeVisuals(List<(Vector3 a, Vector3 b, EdgeKind kind)> lines)
+        public static void GetEdgeVisuals(List<(Vector3 a, Vector3 b)> lines)
         {
             EnsureLoaded();
             EnsureEdgesFresh();
@@ -1783,17 +1625,7 @@ namespace YourBuddy
                         continue; // each edge once
                     }
 
-                    lines.Add((owners.WorldOf(Nodes[ia]), owners.WorldOf(Nodes[ib]), e.Kind));
-                }
-            }
-
-            foreach (ManualLink l in ManualLinks)
-            {
-                if (l.Mode != LinkMode.Block) continue;
-
-                if (idToIndex.TryGetValue(l.A, out int ia2) && idToIndex.TryGetValue(l.B, out int ib2))
-                {
-                    lines.Add((owners.WorldOf(Nodes[ia2]), owners.WorldOf(Nodes[ib2]), EdgeKind.Blocked));
+                    lines.Add((owners.WorldOf(Nodes[ia]), owners.WorldOf(Nodes[ib])));
                 }
             }
         }
@@ -2186,9 +2018,7 @@ namespace YourBuddy
                     if (fScore[openSet[i]] < fScore[current]) current = openSet[i];
                 }
 
-                // Can we walk the last stretch directly from here? Probed and length
-                // capped, and SameLevelDeltaY rather than MaxDirectDeltaY:
-                // docs/invariants.md#finish-may-not-change-deck
+                // Can we walk the last stretch directly from here? Probed and length capped.
                 if ((world[current] - end).sqrMagnitude <= MaxGoalFinishDist * MaxGoalFinishDist)
                 {
                     // Cost first: the walkable-line probe is the expensive part, and only a better finish needs it.
@@ -2226,31 +2056,13 @@ namespace YourBuddy
 
                 if (!_edges.TryGetValue(current, out List<Edge> edges)) continue;
 
-                // Priority links: arriving from anywhere other than the priority target
-                // forces the exit through it. Arriving via it leaves all exits open.
-                if (_priorityExits != null && _priorityExits.TryGetValue(current, out HashSet<int> exits))
-                {
-                    // No cameFrom entry means `current` is a seed, and a start is not an
-                    // arrival: docs/invariants.md#no-priority-constraint-on-seeds
-                    if (cameFrom.TryGetValue(current, out int predecessor) && !exits.Contains(predecessor))
-                    {
-                        List<Edge>? forcedExits = null;
-                        foreach (Edge e in edges)
-                        {
-                            if (exits.Contains(e.To)) (forcedExits ??= []).Add(e);
-                        }
-                        if (forcedExits != null) edges = forcedExits;
-                    }
-                }
-
                 foreach (Edge e in edges)
                 {
                     if (closedSet.Contains(e.To) || !world.ContainsKey(e.To)) continue;
 
                     if (excluded != null && excluded.Contains(e.To)) continue;
-                    // Force and Priority edges are filtered too: their LOS exemption is
-                    // about sight lines, and a locked door is not one.
-                    // docs/invariants.md#locked-doors-block-edges
+                    // Links are filtered too: their LOS exemption is about sight lines, and a
+                    // locked door is not one. docs/invariants.md#locked-doors-block-edges
                     if (DoorBlocks(world[current], world[e.To])) continue;
 
                     float tentative = gScore[current] + e.Cost;
@@ -2312,7 +2124,7 @@ namespace YourBuddy
             }
 
             // Build waypoints and the parallel forced[] and deck arrays.
-            // forced[i] = true when the edge arriving at waypoint i is Force/Priority.
+            // forced[i] = true when the edge arriving at waypoint i is a graph link.
             List<Vector3> waypoints = [];
             List<bool> forced = [];
             List<float> decks = [];
@@ -2331,26 +2143,12 @@ namespace YourBuddy
                 waypoints.Add(world[nodeId]);
                 decks.Add(floors[nodeId]);
 
-                // Forced: a Force/Priority link arrives here, or this is an off-level Stair
-                // entry the seeder already accepted. docs/invariants.md#a-stair-entry-is-committed-once-taken
-                bool isForced = ni == 0 &&
-                                NodeById(nodeId)?.Type == NodeType.Stair &&
-                                Mathf.Abs(floors[nodeId] - startFloorY) > SameLevelDeltaY;
-                if (ni > 0)
-                {
-                    int prevId = nodeChain[ni - 1];
-                    if (_edges.TryGetValue(prevId, out List<Edge> prevEdges))
-                    {
-                        foreach (Edge e in prevEdges)
-                        {
-                            if (e.To == nodeId)
-                            {
-                                isForced = e.Kind == EdgeKind.Forced || e.Kind == EdgeKind.Priority;
-                                break;
-                            }
-                        }
-                    }
-                }
+                // Forced: a link arrives here (every graph edge is one), or this is an
+                // off-level Stair entry the seeder already accepted.
+                // docs/invariants.md#a-stair-entry-is-committed-once-taken
+                bool isForced = ni > 0 ||
+                                (NodeById(nodeId)?.Type == NodeType.Stair &&
+                                 Mathf.Abs(floors[nodeId] - startFloorY) > SameLevelDeltaY);
                 forced.Add(isForced);
             }
 

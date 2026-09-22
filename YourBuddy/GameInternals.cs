@@ -207,7 +207,7 @@ namespace YourBuddy
             internal static float GetScale(LifecareDisplay? display)
             {
                 float? scale = GetValue<float>(Scale, display);
-                return scale.HasValue ? scale.Value : DefaultScale;
+                return scale ?? DefaultScale;
             }
         }
 

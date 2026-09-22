@@ -12,10 +12,9 @@ namespace YourBuddy
     /// </summary>
     public sealed class BuddyNodeEditor : MonoBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         private int selectedNode = -1;
         private int lastSelectedNode = -1;
-        private int markedNode = -1; // first node of a pending K/B/O link
+        private int markedNode = -1; // first node of a pending link
         private float lastPlaceTime = 0f;
         private float lastDeleteTime = 0f;
         private float visUpdateTimer = 0f;
@@ -26,16 +25,15 @@ namespace YourBuddy
         private float cacheRefreshAt = 0f;
         private Vector3 lastPlayerPos = Vector3.zero;
 
-        // Markers and edges only draw near the player. 80 matches the default
-        // Navigation.MaxEdgeDist - past it nodes cannot auto-connect anyway.
+        // Markers and edges only draw near the player, so a large graph does not paint
+        // off-screen crosshairs and long-haul lines across the whole sector.
         private const float MaxDrawnEdgePlayerDist = 80f;
         private const float MaxDrawnNodePlayerDist = 80f;
 
         private readonly List<LineRenderer> nodeVisLines = [];
         private readonly List<LineRenderer> connVisLines = [];
-        private readonly List<(Vector3 a, Vector3 b, BuddyNodeGraph.EdgeKind kind)> edgeLines = [];
+        private readonly List<(Vector3 a, Vector3 b)> edgeLines = [];
         private Material? lrMaterial = null;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         /// <summary>
         /// Toggle the editor on/off.
@@ -158,30 +156,18 @@ namespace YourBuddy
                 UpdateVisualization();
             }
 
-            // Keys: K (Force), B (Block), O (Priority) - two-phase linking.
-            // First press marks the selected node; the second press (at another node)
-            // creates the link between the marked and the currently selected node.
-            HandleLinkKey(BuddyNodeGraph.LinkMode.Force, YourBuddyPlugin.ConfigEditorForceLinkKey);
-            HandleLinkKey(BuddyNodeGraph.LinkMode.Block, YourBuddyPlugin.ConfigEditorBlockLinkKey);
-            HandleLinkKey(BuddyNodeGraph.LinkMode.Priority, YourBuddyPlugin.ConfigEditorPriorityLinkKey);
+            // Key: K (by default) - two-phase linking. First press marks the selected
+            // node; the second press (at another node) creates or removes the link
+            // between the marked and the currently selected node.
+            HandleLinkKey(YourBuddyPlugin.ConfigEditorForceLinkKey);
 
-            // Key: U (by default) removes every manual link of the selected node in one go.
+            // Key: U (by default) removes every link of the selected node in one go.
             if (KeyDown(YourBuddyPlugin.ConfigEditorClearLinksKey) && selectedNode >= 0)
             {
                 int cleared = BuddyNodeGraph.ClearLinks(selectedNode);
                 YourBuddyPlugin.Log.LogInfo(cleared > 0
-                    ? "[editor] Node #" + selectedNode + ": " + cleared + " manual link(s) removed"
-                    : "[editor] Node #" + selectedNode + " has no manual links");
-                UpdateVisualization();
-            }
-
-            // Key: N (by default) toggles auto-connect snapping for the selected node.
-            // Auto-connect off (blue) means the node only accepts manual links.
-            if (KeyDown(YourBuddyPlugin.ConfigEditorAutoLinkKey) && selectedNode >= 0)
-            {
-                bool now = BuddyNodeGraph.SetNodeAutoLink(selectedNode, !BuddyNodeGraph.GetNodeAutoLink(selectedNode));
-                YourBuddyPlugin.Log.LogInfo("[editor] Node #" + selectedNode + " auto-connect: " +
-                                            (now ? "ON" : "OFF (manual links only)"));
+                    ? "[editor] Node #" + selectedNode + ": " + cleared + " link(s) removed"
+                    : "[editor] Node #" + selectedNode + " has no links");
                 UpdateVisualization();
             }
 
@@ -214,9 +200,10 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Two-phase manual linking: mark a node, walk to another one, apply the mode.
+        /// Two-phase linking: mark a node, walk to another one, press again to link them
+        /// (or to remove the link, if pressed at an already-linked pair).
         /// </summary>
-        private void HandleLinkKey(BuddyNodeGraph.LinkMode mode, ConfigEntry<KeyboardShortcut> entry)
+        private void HandleLinkKey(ConfigEntry<KeyboardShortcut> entry)
         {
             if (!KeyDown(entry)) return;
 
@@ -230,7 +217,7 @@ namespace YourBuddy
                 markedNode = selectedNode;
                 YourBuddyPlugin.Log.LogInfo("[editor] Marked node #" + markedNode +
                                             " - now stand at another node and press " + KeyName(entry) +
-                                            " to create the link (press on the same node to cancel)");
+                                            " to link (press on the same node to cancel)");
                 UpdateVisualization();
                 return;
             }
@@ -243,10 +230,10 @@ namespace YourBuddy
                 return;
             }
 
-            BuddyNodeGraph.LinkMode? result = BuddyNodeGraph.ToggleLink(markedNode, selectedNode, mode);
-            YourBuddyPlugin.Log.LogInfo(result == null
+            bool created = BuddyNodeGraph.ToggleLink(markedNode, selectedNode);
+            YourBuddyPlugin.Log.LogInfo(!created
                 ? $"[editor] Link removed between #{markedNode} and #{selectedNode}"
-                : $"[editor] {result} link: arrive at #{markedNode} -> go to #{selectedNode}" +
+                : $"[editor] Link created: #{markedNode} <-> #{selectedNode}" +
                   (BuddyNodeGraph.LinkIsStageBound(markedNode, selectedNode)
                       ? " (holds only while the ship's rooms stand as they do now)"
                       : ""));
@@ -298,7 +285,6 @@ namespace YourBuddy
             if (index == markedNode) return new Color(1f, 0.4f, 1f); // magenta: marked for a link
             if (index == selectedNode) return Color.red;
             if (!BuddyNodeGraph.IsNodeActive(index)) return new Color(0.45f, 0.45f, 0.45f); // inactive or unbuilt
-            if (!BuddyNodeGraph.GetNodeAutoLink(index)) return new Color(0.4f, 0.7f, 1f);   // blue: manual links only
             if (BuddyNodeGraph.GetNodeType(index) == BuddyNodeGraph.NodeType.Stair) return new Color(1f, 0.55f, 0.1f);
             return Color.green;
         }
@@ -346,13 +332,13 @@ namespace YourBuddy
             int connVisIndex = 0;
             if (showConnections)
             {
-                // Draw the actual graph: cached auto/forced edges plus blocked links.
-                // Edges are only drawn near the player - long-haul connections to a
-                // station across the sector would otherwise paint lines everywhere.
+                // Draw the actual graph. Edges are only drawn near the player - long-haul
+                // connections to a station across the sector would otherwise paint lines
+                // everywhere.
                 edgeLines.Clear();
                 BuddyNodeGraph.GetEdgeVisuals(edgeLines);
 
-                foreach ((Vector3 a, Vector3 b, BuddyNodeGraph.EdgeKind kind) in edgeLines)
+                foreach ((Vector3 a, Vector3 b) in edgeLines)
                 {
                     if ((a - lastPlayerPos).sqrMagnitude > MaxDrawnEdgePlayerDist * MaxDrawnEdgePlayerDist ||
                         (b - lastPlayerPos).sqrMagnitude > MaxDrawnEdgePlayerDist * MaxDrawnEdgePlayerDist)
@@ -360,14 +346,7 @@ namespace YourBuddy
                         continue;
                     }
 
-                    Color color = kind switch
-                    {
-                        BuddyNodeGraph.EdgeKind.Forced => Color.yellow,
-                        BuddyNodeGraph.EdgeKind.Priority => new Color(1f, 0.4f, 1f),
-                        BuddyNodeGraph.EdgeKind.Blocked => Color.red,
-                        _ => Color.cyan
-                    };
-                    LineRenderer lr = GetLineRenderer(connVisLines, connVisIndex++, 0.025f, color);
+                    LineRenderer lr = GetLineRenderer(connVisLines, connVisIndex++, 0.025f, Color.yellow);
                     lr.positionCount = 2;
                     lr.SetPosition(0, a + Vector3.up * 0.5f);
                     lr.SetPosition(1, b + Vector3.up * 0.5f);
@@ -389,10 +368,10 @@ namespace YourBuddy
             // Draw-only panel: docs/invariants.md#read-only-panels-build-on-repaint
             if (UnityEngine.Event.current.type != EventType.Repaint) return;
 
-            // Sized to the thirteen lines drawn below, plus slack for a wrapped node
-            // summary. Grow it here if you add a control line.
+            // Sized to the lines drawn below, plus slack for a wrapped node summary.
+            // Grow it here if you add a control line.
             float boxW = 380f;
-            float boxH = 270f;
+            float boxH = 230f;
             float x = Screen.width - boxW - 10f;
             float y = 10f;
 
@@ -400,7 +379,7 @@ namespace YourBuddy
 
             string text = "Nodes: " + BuddyNodeGraph.DescribeNodes();
 
-            if (markedNode >= 0) text += "\nMarked: #" + markedNode + " (magenta) - select another node, then K/B/O";
+            if (markedNode >= 0) text += "\nMarked: #" + markedNode + " (magenta) - select another node, then K";
 
             if (selectedNode >= 0 && cachedNodes != null && selectedNode < cachedNodes.Count)
             {
@@ -408,12 +387,11 @@ namespace YourBuddy
                 float dist = player != null && player.Controller != null
                     ? Vector3.Distance(player.Controller.CachedTransform.position, cachedNodes[selectedNode])
                     : 0f;
-                string flags = BuddyNodeGraph.GetNodeAutoLink(selectedNode) ? "" : ", manual-only";
                 string? anchor = BuddyNodeGraph.GetNodeAnchor(selectedNode);
                 text += "\nNearest: #" + selectedNode + " (" + dist.ToString("0.0") + "m)" +
                         " [" + BuddyNodeGraph.GetNodeOwner(selectedNode) + (anchor != null ? "/" + anchor : "") +
                         (BuddyNodeGraph.GetNodeType(selectedNode) == BuddyNodeGraph.NodeType.Stair ? ", stair" : "") +
-                        flags + "]";
+                        "]";
             }
             else
             {
@@ -425,12 +403,9 @@ namespace YourBuddy
             text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorPlaceKey) + "/Numpad0: Place node";
             text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorDeleteKey) + ": Remove nearest node";
             text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorLinksKey) + ": Toggle connections " + (showConnections ? "[ON]" : "[OFF]");
-            text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorForceLinkKey) + "/" +
-                    KeyName(YourBuddyPlugin.ConfigEditorBlockLinkKey) + "/" +
-                    KeyName(YourBuddyPlugin.ConfigEditorPriorityLinkKey) + ": Link force/block/priority (2 presses)";
+            text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorForceLinkKey) + ": Link nodes (2 presses)";
             text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorClearLinksKey) + ": Clear the node's links";
             text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorTypeKey) + ": Node type ground/stair";
-            text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorAutoLinkKey) + ": Auto-connect on/off (blue = manual only)";
             text += "\n" + KeyName(YourBuddyPlugin.ConfigEditorSaveKey) + ": Save nodes";
 
             GUI.Label(new Rect(x + 10f, y + 22f, boxW - 20f, boxH - 30f), text);

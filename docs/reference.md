@@ -20,8 +20,7 @@ Before changing any height threshold, read
 | `SameLevelDeltaY` | 0.5 m | **same deck?** floor to floor |
 | `StairSeedRadius` | 2.5 m | how near a `Stair` node must be to enter it off-level |
 | `StairEntryGroundStep` | 0.8 m | largest floor break along an off-level entry |
-| `MaxStairDeltaY` | 2.0 m | climb cap for a `Stair` entry, and for auto edges with a stair end |
-| `MaxDirectDeltaY` | 0.8 m | node-to-node auto-edge climb cap only |
+| `MaxStairDeltaY` | 2.0 m | climb cap for a `Stair` entry |
 | `SeedCloseDist` / `SeedCloseDeltaY` | 1.25 m / 0.5 m | arm's-length entry, no line of sight needed |
 | `VerticalCostFactor` | 4 | height multiplier in `GoalCost` |
 | `ApproachMinGain` | 1.5 m | how much nearer an approach node must get to be worth it |
@@ -346,8 +345,8 @@ and configurable in the `NodeEditor` config section.
 
 - **F6 saves, never F5** - F5 is the game's QuickSave.
 - `U` removes every manual link of the selected node. It forks only that node's owner.
-- Node colours: green normal, orange stair, blue manual-only, red selected, magenta pending link,
-  grey inactive (other station, or unbuilt ship room - cannot be selected).
+- Node colours: green normal, orange stair, red selected, magenta pending link, grey inactive
+  (other station, or unbuilt ship room - cannot be selected).
 - The console-open check uses `GameManager.Instance?.GameCanvas?.PlayerOverlay?.ConsoleMenu?.Opened`.
   Never reflect for it.
 

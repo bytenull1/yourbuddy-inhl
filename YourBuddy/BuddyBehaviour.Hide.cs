@@ -10,7 +10,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         private HidingSpot? hideSpot = null;
         private readonly List<Door> hideOpened = [];
         private static readonly List<HidingSpot> HideCandidates = [];
@@ -79,7 +78,6 @@ namespace YourBuddy
         /// A monster parked outside forever must not freeze the buddy in a cupboard.
         /// </summary>
         private const float HideMaxSeconds = 240f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         /// <summary>
         /// Only used to reuse the reach walk's node and stand-point search; the walk itself is the flee's.
@@ -318,7 +316,7 @@ namespace YourBuddy
                     wantMove = true;
                     currentMoveTarget = navPlan.Value[navPathIndex];
                     hasMoveTarget = true;
-                    return HeadingAlongPlan() * (moveSpeed * (hideFromFear ? FleeSpeedFactor : 1f));
+                    return HeadingAlongPlan() * (MoveSpeed * (hideFromFear ? FleeSpeedFactor : 1f));
                 }
                 DropPlan();
             }
@@ -359,7 +357,7 @@ namespace YourBuddy
             wantMove = true;
             currentMoveTarget = target;
             hasMoveTarget = true;
-            return step.normalized * (moveSpeed * (hideFromFear ? FleeSpeedFactor : 1f));
+            return step.normalized * (MoveSpeed * (hideFromFear ? FleeSpeedFactor : 1f));
         }
 
         /// <summary>
@@ -380,9 +378,9 @@ namespace YourBuddy
             cc.enabled = false;
             hasMoveTarget = false;
             verticalVelocity = 0f;
-            Vector3 out_ = hideStand - transform.position;
-            out_.y = 0f;
-            if (out_.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(out_.normalized);
+            Vector3 @out = hideStand - transform.position;
+            @out.y = 0f;
+            if (@out.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(@out.normalized);
 
             CloseOpenedDoors(hideOpened, null, hideName);
             hideOpened.Clear();

@@ -9,7 +9,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         private const float NavPathRecalcInterval = 0.22f;
         // A plan is kept while the goal stays within this drift and its entry stretch
         // is clear. Replanning every tick flips the first waypoint back and forth.
@@ -85,7 +84,6 @@ namespace YourBuddy
         private const float IdleAboveFloorDelta = 0.35f;
 
         private float doorBlockedLogAt = 0f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         // ------------------------------------------------------------------
         // Modes
@@ -168,7 +166,7 @@ namespace YourBuddy
                         invalidReason = "goal moved";
                     }
                     // docs/invariants.md#one-entry-predicate; skipped per
-                    // #commitment-skips-on-route and #force-and-priority-have-no-los
+                    // #commitment-skips-on-route and #links-have-no-los
                     else if (!navPlan.Value.IsForced(navPathIndex) &&
                              !IsStandingOnRoute(start) &&
                              !BuddyNodeGraph.CanReachEntry(start, navPlan.Value[navPathIndex]))
@@ -176,7 +174,7 @@ namespace YourBuddy
                         invalidReason = "entry stretch blocked";
                         blockedEntry = navPlan.Value[navPathIndex];
                     }
-                    // No "next stretch blocked" check: docs/invariants.md#force-and-priority-have-no-los
+                    // No "next stretch blocked" check: docs/invariants.md#links-have-no-los
                     else
                     {
                         invalidReason = null;
@@ -326,7 +324,7 @@ namespace YourBuddy
                         wantMove = true;
                         currentMoveTarget = navPlan.Value[navPathIndex];
                         hasMoveTarget = true;
-                        return HeadingAlongPlan() * moveSpeed;
+                        return HeadingAlongPlan() * MoveSpeed;
                     }
                 }
 
@@ -334,7 +332,7 @@ namespace YourBuddy
                 wantMove = true;
                 currentMoveTarget = playerTransform.position;
                 hasMoveTarget = true;
-                return toPlayer.normalized * moveSpeed;
+                return toPlayer.normalized * MoveSpeed;
             }
 
             hasMoveTarget = false;
@@ -468,7 +466,7 @@ namespace YourBuddy
             hasMoveTarget = true;
             Vector3 toStep = followStepOffTarget - transform.position;
             toStep.y = 0f;
-            if (toStep.sqrMagnitude >= 0.001f) velocity = toStep.normalized * moveSpeed;
+            if (toStep.sqrMagnitude >= 0.001f) velocity = toStep.normalized * MoveSpeed;
 
             return true;
         }
@@ -647,7 +645,7 @@ namespace YourBuddy
                 wantMove = true;
                 currentMoveTarget = navPlan.Value[navPathIndex];
                 hasMoveTarget = true;
-                return HeadingAlongPlan() * (moveSpeed * 0.85f);
+                return HeadingAlongPlan() * (MoveSpeed * 0.85f);
             }
 
             if (Time.time >= wanderIdleUntil && TryStartWanderRoute()) return Vector3.zero;
@@ -781,7 +779,7 @@ namespace YourBuddy
             wantMove = true;
             currentMoveTarget = waypoint;
             hasMoveTarget = true;
-            return toWaypoint.normalized * moveSpeed;
+            return toWaypoint.normalized * MoveSpeed;
         }
 
         /// <summary>

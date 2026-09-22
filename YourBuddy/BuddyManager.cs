@@ -15,7 +15,6 @@ namespace YourBuddy
     /// </summary>
     public sealed class BuddyManager : MonoBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         public static BuddyBehaviour? CurrentBuddy;
         private static bool _tickLogged = false;
 
@@ -34,7 +33,6 @@ namespace YourBuddy
         // the end of the animation, so this must outlive the Close() call itself.
         private static readonly List<KeyValuePair<Gate, float>> BuddyClosedGates = [];
         private const float BuddyCloseWindow = 6f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         /// <summary>
         /// Which vessel the floor under a world position belongs to. Tri-state on

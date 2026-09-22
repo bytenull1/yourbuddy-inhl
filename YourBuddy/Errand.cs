@@ -103,7 +103,7 @@ namespace YourBuddy
         /// <summary>
         /// The target is skipped for a while, and the next try waits at least RetryDelay.
         /// </summary>
-        public void Defer(Transform target, float seconds)
+        protected void Defer(Transform target, float seconds)
         {
             Skips.Skip(target, DeferSkipSeconds);
             DueAt = Mathf.Max(DueAt, Time.time + Mathf.Max(seconds, RetryDelay));

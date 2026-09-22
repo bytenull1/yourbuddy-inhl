@@ -21,8 +21,8 @@ Every node has an `Owner`:
 Owner-local storage survives flight, docking and saves: the game moves the world around the ship
 ([never-cache-node-world-positions](invariants.md#never-cache-node-world-positions)).
 
-Nodes are `Ground` or `Stair`. `Stair` raises the auto-edge climb cap and is the one exception to
-[entry-seeds-on-own-deck](invariants.md#entry-seeds-on-own-deck).
+Nodes are `Ground` or `Stair`. `Stair` raises the off-level entry cap (`MaxStairDeltaY`) and is the
+one exception to [entry-seeds-on-own-deck](invariants.md#entry-seeds-on-own-deck).
 
 ### Ship nodes follow the ship's upgrades
 
@@ -38,13 +38,9 @@ at one stage by drawing the link *at* that stage - it cannot break the others.
 
 ### Links
 
-| Mode | Meaning |
-|---|---|
-| **Force** | an edge regardless of line of sight or height |
-| **Block** | suppresses an auto edge |
-| **Priority** | Force, plus: arriving at A from anywhere except B, the next hop must be B. Arriving via B leaves all exits open |
-
-`AutoLink = false` means manual links only. The shipped graph is entirely manual.
+Nodes connect only through links the player draws (editor key `K`, or `buddy_node link`). A link
+is an edge regardless of line of sight or height - there is no automatic, distance-based
+connection.
 
 ### Where the nodes come from
 
@@ -65,9 +61,9 @@ owners and keeps every other owner, with its links, from the current bundle: you
 what you forked, and copying it alone once shipped a bundle with no ship graph. To drop an owner,
 fork it and empty it.
 
-> **Block and Priority only act while A\* traverses edges.** If links seem ignored, check the route
-> chains at `debug_level 2`. A one-hop route (`via #99 -> goal`) never used an edge - that is a
-> seeding problem ([entry-seeds-on-own-deck](invariants.md#entry-seeds-on-own-deck)).
+> **A link only acts while A\* traverses edges.** If one seems ignored, check the route chains at
+> `debug_level 2`. A one-hop route (`via #99 -> goal`) never used an edge - that is a seeding
+> problem ([entry-seeds-on-own-deck](invariants.md#entry-seeds-on-own-deck)).
 
 ---
 
@@ -89,16 +85,13 @@ Rule: [floor-to-floor](invariants.md#floor-to-floor).
 
 ## 3. Edge cache
 
-`RebuildEdges` builds `_edges` (node id → outgoing edges) and `_priorityExits`. It rebuilds when the
-graph is dirty, the dock or ship layout changes, or `MaxEdgeDist` changes, and clears the node
-hover cache.
+`RebuildEdges` builds `_edges` (node id → outgoing edges) directly from the player's links: every
+live node gets an entry, even an empty one, since `FindPath` treats `_edges.Keys` as the set of
+nodes it may seed from or route through. It rebuilds when the graph is dirty or the dock or ship
+layout changes, and clears the node hover cache.
 
-Auto edges need: both nodes `AutoLink`, no `Block` link, an allowed climb (`AutoEdgeAllowed`, deck to
-deck) and `NavProbe.ThinLos`. Force and Priority skip all of it
-([force-and-priority-have-no-los](invariants.md#force-and-priority-have-no-los)).
-
-Edges use **thin** line of sight, not a body sweep. A body sweep rejected the links users drew; low
-furniture is left to whisker steering.
+A link needs no line of sight, height check or distance cap
+([links-have-no-los](invariants.md#links-have-no-los)) - it is added exactly as drawn.
 
 ---
 
@@ -156,7 +149,7 @@ beats standing still, `FindPath` returns null and Follow walks directly.
 **A failed search does not keep an old plan** unless its waypoint is within one flight
 ([a-stale-plan-is-worse-than-none](invariants.md#a-stale-plan-is-worse-than-none)).
 
-**Doors the buddy cannot open are rejected everywhere**, Force and Priority edges included
+**Doors the buddy cannot open are rejected everywhere**, graph links included
 ([locked-doors-block-edges](invariants.md#locked-doors-block-edges)). The test comes in through the
 `SegmentBlockedByDoor` hook, and `LastPathBlockedByDoor` tells callers why a search failed
 ([doors.md §3](doors.md#3-routing-around-what-it-cannot-open)).
@@ -178,7 +171,7 @@ target is never "close".
    the buddy is [still on the route](invariants.md#commitment-skips-on-route), or `CanReachEntry` passes.
 
 There is deliberately **no** "next stretch blocked" check
-([force-and-priority-have-no-los](invariants.md#force-and-priority-have-no-los)).
+([links-have-no-los](invariants.md#links-have-no-los)).
 
 ### Recovery ladder
 
@@ -294,7 +287,7 @@ buddy off; the obstacle reports around it say what.
 The hardest level change in the game and the reference test for the stair rules.
 
 `OxygenStation` local coordinates (world z = local z + 20.62). Markers hover ~1.0 m above their deck.
-Every link is Force; every node has `AutoLink = false`.
+Every step of the flight is a drawn link.
 
 | Node | local (x, y, z) | deck | role |
 |---|---|---|---|

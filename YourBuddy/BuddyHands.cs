@@ -111,6 +111,8 @@ namespace YourBuddy
         /// frozen in mid-air. Everything resting on `taken`'s old place - and on that in turn - is woken,
         /// and its body with it: a sleeping body is not woken by the collider under it going away.
         /// </summary>
+        private static readonly Collider[] StackOverlapBuffer = new Collider[32];
+
         private void WakeStackedOn(Grabbable taken, Bounds bounds)
         {
             const int maxItems = 16;
@@ -123,10 +125,12 @@ namespace YourBuddy
             {
                 Bounds under = below.Dequeue();
                 Vector3 halfExtents = new(under.extents.x + side, above * 0.5f, under.extents.z + side);
-                Vector3 centre = new(under.center.x, under.max.y + above * 0.5f - 0.02f, under.center.z);
-                foreach (Collider collider in Physics.OverlapBox(centre, halfExtents, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore))
+                Vector3 boxCentre = new(under.center.x, under.max.y + above * 0.5f - 0.02f, under.center.z);
+                int hitCount = Physics.OverlapBoxNonAlloc(boxCentre, halfExtents, StackOverlapBuffer, Quaternion.identity,
+                    ~0, QueryTriggerInteraction.Ignore);
+                for (int i = 0; i < hitCount; i++)
                 {
-                    Grabbable? other = collider.GetComponentInParent<Grabbable>();
+                    Grabbable? other = StackOverlapBuffer[i].GetComponentInParent<Grabbable>();
                     if (other == null || woken.Contains(other) || other.restrictGrab || other.IsGrabbed) continue;
 
                     woken.Add(other);

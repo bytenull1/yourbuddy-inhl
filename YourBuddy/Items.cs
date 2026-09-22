@@ -90,7 +90,7 @@ namespace YourBuddy
         public static string BaseName(string name)
         {
             int copy = name.IndexOf(" (", System.StringComparison.Ordinal);
-            return copy > 0 ? name.Substring(0, copy) : name;
+            return copy > 0 ? name[..copy] : name;
         }
 
         /// <summary>
@@ -115,7 +115,7 @@ namespace YourBuddy
 
             if (item.Signature == "TRASH") return true;
 
-            if (item.TryGetComponent(out Food food) && food.Data != null && food.Data.usages == 0) return true;
+            if (item.TryGetComponent(out Food food) && food.Data is { usages: 0 }) return true;
 
             if (item.TryGetComponent(out SeedPack pack) && pack.Seeds == 0) return true;
 

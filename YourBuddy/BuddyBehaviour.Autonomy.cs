@@ -1,4 +1,4 @@
-﻿using Space;
+using Space;
 using UnityEngine;
 
 namespace YourBuddy
@@ -9,7 +9,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         private float orderedAt = 0f;
         private float decideTraceAt = 0f;
         /// <summary>
@@ -28,7 +27,6 @@ namespace YourBuddy
         /// </summary>
         private const float WanderBoutMin = 40f;
         private const float WanderBoutMax = 90f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         // ------------------------------------------------------------------
         // Orders - given only through BuddyCommands
@@ -133,7 +131,7 @@ namespace YourBuddy
         /// <summary>
         /// For the HUD.
         /// </summary>
-        internal string DescribeOrders()
+        private string DescribeOrders()
         {
             bool autonomy = YourBuddyPlugin.ConfigAutonomy.Value;
             if (!orderedMode.HasValue) return autonomy ? "none - deciding for itself" : "none (autonomy off)";
@@ -201,7 +199,7 @@ namespace YourBuddy
 
             if (catchInProgress) return "being caught";
 
-            if (inDialog) return "being talked to";
+            if (InDialog) return "being talked to";
 
             if (Hiding) return hideState + " " + hideName;
             // docs/invariants.md#fear-owns-the-buddy
@@ -243,7 +241,7 @@ namespace YourBuddy
         /// <summary>
         /// For the HUD and buddy_mind: why the decider waits, or the bout it is timing and when it looks next.
         /// </summary>
-        internal string DescribeMind()
+        private string DescribeMind()
         {
             if (!YourBuddyPlugin.ConfigAutonomy.Value) return "autonomy off";
 
@@ -283,14 +281,14 @@ namespace YourBuddy
         private string? DescribeHudMind()
         {
             string mind = DescribeMind();
-            const string StandingDown = "standing down - ";
-            if (mind.StartsWith(StandingDown))
+            const string standingDown = "standing down - ";
+            if (mind.StartsWith(standingDown))
             {
-                string reason = mind.Substring(StandingDown.Length);
+                string reason = mind[standingDown.Length..];
                 bool shownElsewhere = reason == DescribeReachTask() || reason.StartsWith("order '");
                 return shownElsewhere ? null : "Mind: " + mind;
             }
-            return "Mind: " + mind + (urgeReport.Length > 0 && !urgeReport.StartsWith(StandingDown) ? "\nWhy: " + urgeReport : "");
+            return "Mind: " + mind + (urgeReport.Length > 0 && !urgeReport.StartsWith(standingDown) ? "\nWhy: " + urgeReport : "");
         }
 
         /// <summary>

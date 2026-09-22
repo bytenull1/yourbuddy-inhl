@@ -75,17 +75,13 @@ namespace YourBuddy
         public static ConfigEntry<float> ConfigOrderExpirySeconds;
         // ReSharper disable once MemberCanBePrivate.Global
         public static ConfigEntry<float> ConfigMoveSpeed;
-        public static ConfigEntry<float> ConfigMaxEdgeDist;
         public static ConfigEntry<bool> ConfigBundledGraph;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorToggleKey;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorPlaceKey;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorDeleteKey;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorLinksKey;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorForceLinkKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorBlockLinkKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorPriorityLinkKey;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorClearLinksKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorAutoLinkKey;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorTypeKey;
         public static ConfigEntry<KeyboardShortcut> ConfigEditorSaveKey;
 
@@ -181,9 +177,6 @@ namespace YourBuddy
                 "How long an order holds when OrderPersistence is Expires. Ignored otherwise.");
             ConfigMoveSpeed = Config.Bind("General", "MoveSpeed", 3.5f,
                 "Default buddy movement speed in m/s.");
-            ConfigMaxEdgeDist = Config.Bind("Navigation", "MaxEdgeDist", 80f,
-                "Maximum distance (meters) at which two nav nodes are auto-connected. " +
-                "Lower it for sparser graphs. Manual Force links (editor key K) work at any distance.");
             ConfigBundledGraph = Config.Bind("Navigation", "BundledGraph", true,
                 "Use the ready-made nav graph shipped with the mod for stations and the ship. " +
                 "Your own nodes always win: the moment you edit anything on a ship or station, " +
@@ -198,23 +191,14 @@ namespace YourBuddy
             ConfigEditorLinksKey = Config.Bind("NodeEditor", "EditorLinksKey", new KeyboardShortcut(KeyCode.L),
                 "Toggles rendering of node connections. Previously C, which fights the game's crouch key.");
             ConfigEditorForceLinkKey = Config.Bind("NodeEditor", "EditorForceLinkKey", new KeyboardShortcut(KeyCode.K),
-                "Link mode 1 of 3: press once to mark the selected node, then again at another node to create a Force " +
-                "link - the connection always works and skips the hull probe (use for ramps/stair flights the probe rejects).");
-            ConfigEditorBlockLinkKey = Config.Bind("NodeEditor", "EditorBlockLinkKey", new KeyboardShortcut(KeyCode.B),
-                "Link mode 2 of 3: mark a node, then press at another node to Block the auto connection between them " +
-                "(use for connections across railings the probe still allows).");
-            ConfigEditorPriorityLinkKey = Config.Bind("NodeEditor", "EditorPriorityLinkKey", new KeyboardShortcut(KeyCode.O),
-                "Link mode 3 of 3: mark a node, then press at another node to create a Priority route. Whenever a path " +
-                "arrives at the marked node from anywhere else, the ONLY exit is the second node - all other connections " +
-                "from it are ignored. Arriving VIA the second node keeps every exit open, so return trips still work.");
+                "Press once to mark the selected node, then again at another node to link them - the connection " +
+                "always works and skips the hull probe (use for ramps/stair flights the probe rejects). Press again " +
+                "on an already-linked pair to remove the link.");
             ConfigEditorClearLinksKey = Config.Bind("NodeEditor", "EditorClearLinksKey", new KeyboardShortcut(KeyCode.U),
-                "Removes every Force, Block and Priority link of the selected node at once. Automatic connections " +
-                "are not stored links - turn them off with the auto-connect key.");
-            ConfigEditorAutoLinkKey = Config.Bind("NodeEditor", "EditorAutoLinkKey", new KeyboardShortcut(KeyCode.N),
-                "Toggles auto-connect snapping for the selected node. Auto-connect off (blue node) means it only accepts " +
-                "manually placed links - useful in large rooms where automatic snapping creates clutter.");
+                "Removes every link of the selected node at once.");
             ConfigEditorTypeKey = Config.Bind("NodeEditor", "EditorTypeKey", new KeyboardShortcut(KeyCode.T),
-                "Cycles the selected node's type between Ground and Stair. Stair nodes allow auto edges up to 2m of climb.");
+                "Cycles the selected node's type between Ground and Stair. A Stair node may be entered up to 2m " +
+                "off-level, from right at its foot or head.");
             ConfigEditorSaveKey = Config.Bind("NodeEditor", "EditorSaveKey", new KeyboardShortcut(KeyCode.F6),
                 "Saves the node graph. Never bind this to F5: that key is the game's own QuickSave.");
 

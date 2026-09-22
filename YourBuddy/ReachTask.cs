@@ -8,7 +8,7 @@ namespace YourBuddy
     /// </summary>
     internal abstract class ReachTask(Vector3 targetPoint, Transform own)
     {
-        public const float ReachDist = 1.6f;
+        protected const float ReachDist = 1.6f;
         /// <summary>
         /// How far above the buddy's floor a target may be and still be reached.
         /// </summary>
@@ -16,7 +16,7 @@ namespace YourBuddy
         /// <summary>
         /// Stand points tried in front of the target, nearest first, all within ReachDist.
         /// </summary>
-        public static readonly float[] ReachStandOffs = [0.8f, 1.1f, 1.4f];
+        protected static readonly float[] ReachStandOffs = [0.8f, 1.1f, 1.4f];
         /// <summary>
         /// After a plan that failed: often the buddy stood somewhere transient, like on furniture.
         /// </summary>

@@ -54,7 +54,7 @@ namespace YourBuddy
             /// The item itself when it lies about, not in a container.
             /// </summary>
             public readonly Food? Item;
-            public readonly string KindName;
+            private readonly string kindName;
             public readonly int FoodCount;
             public SnackPhase Phase = SnackPhase.Walk;
             public float PhaseUntil;
@@ -71,7 +71,7 @@ namespace YourBuddy
                 Doors = doors;
                 Contents = contents;
                 Hideout = hideout;
-                KindName = ContainerKind(container);
+                kindName = ContainerKind(container);
                 FoodCount = foodCount;
             }
 
@@ -80,11 +80,11 @@ namespace YourBuddy
                 this.errand = errand;
                 Doors = [];
                 Item = item;
-                KindName = BaseName(item.gameObject.name);
+                kindName = BaseName(item.gameObject.name);
                 FoodCount = 1;
             }
 
-            public override string Name => "the " + KindName;
+            public override string Name => "the " + kindName;
             public override float Reach => SnackReachDist;
             public override float[] StandOffs => SnackStandOffs;
             public override float ReachBelow => SnackReachBelow;

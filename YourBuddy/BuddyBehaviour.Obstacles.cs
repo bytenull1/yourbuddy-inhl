@@ -10,7 +10,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         private float gravity = 9.81f;
         private bool wantJump = false;
         private float jumpCooldownUntil = 0f;
@@ -46,7 +45,6 @@ namespace YourBuddy
         private float noProgressSeconds = 0f;
         private bool noProgressLogged = false;
         private int noProgressCycles = 0;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         // ------------------------------------------------------------------
         // Navigation helpers

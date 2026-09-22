@@ -148,7 +148,7 @@ Details: [navigation.md](navigation.md).
 | Gate placement per frame | `NavProbe.FrameGates` | every frame ([probes.md](probes.md#caches)) |
 | Gate openings | `NavProbe.GateOpenings` | `InvalidateGates()` only |
 | Impassable gates | `BuddyBehaviour.impassableGates` | 1 s TTL |
-| Node edges, priority exits, id index | `BuddyNodeGraph._edges`, `NodesById` | `_edgesDirty`, dock change, ship layout change, `MaxEdgeDist` change |
+| Node edges, id index | `BuddyNodeGraph._edges`, `NodesById` | `_edgesDirty`, dock change, ship layout change |
 | Node hover | `BuddyNodeGraph.NodeHover` | 3 s TTL; cleared on edge rebuild |
 | Space objects | `BuddyNodeGraph.SpaceObjects` | 5 s TTL, or at once when one is destroyed |
 | Detectors / airlocks / environments | `BuddyBehaviour` | 5 s TTL each |

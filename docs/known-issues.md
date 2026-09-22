@@ -78,8 +78,8 @@ Explanations that were checked and are wrong.
 
 - **"The gate carve-out needs a name list / a bigger radius."** See
   [below](#the-gate-carve-out). The carve-out is the gate's opening; nothing else works.
-- **"Force and Priority links need line of sight."** No -
-  [force-and-priority-have-no-los](invariants.md#force-and-priority-have-no-los).
+- **"Links need line of sight."** No -
+  [links-have-no-los](invariants.md#links-have-no-los).
 - **"Follow's look-at-the-player pause stalls stair climbs."** No. Rotation is cosmetic; movement
   goes through `cc.Move`. The real cause was [one-entry-predicate](invariants.md#one-entry-predicate).
 - **"Moving nodes can fix routing through a wall."** No. If a probe cannot see the wall, edges link

@@ -65,13 +65,13 @@ namespace YourBuddy
         private sealed class TidyRun
         {
             public readonly int Budget = Random.Range(TidyRoundMin, TidyRoundMax + 1);
-            public readonly float StartedAt = Time.time;
+            private readonly float startedAt = Time.time;
             public int Done;
 
             /// <summary>
             /// Whether another piece may be fetched: the budget and the clock, nothing about the world.
             /// </summary>
-            public bool WantsMore => Done < Budget && Time.time - StartedAt < TidyRoundSeconds;
+            public bool WantsMore => Done < Budget && Time.time - startedAt < TidyRoundSeconds;
 
             public string Describe() => Done == 1 ? "a piece of trash" : Done + " pieces of trash";
         }

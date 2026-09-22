@@ -9,7 +9,6 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // ReSharper disable RedundantDefaultMemberInitializer
         private float waitingGateSince = 0f;
         private float lastDoorRayTime = 0f;
         private float suitDoorLogAt = 0f;
@@ -55,7 +54,6 @@ namespace YourBuddy
         /// </summary>
         private const float PinPanelReachDist = 1.6f;
         private float pinPanelTryAt = 0f;
-        // ReSharper restore RedundantDefaultMemberInitializer
 
         /// <summary>
         /// Simple door handling: open closed room gates in front of the buddy, wait for

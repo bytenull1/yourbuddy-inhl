@@ -152,10 +152,6 @@ def main():
     with open(source, encoding="utf-8") as handle:
         graph = json.load(handle)
 
-    found = problems(graph, bundled=False)
-    if found:
-        sys.exit("\n".join(found))
-
     previous_bundle = None
     if os.path.isfile(OUT):
         with open(OUT, encoding="utf-8") as handle:
@@ -172,6 +168,14 @@ def main():
     graph.pop("ForkedOwners", None)
     bundled = {"Version": graph.get("Version", 4), "BundleVersion": version}
     bundled.update({k: v for k, v in graph.items() if k not in ("Version", "BundleVersion")})
+
+    # Checked against the merged graph, not the raw source: a link from a node you own to
+    # one in an owner you never forked (e.g. your station node to the ship's airlock) is
+    # only resolvable once carry_unforked has pulled that owner in.
+    found = problems(bundled, bundled=True)
+    if found:
+        sys.exit("\n".join(found))
+
     if carried:
         print("Kept from the previous bundle (not forked in the source): %s" % ", ".join(carried))
 

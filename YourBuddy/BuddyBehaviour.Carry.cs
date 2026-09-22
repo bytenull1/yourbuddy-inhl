@@ -10,7 +10,7 @@ namespace YourBuddy
     {
         private BuddyHands hands = null!; // created in Init, before the first frame
 
-        private void LateUpdate() => hands.Follow(moveSpeed);
+        private void LateUpdate() => hands.Follow(MoveSpeed);
 
         /// <summary>
         /// Before the game writes the save: docs/invariants.md#a-carried-item-is-put-down-before-a-save

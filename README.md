@@ -116,7 +116,6 @@ General settings (section `General` unless noted; the node editor keys live in s
 | `DebugVisuals` | General | `false` | Draws navigation probes, target markers, and path lines. |
 | `ShowHud` | General | `false` | Displays an on‑screen status panel (mode, orders, position, room, environment, fear, mind, errand timers, target); hidden while the console is open. |
 | `MoveSpeed` | General | `3.5` | Default movement speed in m/s. |
-| `MaxEdgeDist` | Navigation | `80` | Maximum distance (m) at which two nav nodes auto-connect. Manual Force links work at any distance. |
 | `BundledGraph` | Navigation | `true` | Use the ready-made nav graph shipped with the mod for any ship or station you have not edited yourself. |
 
 </details>
@@ -151,7 +150,7 @@ You can change these values in the config file or via console commands (see belo
 | `buddy_auto` | `[on\|off]` | Let the buddy decide for itself (`on` also cancels the order in force), or stop it deciding. Saved in the config. |
 | `buddy_password` | `<code>` | Tell the buddy a door PIN code. It is used only on keypads whose own code matches, and is saved with your game. |
 | `buddy_speed` | `<value>` | Set movement speed (0.5–10 m/s). |
-| `buddy_node` | `add`, `count`, `clear`, `save`, `list`, `remove <index>` (alias `delete`), `link <a> <b> [force\|block\|priority\|auto]`, `unlink <index>`, `type <index> <ground\|stair>`, `auto <index> <on\|off>`, `bundled`, `unfork <owner>` | Manually manage the nav graph, including forced/blocked/priority links and stair nodes. `unlink` removes every manual link of one node. `bundled` shows which ships and stations use the shipped graph; `unfork` hands one back to it. |
+| `buddy_node` | `add`, `count`, `clear`, `save`, `list`, `remove <index>` (alias `delete`), `link <a> <b>`, `unlink <index>`, `type <index> <ground\|stair>`, `bundled`, `unfork <owner>` | Manually manage the nav graph, including links and stair nodes. `link` toggles a link between two nodes; `unlink` removes every link of one node. `bundled` shows which ships and stations use the shipped graph; `unfork` hands one back to it. |
 | `ai_disable` | `[buddy\|monster\|all] [on\|off]` | Debug: freeze the buddy's AI, the Breathless's, or both. Nothing is written to your save, so a reload always clears it. |
 | `ai_notarget` | `[on\|off]` | Debug: the Breathless stops noticing **you** - it keeps wandering, and it still hunts the buddy. |
 | `node_editor` | – | Toggle the interactive node editor overlay (all its keys are configurable in the config, section `NodeEditor`). |
@@ -205,19 +204,18 @@ Open the editor with `F8` or `node_editor` (every key can be changed in the conf
 | `Insert` / `Numpad0` | Place a node at your position |
 | `Delete` | Remove the nearest node on your deck |
 | `L` | Toggle connection lines |
-| `K` / `B` / `O` | **Force** / **Block** / **Priority** link - press once at one node, again at another |
-| `U` | Remove every Force/Block/Priority link of the nearest node |
+| `K` | Link two nodes - press once at one node, again at another (press again on a linked pair to remove it) |
+| `U` | Remove every link of the nearest node |
 | `T` | Ground <-> **Stair** node |
-| `N` | Auto-connect on/off for this node (blue = manual links only) |
 | `F6` | Save nodes |
 
-Nodes within `MaxEdgeDist` (80 m) connect automatically when the line of sight along the floor is clear. A plain node connects at most ~0.8 m upward, a **Stair** node up to 2 m; anything steeper needs a manual link:
+Nodes are never connected automatically - draw a link (`K`, shown yellow) between any two you want
+the buddy to walk between. A link always works, at any distance and with no line of sight needed,
+so it is also how you cross tight ramps, steep stairs and railings.
 
-- **Force** (yellow) always connects - for tight ramps and steep stairs the probe rejects.
-- **Block** (red) removes a wrong automatic connection, e.g. across a railing.
-- **Priority** (magenta) makes any path arriving at the first node leave through the second; return trips are unaffected.
-
-Grey nodes belong to a station you are not docked to. To make the buddy use a staircase, put a Stair node (`T`) on the bottom and top landings and check with `L` that they connect - if not, Force-link them, or use `O` to make the stairs mandatory.
+Grey nodes belong to a station you are not docked to. To make the buddy use a staircase, put a
+Stair node (`T`) on the bottom and top landings and link them (`K`); check with `L` that the
+connection is there.
 
 ---
 
@@ -255,11 +253,11 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 - [x] Clean up the Debug HUD. Reduce the amount of information slightly or remove duplicates, move HUD to the background so it doesn't cover the console.
 - [x] Use meaningful room names instead of node numbers for the dialog `goto`; the console keeps node indices.
 - [x] Add a `snack` command to BuddyDialogCommands. Need comparing it to how often the player eats, I think 20 minutes is too long.
-- [ ] Simplify NodeEditor. Automatic connections and connections like Block and Priority should be removed, as they are inefficient, outdated workarounds, or unused functionality.
+- [x] Simplify NodeEditor. Automatic connections and connections like Block and Priority should be removed, as they are inefficient, outdated workarounds, or unused functionality.
 - [ ] Improve footstep sounds. They can be heard from too far away, and they don’t change based on the floor under the NPC. Need to determine which index corresponds to a specific floor in the serialized `footstepEvents` array.
 - [ ] Experiment with longer distance tasks. If stability is low, add intermediate logistics points to the planning.
 - [ ] Remove redundant stairs checks. Not sure all of them are needed.
-- [ ] Check optimization and analyze performance. In particular, consider changing how rooms adjacent to NPC are loaded.
+- [ ] Check optimization and analyze performance. In particular, consider changing how rooms adjacent to NPC are loaded. View hot paths (calculations every frame, tick, high allocations).
 
 **Priority 2 - Major features**
 - [ ] Add support for multiple NPCs.
