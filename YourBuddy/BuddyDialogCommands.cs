@@ -15,7 +15,7 @@ namespace YourBuddy
         /// The list shown on the commands page, in the order it is drawn.
         /// </summary>
         internal static readonly string[] Names =
-            ["Follow", "Wander", "Stay", "Hide", "Tidy", "Sell", "Play", "Goto", "Decide", "Password"];
+            ["Follow", "Wander", "Stay", "Hide", "Tidy", "Sell", "Play", "Snack", "Goto", "Decide", "Password"];
 
         private static readonly string[] GotoWords = ["goto", "go to", "walk", "move to"];
 
@@ -52,6 +52,8 @@ namespace YourBuddy
             if (Has(lower, "tidy", "clean", "trash", "rubbish", "garbage", "litter", "bin")) return BuddyCommands.Tidy();
 
             if (Has(lower, "play", "toy")) return BuddyCommands.Play();
+
+            if (Has(lower, "snack", "eat", "food", "hungry")) return BuddyCommands.Snack();
 
             if (Has(lower, GotoWords)) return BuddyRooms.Prompt();
 

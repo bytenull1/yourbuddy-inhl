@@ -139,8 +139,11 @@ namespace YourBuddy
                 "Now and then the buddy opens a nearby fridge, cabinet, chest or locker and eats or drinks one thing " +
                 "from it, then closes it again. It does not need to eat. Only while it decides for itself, never while " +
                 "you are hungry, and never at a hiding spot you are in. 'buddy_snack' triggers one now.");
-            ConfigSnackIntervalMinutes = Config.Bind("General", "SnackIntervalMinutes", 20f,
-                "Roughly how many minutes pass between snacks (each time 25% more or less at random; at least 1).");
+            ConfigSnackIntervalMinutes = Config.Bind("General", "SnackIntervalMinutes", 13f,
+                "Roughly how many minutes pass between snacks (each time 25% more or less at random; at least 1). " +
+                "13 tracks how often the player themselves needs to eat: satiety drains 1/tick (~1.02s) and the game's " +
+                "own Hunger buff starts at 250, so from a full stomach (the ~1000 a player can actually eat up to) " +
+                "that is about 12-13 minutes.");
             ConfigTidying = Config.Bind("General", "Tidying", true,
                 "Now and then the buddy picks up a piece of trash (an empty wrapper or can, never anything still useful) " +
                 "lying about or from a fridge, cabinet, chest or locker it closes again, and carries it to a trash can within 25m. Only while it decides " +

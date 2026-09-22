@@ -1,7 +1,11 @@
 # Snacks
 
 `SnackErrand.cs`, walking on `BuddyBehaviour.Reach.cs`. Config (General): `Snacks`
-(default on), `SnackIntervalMinutes` (20). Console: `buddy_snack` (one now), `buddy_mind` (the timer).
+(default on), `SnackIntervalMinutes` (13 - the player's own satiety drains from a full stomach to the
+game's Hunger threshold in about that long,
+[game-model.md](game-model.md#atmosphere-kills-by-the-players-rule)). Console: `buddy_snack` (one
+now), `buddy_mind` (the timer). Dialog: "snack" / "eat" / "food" / "hungry"
+([dialog.md §3](dialog.md#3-the-orders)).
 
 ---
 

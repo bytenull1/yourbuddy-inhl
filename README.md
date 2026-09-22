@@ -96,7 +96,7 @@ General settings (section `General` unless noted; the node editor keys live in s
 | `MortalNPC` | General | `true` | Allows the buddy to die (ragdoll) from deadly conditions. |
 | `PreventSpace` | General | `true` | Prevents the buddy from opening airlocks, walking into open space, and teleports it back inside if it ends up there anyway. |
 | `AutoDoors` | General | `true` | Allows the buddy to open room doors (Gate type) in front of it. |
-| `Dialog` | General | `true` | Look at the buddy and press Interact to open the order window (follow, do its own thing, stay, hide, tidy up, sell, play, walk to a node, give it a door password). |
+| `Dialog` | General | `true` | Look at the buddy and press Interact to open the order window (follow, do its own thing, stay, hide, tidy up, sell, play, get a snack, walk to a node, give it a door password). |
 | `Fear` | General | `true` | The buddy reacts to the Breathless: watches it, keeps away from it, runs from it or hides. Off: it ignores the monster (which can still kill it). |
 | `HideInClosets` | General | `true` | A frightened buddy may get into a closet or locker instead of running, shut the doors, and wait there until the Breathless is no longer about. It never uses one you are in. |
 | `FleeHideBias` | General | `0.5` | How readily it hides rather than runs: `0` never, `1` always try. The chance drops while the Breathless can see it - it would watch the buddy climb in - or is too close to beat to the doors, and rises when there is nowhere to run to. |
@@ -105,7 +105,7 @@ General settings (section `General` unless noted; the node editor keys live in s
 | `OrderExpirySeconds` | General | `90` | How long an order holds under `Expires`. |
 | `Terminals` | General | `true` | When oxygen runs low or it gets too cold or hot aboard and the oxygen generator or climate control is off, a buddy deciding for itself walks over and switches it on. |
 | `Snacks` | General | `true` | Now and then a buddy deciding for itself eats or drinks something nearby: from a container with food in it, or lying about. Never while you are hungry. `buddy_snack` triggers one now. |
-| `SnackIntervalMinutes` | General | `20` | Roughly how many minutes pass between snacks (25% more or less each time). |
+| `SnackIntervalMinutes` | General | `13` | Roughly how many minutes pass between snacks (25% more or less each time) - tracks how often the player's own satiety needs topping up. |
 | `Tidying` | General | `true` | Now and then a buddy deciding for itself clears the rubbish: two to five pieces in a row, loose or out of a cupboard it closes again, into a trash can. `buddy_tidy` starts a round now. |
 | `TidyIntervalMinutes` | General | `5` | Roughly how many minutes pass between tidying rounds (25% more or less each time). |
 | `SellTrash` | General | `true` | When trash boxes have piled up and a sell station is in reach, the buddy carries every one it can to the station, loads them and presses the button once - the money is yours. It only presses when nothing else sellable is in there and nobody is standing inside. `buddy_sell` starts a run now. |
@@ -254,7 +254,7 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 **Priority 1 - Improvements**
 - [x] Clean up the Debug HUD. Reduce the amount of information slightly or remove duplicates, move HUD to the background so it doesn't cover the console.
 - [x] Use meaningful room names instead of node numbers for the dialog `goto`; the console keeps node indices.
-- [ ] Add a `snack` command to BuddyDialogCommands. Need comparing it to how often the player eats, I think 20 minutes is too long.
+- [x] Add a `snack` command to BuddyDialogCommands. Need comparing it to how often the player eats, I think 20 minutes is too long.
 - [ ] Simplify NodeEditor. Automatic connections and connections like Block and Priority should be removed, as they are inefficient, outdated workarounds, or unused functionality.
 - [ ] Improve footstep sounds. They can be heard from too far away, and they don’t change based on the floor under the NPC. Need to determine which index corresponds to a specific floor in the serialized `footstepEvents` array.
 - [ ] Experiment with longer distance tasks. If stability is low, add intermediate logistics points to the planning.
