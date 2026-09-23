@@ -778,7 +778,7 @@ namespace YourBuddy
             if (cc != null) cc.enabled = false;
             if (itemBlocker != null) itemBlocker.enabled = false;
 
-            if (footstepInstance.isValid()) footstepInstance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
+            StopFootsteps();
 
             HideDebugVisuals();
             YourBuddyPlugin.Log.LogWarning("[ai] Buddy died");

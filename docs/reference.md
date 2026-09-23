@@ -300,6 +300,18 @@ The player's own rule ([game-model.md](game-model.md#atmosphere-kills-by-the-pla
 | `VacuumThreat` | 100 | no environment at all |
 | `BuddySuitTemperatureResistance` | 100 | a PilotSuit's +1 °C |
 
+### Footsteps - `BuddyBehaviour.cs`
+
+Which sound: [game-model.md §6](game-model.md#6-footstep-sounds).
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `ShipFootsteps` / `StationFootsteps` | 0 / 1 | indices into the player's `footstepEvents` |
+| `FootstepVolume` | 0.5 | step volume within `FootstepFullVolumeDist` of the listener |
+| `FootstepFullVolumeDist` / `FootstepSilentDist` | 2 / 12 m | fades out between these, quadratically |
+| `FootstepDoorHalfWidth` / `FootstepDoorHeight` | 1.5 / 2.5 m | how near a detector's centre a plane crossing counts as through its door |
+| `FootstepDetectorsTtl` | 5 s | detector list cache |
+
 ### Probes - `NavProbe.cs`
 
 | Constant | Value | Meaning |

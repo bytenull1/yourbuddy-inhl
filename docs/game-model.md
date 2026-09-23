@@ -254,3 +254,24 @@ All game types are in the **global namespace**. Unity 2022 / netstandard2.1 has 
   flags instead ([mod-state-never-enters-the-vanilla-save](invariants.md#mod-state-never-enters-the-vanilla-save)).
 - **It never sees the buddy.** Its detectors need a `Player` ([§1](#1-the-buddy-is-not-a-player));
   the catch is the mod's own `BreathlessCheck`.
+
+---
+
+## 6. Footstep sounds
+
+- **Two events.** `CameraAnimator.footstepEvents` on the player prefab holds `0` =
+  `event:/sounds/playerwalkship`, `1` = `event:/sounds/playerwalkstation` (GUIDs resolved through
+  `Master.strings.bank`).
+- **Who switches them.** One `FootstepDetector` per station, at the door between its docker
+  corridor and its interior, under `StaticObjects/<Station>Parts/Doors` (Shipyard, Fuel, Oxygen,
+  Solar). Crossing it sets `1` or `0` by the side the player ends up on (`FootstepDetector.cs`,
+  `CameraAnimator.SetFootsteps`), and the choice sticks until the next crossing. So the docker
+  corridor, though station floor, has ship steps. `ObservingStation` has no detector.
+- **Crossing, not position.** The door plane does not split a station cleanly: `FuelBackyard` and
+  `FuelRefinery` lie behind it but are reached through `AirlockMain` off `FuelMain`, so the player
+  keeps station steps there. The buddy tracks its feet through each detector's doorway instead. Before its first
+  crossing it guesses from the side of the ridden station's door.
+- **Not placed in the world.** The player's instance never gets 3D attributes. An unplaced 3D event
+  sounds from the world origin, which is the ship ([§2a](#2a-the-ship-never-moves---the-world-moves-around-it)).
+  The buddy gets no trigger events ([§1](#1-the-buddy-is-not-a-player)), so it places and fades
+  each step itself (`BuddyBehaviour.Presentation.cs`).

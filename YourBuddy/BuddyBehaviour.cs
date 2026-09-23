@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using FMOD.Studio;
 using Space;
 using UnityEngine;
 
@@ -54,9 +53,6 @@ namespace YourBuddy
         // The prefab root sits at CharacterController center height (~0.66m above the
         // floor), so probe heights must be computed from the ground, not the transform.
         private float originToFeet = 0f;
-
-        // Footstep sound system (copied from player's CameraAnimator)
-        private EventInstance footstepInstance;
 
         // Node-based navigation. navPlan holds the route plus which segments arrive via
         // a graph link; those skip the LOS commitment check by design.
@@ -598,11 +594,7 @@ namespace YourBuddy
             SaveParser.OnFileSaveInitiated.RemoveListener(OnGameSaving);
             hands.Drop("the buddy is gone");
             ForceLeaveHidingSpot("the buddy is gone");
-            if (footstepInstance.isValid())
-            {
-                footstepInstance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
-                footstepInstance.release();
-            }
+            ReleaseFootsteps();
 
             if (forcedRoom != null) forcedRoom.OnContentStateChanged.RemoveListener(OnForcedRoomContentChanged);
 

@@ -355,6 +355,27 @@ namespace YourBuddy
         }
 
         /// <summary>
+        /// FootstepDetector: which side of a station door means which floor sound.
+        /// docs/game-model.md#6-footstep-sounds
+        /// </summary>
+        internal static class FootstepDetectorAccess
+        {
+            private const string Feature = "buddy floor sound at station doors";
+            private static readonly FieldInfo? RotationReference = Field<Transform>(typeof(FootstepDetector), "rotationReference", Feature);
+            private static readonly FieldInfo? ReverseSide = Field<bool>(typeof(FootstepDetector), "reverseSide", Feature);
+            private static readonly FieldInfo? EnterFootstepsId = Field<int>(typeof(FootstepDetector), "enterFootstepsID", Feature);
+            private static readonly FieldInfo? ExitFootstepsId = Field<int>(typeof(FootstepDetector), "exitFootstepsID", Feature);
+
+            internal static Transform? GetRotationReference(FootstepDetector detector) => Get<Transform>(RotationReference, detector);
+
+            internal static bool? GetReverseSide(FootstepDetector detector) => GetValue<bool>(ReverseSide, detector);
+
+            internal static int? GetEnterFootstepsId(FootstepDetector detector) => GetValue<int>(EnterFootstepsId, detector);
+
+            internal static int? GetExitFootstepsId(FootstepDetector detector) => GetValue<int>(ExitFootstepsId, detector);
+        }
+
+        /// <summary>
         /// BreathlessController: the point the monster casts its own sight line from, which
         /// is where the buddy looks to see it. docs/fear.md
         /// </summary>

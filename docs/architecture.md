@@ -38,7 +38,7 @@ Other classes reach the buddy through a few `internal` members, never its fields
 | `BuddyHands.cs` | holding one item: `PickUp`, hold point, re-owning to the carrier's room, `ReachTo`, `PutDown`, `Drop`, `Release` | - | [items](items.md) |
 | `SkipList.cs` | what a task leaves out for a while, per object: `Skip`, `Has`, `Prune` | - | [items](items.md) |
 | `BuddyBehaviour.Hide.cs` | hiding in a closet or locker: walk, teleport in/out, doors, who ends it | - | [fear](fear.md) |
-| `BuddyBehaviour.Presentation.cs` | footstep sounds, animator parameters, debug line renderers | `GameInternals` | - |
+| `BuddyBehaviour.Presentation.cs` | footstep sounds, animator parameters, debug line renderers | `GameInternals`, `BuddyManager` | [game-model](game-model.md#6-footstep-sounds) |
 | `BuddyNodeGraph.cs` | node storage and ownership, `TryVesselOf`, JSON persistence, edge cache, node floor cache, A\* (`FindPath`), `CanReachEntry` | `NavProbe`, `GameInternals` | [navigation](navigation.md) |
 | `BuddyNodeEditor.cs` | F8 editor overlay, node and link placement | `BuddyNodeGraph` | [reference](reference.md) |
 | `NavProbe.cs` | **every physics probe**: floors, line of sight, `CanSee`, collider filter, gate cache | `BuddyManager` (buddy transform) | [probes](probes.md) |
