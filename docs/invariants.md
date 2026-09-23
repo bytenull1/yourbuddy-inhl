@@ -931,13 +931,25 @@ the game's `Grabbable` (which allocates a save ID), and the cryo capsule is a pr
 **Rule.** The buddy presses a sell button only when every `CanSell && Enabled` item in the zone is a
 `Trash_Box`, the player is outside the catch zone, the gate is fully open, and the buddy stands
 outside the zone. It presses with `Button.Interact(pilot)`, so the player is paid. Otherwise the
-boxes stay loaded. A run loads all its boxes and presses once; the rule is checked right before the
-press.
+boxes stay loaded. A run presses once per load; the rule is checked right before each press.
 
 **Why.** `SellStation.Sell` sells everything in the zone and kills a player standing inside. A body
 under the gate trips its `AntiCrasher` and the sale silently fails.
 
 **Enforced in.** `SellErrand.PressButton` (and `TryStart`), `SellTask.StandAllowed`.
+
+### a-selling-run-keeps-its-boxes
+
+**Rule.** The search radius and the vessel filter choose a run's boxes; they never end it. A queued
+box leaves the run only when it is gone, taken, loaded, or has no way to it, and each exit is logged.
+A box in an unloaded room is still queued, and the run's station is reloaded if its room goes off.
+
+**Why.** After a load the buddy stands at the station. A fresh search from there cannot see boxes
+left on the ship: they are on another vessel, and their room may be unloaded, so `FindObjectsOfType`
+skips them. The run then ended after one box of four. And the Shipyard's station unloads with its
+hallway as soon as the buddy leaves for the next box.
+
+**Enforced in.** `SellErrand.ConfirmSale`, `TryNextBox`, `FetchBlocker`, `StationBlocker`; `Items.InUnloadedRoom`.
 
 ### reflection-lives-in-gameinternals
 

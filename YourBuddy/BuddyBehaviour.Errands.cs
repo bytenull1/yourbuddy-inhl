@@ -40,6 +40,13 @@ namespace YourBuddy
         Vector3 IErrandBody.FloorUnderBuddy() => FloorUnderBuddy();
         Vector3 IErrandBody.GroundPos(float height) => GroundPos(height);
         bool IErrandBody.OnMyVessel(Transform what) => OnMyVessel(what);
+
+        void IErrandBody.LoadRoomOf(Transform what)
+        {
+            Room? room = what.GetComponentInParent<Room>(true);
+            if (room != null && what.IsChildOf(room.ContentParent)) EnableRoom(room);
+        }
+
         void IErrandBody.FacePoint(Vector3 point) => FacePoint(point);
 
         void IErrandBody.StandFacing(Vector3 point)

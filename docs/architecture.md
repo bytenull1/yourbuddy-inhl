@@ -31,7 +31,7 @@ Other classes reach the buddy through a few `internal` members, never its fields
 | `LifeSupport.cs` | switching on the oxygen generator or climate control | `IErrandBody` | [terminals](terminals.md) |
 | `SnackErrand.cs` | opening a container or finding loose food, eating one thing | `IErrandBody`, `Items`, `GameInternals` | [snacks](snacks.md) |
 | `TidyErrand.cs` | a tidying round: several pieces of trash to a trash can | `IErrandBody`, `Items`, `GameInternals` | [items](items.md) |
-| `SellErrand.cs` | a selling run: nearby trash boxes into one sell station, one press | `IErrandBody`, `Items`, `SellPens`, `GameInternals` | [items](items.md) |
+| `SellErrand.cs` | a selling run: nearby trash boxes into one sell station, one press per load | `IErrandBody`, `Items`, `SellPens`, `GameInternals` | [items](items.md) |
 | `PlayErrand.cs` | a play session: carry near, carry far, or throw and fetch | `IErrandBody`, `Items`, `NavProbe` | [items](items.md) |
 | `Items.cs` | item rules every errand shares: `IsTrash`, `IsPlaything`, `TakeBlocker`, containers and their doors, `ShuffleNearest`, the item-reach constants | `GameInternals` | [items](items.md) |
 | `SellPens.cs` | the fenced footprint of every sell station: `InAFencedPen` | `GameInternals` | [items](items.md#4-selling-trash-boxes) |

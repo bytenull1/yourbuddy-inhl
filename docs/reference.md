@@ -219,9 +219,9 @@ See [items.md §4](items.md#4-selling-trash-boxes). `SellStationClearance` and `
 | `SellCheckInterval` | 60 s | between looks, and after a sale |
 | `SellSkipSeconds` | 600 s | a box or station with no clear way to it |
 | `SellRetrySeconds` | 90 s | one that failed this time only |
-| `SellSearchRadius` / `SellStationRadius` | 30 m / 80 m | boxes from the buddy; a station from the box |
-| `SellMaxBoxes` / `SellZoneMaxItems` | 4 / 4 | boxes per run; most items the zone may hold |
-| `SellMaxBoxesTransit` | 2 | boxes per run at the Oxygen, Solar and Fuel stations |
+| `SellSearchRadius` / `SellStationRadius` | 30 m / 80 m | boxes from the buddy when a run is chosen; a station from the box |
+| `SellMaxBoxes` / `SellZoneMaxItems` | 4 / 4 | boxes per press; most items the zone may hold |
+| `SellMaxBoxesTransit` | 2 | boxes per press at the Oxygen, Solar and Fuel stations |
 | `SellSlotMargin` / `SellSlotGap` / `SellDropHeight` | 0.02 / 0.02 / 0.03 m | box slots in the zone: from its walls, from each other, above the floor or box below |
 | `SellMaxPlans` | 3 | boxes tried with a plan |
 | `SellStationClearance` | 0.35 m | margin around the zone and fences the buddy never stands in |

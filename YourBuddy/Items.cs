@@ -98,12 +98,21 @@ namespace YourBuddy
         /// </summary>
         public static string? TakeBlocker(Grabbable? item, Grabbable? held)
         {
-            if (item == null || !item.gameObject.activeInHierarchy) return "it is gone";
+            if (item == null || !item.gameObject.activeSelf) return "it is gone";
+
+            if (!item.gameObject.activeInHierarchy) return "its room is not loaded";
 
             if (item.IsGrabbed) return "someone took it";
 
             return item.restrictGrab && item != held ? "it is held down" : null;
         }
+
+        /// <summary>
+        /// Switched off with its room's content, not gone: a sale or a trash can clears the item's own flag
+        /// (Grabbable.Destroy), an unloaded room leaves it alone. docs/items.md#4-selling-trash-boxes
+        /// </summary>
+        public static bool InUnloadedRoom(Grabbable? item) =>
+            item != null && item.gameObject.activeSelf && !item.gameObject.activeInHierarchy;
 
         /// <summary>
         /// A wrapper, can, empty seed pack or broken loot box the game turned to trash, or a trash item:

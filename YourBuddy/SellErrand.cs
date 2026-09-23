@@ -32,8 +32,8 @@ namespace YourBuddy
         private const float SellStationRadius = 80f;
         private const int SellMaxPlans = 3;
         /// <summary>
-        /// Boxes carried in one run before the button is pressed - the game's Sell pays for everything in
-        /// the zone at once - and how many items the zone may end up holding. docs/items.md
+        /// Boxes loaded before each press - the game's Sell pays for everything in the zone at once - and
+        /// how many items the zone may end up holding. A run with more boxes loads again. docs/items.md
         /// </summary>
         private const int SellMaxBoxes = 4;
         private const int SellZoneMaxItems = 4;
@@ -122,10 +122,15 @@ namespace YourBuddy
             public bool Holds(Grabbable item) => Detector.Items.Contains(item);
 
             /// <summary>
-            /// Boxes per run: SellMaxBoxes at the Shipyard, fewer at the transit stations, whose stations live
+            /// Boxes per press: SellMaxBoxes at the Shipyard, fewer at the transit stations, whose stations live
             /// under a root named for them (StaticObjects/OxygenStationParts, ...); the Shipyard's is ShipyardStationParts.
             /// </summary>
             public int MaxBoxes => InShipyard() ? SellMaxBoxes : SellMaxBoxesTransit;
+
+            /// <summary>
+            /// Boxes still to fetch before the next press: MaxBoxes, less what the zone already holds.
+            /// </summary>
+            public int Room() => Mathf.Min(MaxBoxes, SellZoneMaxItems - Detector.Items.Count);
 
             private bool InShipyard()
             {
@@ -187,16 +192,21 @@ namespace YourBuddy
 
         /// <summary>
         /// One selling run: every trash box the buddy means to put into this station, loaded one after
-        /// another, then a single press - the game's Sell pays for everything in the zone. docs/items.md §4
+        /// another, a press whenever the zone is full, and again for the rest. docs/items.md §4
         /// </summary>
         private sealed class SellRun(SellStationParts parts)
         {
             public readonly SellStationParts Parts = parts;
             /// <summary>
-            /// Boxes still to fetch, nearest first, and the ones already in the zone.
+            /// Boxes still to fetch, nearest first, wherever they lie now; and the ones in the zone for this press.
+            /// docs/invariants.md#a-selling-run-keeps-its-boxes
             /// </summary>
             public readonly List<Grabbable> Queue = [];
             public readonly List<Grabbable> Loaded = [];
+            /// <summary>
+            /// How many Loaded may hold before the press: what the zone had room for, plus what was in it.
+            /// </summary>
+            public int Capacity;
             /// <summary>
             /// The box being fetched or carried; null once every one of them is loaded.
             /// </summary>
@@ -208,6 +218,20 @@ namespace YourBuddy
             /// or the station never listed them. One retry each, so the run always ends.
             /// </summary>
             public readonly HashSet<Grabbable> Reseated = [];
+
+            public bool Full => Loaded.Count >= Capacity;
+
+            public int Left => Queue.Count + (Current != null ? 1 : 0);
+
+            /// <summary>
+            /// After a sale: Sell emptied the zone and its list, so the next load starts from nothing.
+            /// </summary>
+            public void NextLoad()
+            {
+                Loaded.Clear();
+                Reseated.Clear();
+                Capacity = Parts.Room();
+            }
 
             /// <summary>
             /// How many of the loaded boxes the zone still lists: what a press would actually sell.
@@ -417,13 +441,12 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// `first` and every other candidate box this station can take, capped by SellMaxBoxes and by
-        /// the room its zone has left. Already-loaded boxes need no trip at all. docs/items.md §4
+        /// `first` and every other candidate box for this station. The first load is capped by the room
+        /// its zone has left; the rest wait for the next. Already-loaded boxes need no trip. docs/items.md §4
         /// </summary>
         private static SellRun BuildSellRun(SellStationParts parts, Grabbable first)
         {
             SellRun run = new(parts);
-            int room = Mathf.Min(parts.MaxBoxes, SellZoneMaxItems - parts.Detector.Items.Count);
             foreach (SellCandidate other in SellCandidates)
             {
                 if (other.Box == null) continue;
@@ -434,7 +457,7 @@ namespace YourBuddy
                     continue;
                 }
                 // Another station's box, or one too far from this one to be worth carrying here.
-                if (other.LoadedIn != null || run.Queue.Count >= room ||
+                if (other.LoadedIn != null ||
                     (other.Box != first &&
                      (other.Box.transform.position - parts.LoadPoint).sqrMagnitude > SellStationRadius * SellStationRadius))
                 {
@@ -445,7 +468,8 @@ namespace YourBuddy
             // The box the decider chose leads, whatever order the collector left them in.
             if (run.Queue.Remove(first)) run.Queue.Insert(0, first);
 
-            if (run.Queue.Count > 0)
+            run.Capacity = run.Loaded.Count + parts.Room();
+            if (run.Queue.Count > 0 && !run.Full)
             {
                 run.Current = run.Queue[0];
                 run.Queue.RemoveAt(0);
@@ -455,10 +479,12 @@ namespace YourBuddy
 
         private static string DescribeSellRun(SellRun run)
         {
-            string what = SellRun.Count(run.Queue.Count + run.Loaded.Count + (run.Current != null ? 1 : 0));
-            return run.Queue.Count == 0 ? what + ", already loaded"
+            int total = run.Left + run.Loaded.Count;
+            string what = SellRun.Count(total);
+            what = run.Left == 0 ? what + ", already loaded"
                 : run.Loaded.Count == 0 ? what + ", lying about"
                 : $"{what}, {run.Loaded.Count} already loaded";
+            return total > run.Capacity ? $"{what}, {Mathf.Max(1, run.Capacity)} at a time" : what;
         }
 
         private void Begin(SellTask task, BuddyNodeGraph.NavPath? plan)
@@ -591,6 +617,17 @@ namespace YourBuddy
                     task.PhaseUntil = Time.time + (task.Leg == SellLeg.Box ? TidyReachSeconds : TidyAimSeconds);
                     break;
                 case SellPhase.Handle:
+                    // In reach of a box whose room the player walked out of: docs/invariants.md#a-selling-run-keeps-its-boxes
+                    if (task.Leg == SellLeg.Box && InUnloadedRoom(task.Box))
+                    {
+                        Body.LoadRoomOf(task.Box.transform);
+                        if (InUnloadedRoom(task.Box))
+                        {
+                            AbandonBox(task, "leaving the trash box - its room will not load", SellRetrySeconds);
+                            return Vector3.zero;
+                        }
+                        YourBuddyPlugin.Log.LogInfo("[ai] Selling: loaded the trash box's room, which was switched off");
+                    }
                     if (Time.time < task.PhaseUntil) break;
 
                     if (task.Leg == SellLeg.Box)
@@ -645,7 +682,7 @@ namespace YourBuddy
                 case SellPhase.Settle:
                     if (Time.time < task.PhaseUntil) break;
 
-                    // Loaded. Fetch the next box, or press once for the lot. docs/items.md §4
+                    // Loaded. Fetch the next box, or press for the lot once the zone is full. docs/items.md §4
                     if (task.Run.Current != null) task.Run.Loaded.Add(task.Run.Current);
 
                     task.Run.Current = null;
@@ -667,12 +704,13 @@ namespace YourBuddy
         /// </summary>
         private string? LegBlocker(SellTask task)
         {
-            if (!task.Parts.Usable) return "the sell station is gone";
+            string? station = StationBlocker(task.Parts);
+            if (station != null) return station;
 
             switch (task.Leg)
             {
                 case SellLeg.Box:
-                    return TakeBlocker(task.Box) ??
+                    return FetchBlocker(task.Box, task.Phase is SellPhase.Walk or SellPhase.Handle) ??
                            (FlatDistanceSq(ItemTop(task.Box), task.TargetPoint) > SnackItemMovedDist * SnackItemMovedDist ? "it has been moved" : null);
                 case SellLeg.Load:
                     // Settling, it has been let go on purpose.
@@ -874,9 +912,22 @@ namespace YourBuddy
                 DueAt = Time.time + SellCheckInterval;
                 string result = $"sold {SellRun.Count(sold)} for {earned}";
                 Last = result;
-                YourBuddyPlugin.Log.LogInfo($"[ai] Sold {SellRun.Count(sold)} for {earned}");
-                // Boxes left over (a station takes only a few at once): straight on to the next trip.
-                // Walk replaces this leg, as tidying chains its pieces; FinishRoute would end the errand.
+                YourBuddyPlugin.Log.LogInfo($"[ai] Sold {SellRun.Count(sold)} for {earned}" +
+                                            (run.Queue.Count > 0 ? $" - {run.Queue.Count} more of this run to fetch" : ""));
+                // The run's own boxes first, however far or on whichever vessel they lie from here:
+                // docs/invariants.md#a-selling-run-keeps-its-boxes. Walk replaces this leg, as tidying
+                // chains its pieces; FinishRoute would end the errand.
+                if (run.Queue.Count > 0)
+                {
+                    run.NextLoad();
+                    if (TryNextBox(task))
+                    {
+                        YourBuddyPlugin.Log.LogInfo($"[ai] Selling: another load - {SellRun.Count(run.Left)} left, " +
+                                                    $"{run.Capacity} at a time");
+                        return;
+                    }
+                }
+                // Boxes the run did not know of: a new run from here.
                 if (TryStart(out string next))
                 {
                     YourBuddyPlugin.Log.LogInfo("[ai] Selling: more trash boxes about - another trip");
@@ -1006,6 +1057,13 @@ namespace YourBuddy
         /// </summary>
         private void NextLeg(SellTask task, SellLeg leg)
         {
+            // Its zone and button are measured now: a collider switched off with its room has no bounds.
+            string? station = leg == SellLeg.Box ? null : StationBlocker(task.Parts);
+            if (station != null)
+            {
+                End(task, station, 0f);
+                return;
+            }
             SellTask next = new(this, task.Run, leg);
             if (StartLeg(next)) return;
 
@@ -1013,26 +1071,76 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The next box of the run, skipping any that cannot be fetched any more. False when none is
-        /// left and the run should go and press the button. docs/items.md §4
+        /// The next box of the run, saying why any it leaves out cannot be fetched. False when the zone is
+        /// full or none is left, and the run should go and press the button. docs/items.md §4
         /// </summary>
         private bool TryNextBox(SellTask task)
         {
             SellRun run = task.Run;
+            run.Current = null;
             while (run.Queue.Count > 0)
             {
+                if (run.Full)
+                {
+                    YourBuddyPlugin.Log.LogInfo($"[ai] Selling: the sell station is full with {SellRun.Count(run.Loaded.Count)} - " +
+                                                $"selling those, then {run.Queue.Count} more");
+                    return false;
+                }
                 Grabbable box = run.Queue[0];
                 run.Queue.RemoveAt(0);
-                if (box == null || TakeBlocker(box) != null || run.Parts.HasBox(box)) continue;
-
+                if (box == null)
+                {
+                    YourBuddyPlugin.Log.LogInfo("[ai] Selling: leaving a trash box out of this run - it is gone");
+                    continue;
+                }
+                if (run.Parts.HasBox(box))
+                {
+                    // Someone loaded it meanwhile: this press sells it too.
+                    if (!run.Loaded.Contains(box)) run.Loaded.Add(box);
+                    continue;
+                }
+                string? blocker = FetchBlocker(box, true);
+                if (blocker != null)
+                {
+                    YourBuddyPlugin.Log.LogInfo($"[ai] Selling: leaving the trash box at {box.transform.position:0.0} out of this run - {blocker}");
+                    continue;
+                }
                 run.Current = box;
                 if (StartLeg(new SellTask(this, run, SellLeg.Box))) return true;
 
-                Trace($"leaving a trash box at {ItemTop(box):0.0} out of this run - there is no way to it");
+                YourBuddyPlugin.Log.LogInfo($"[ai] Selling: leaving the trash box at {ItemTop(box):0.0} out of this run - " +
+                                            $"there is no way to it{(InUnloadedRoom(box) ? " (its room is not loaded)" : "")}");
             }
             run.Current = null;
             return false;
         }
+
+        /// <summary>
+        /// Null when the station can be used. The game switches its room off once nobody is in it; the run
+        /// holds the station, so that room is loaded again. Undocked, the room cannot load: gone.
+        /// docs/invariants.md#a-selling-run-keeps-its-boxes
+        /// </summary>
+        private string? StationBlocker(SellStationParts parts)
+        {
+            if (parts.Usable) return null;
+
+            if (parts.Station == null || !parts.Station.gameObject.activeSelf || parts.Station.gameObject.activeInHierarchy)
+            {
+                return "the sell station is gone";
+            }
+            Body.LoadRoomOf(parts.Station.transform);
+            if (!parts.Usable) return "the sell station is gone - its room will not load";
+
+            YourBuddyPlugin.Log.LogInfo("[ai] Selling: loaded the sell station's room, which was switched off");
+            return null;
+        }
+
+        /// <summary>
+        /// TakeBlocker, except that until it is picked up a box whose room is merely unloaded is still worth
+        /// the walk: in reach, the buddy loads it. docs/items.md#4-selling-trash-boxes
+        /// </summary>
+        private string? FetchBlocker(Grabbable box, bool beforePickUp) =>
+            beforePickUp && InUnloadedRoom(box) ? null : TakeBlocker(box);
 
         /// <summary>
         /// Puts `next` in hand as the current leg, walking to it when it is not already in reach.

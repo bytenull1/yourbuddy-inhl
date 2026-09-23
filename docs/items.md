@@ -116,18 +116,20 @@ a round now, skipping schedule, setting and order.
 From the decider, as the `Sell` urge (need rises with the number of boxes). It looks every
 `SellCheckInterval`; there is no interval setting.
 
-**One press sells the run.** `SellStation.Sell` pays for everything in the zone at once, so a run
-loads all the boxes it can and presses once. `SellRun` holds the station, the `Queue` to fetch, the
-`Loaded` list and the `Current` box; each leg is a `SellTask`.
+**One press sells a load.** `SellStation.Sell` pays for everything in the zone at once, so a run
+loads as many boxes as the zone takes and presses once, then loads again for the rest. `SellRun` holds
+the station, the `Queue` to fetch, the `Loaded` list, its `Capacity` and the `Current` box; each leg is
+a `SellTask`.
 
 1. **Candidates.** A `Trash_Box` not in hands, within `SellSearchRadius` flat, reachable, on the
    buddy's vessel, not in a container or other machine. A box **already in a sell station** counts
    too - it just needs the button. "Already in" (`SellStationParts.HasBox`) means listed by the
    `ItemDetector` **or** inside the zone bounds: the detector's list is cleared by every sale, so a
    box can sit there unlisted. A loose box needs a station within `SellStationRadius`.
-2. **The run** (`BuildSellRun`): the chosen box plus every other candidate for the same station,
-   capped by `SellMaxBoxes` (4; `SellMaxBoxesTransit` (2) at the Oxygen, Solar and Fuel stations, whose sales area is smaller) and by the room left in the zone (`SellZoneMaxItems`). Boxes already
-   inside go straight into `Loaded`.
+2. **The run** (`BuildSellRun`): the chosen box plus every other candidate for the same station.
+   Boxes already inside go straight into `Loaded`. One load is capped by `SellMaxBoxes` (4;
+   `SellMaxBoxesTransit` (2) at the Oxygen, Solar and Fuel stations, whose sales area is smaller) and
+   by the room left in the zone (`SellZoneMaxItems`); the rest stay queued for the next load.
 3. **Before setting off:** the station holds nothing sellable but trash boxes, and both the load
    point and the button have a reach node with a stand point **outside** the station.
 4. **Box leg**, up close like tidying: 0.5 s, `PickUp`. Big items are held clear of the body.
@@ -138,7 +140,8 @@ loads all the boxes it can and presses once. `SellRun` holds the station, the `Q
 5. **Load leg:** stand points 1.35 / 1.6 m from the zone centre, reach 1.8 m, never within 0.35 m of
    the zone. Wait for the gate to be fully open (up to 20 s). The box reaches into the zone until the
    `ItemDetector` lists it (1.5 s max), is let go, and settles 1 s. Then fetch the next box
-   (`TryNextBox`) or go to the button.
+   (`TryNextBox`), or go to the button once the zone is full or the queue is empty. Every box
+   `TryNextBox` leaves out is logged with the reason.
 6. **Button leg:** terminal reach (stand points 0.8–1.4 m, reach 1.6 m), outside the station. Press
    only if ([the-buddy-sells-only-trash-boxes](invariants.md#the-buddy-sells-only-trash-boxes)):
    - at least one run box is still in the cage (`SellRun.InCage`);
@@ -147,9 +150,10 @@ loads all the boxes it can and presses once. `SellRun` holds the station, the `Q
    - then `Button.Interact(pilot)` - your press, your money.
 7. **Confirm:** every loaded box destroyed within 10 s → `Sold 3 trash boxes for N`. The gate open
    again 1.5 s after the press with boxes still there means something was under it; that station is
-   skipped for `SellRetrySeconds`. Boxes still about afterwards: `ConfirmSale` calls `TryStart` at once
-   for another trip (three runs of two at a transit station), with no `SellCheckInterval` wait; none
-   left, or no way to them, ends the errand.
+   skipped for `SellRetrySeconds`. Boxes still queued: the next load starts at once
+   ([a-selling-run-keeps-its-boxes](invariants.md#a-selling-run-keeps-its-boxes)), wherever they
+   lie from the station. Queue empty: `TryStart` looks for new boxes around the buddy, with no
+   `SellCheckInterval` wait; none, or no way to them, ends the errand.
 
 **Placement** (`LoadPlacement`). The Oxygen, Solar and Fuel zones are a 0.5 m cube and a trash box is
 0.375 x 0.1875 x 0.25 m: one box per layer, two stacked. A box at an angle or across the edge is not sold,
@@ -167,6 +171,17 @@ pressing, each box is re-seated once at most (`SellRun.Reseated`):
   the rest are sold.
 
 A gate that reopens logs the zone size and the offsets of the worst box and the buddy.
+
+**Unloaded rooms.** The game switches a room's content off when the player walks on
+(`EntryDetector`, `optimize`), with everything in it. The Shipyard's sell station is content of
+`YardHallway`, so it goes off once the buddy carries a box away and nobody is left in the hallway.
+
+- A box in such a room (`Items.InUnloadedRoom`: its own `activeSelf` still on) stays in the run. In
+  reach, the buddy switches its room back on (`IErrandBody.LoadRoomOf`). A sold or trashed item clears
+  its own flag and counts as gone.
+- The run's station is loaded again whenever a leg finds it off (`StationBlocker`), and before a load
+  or button leg is measured: a switched-off collider has no bounds. Undocked, its room cannot load, and
+  the run ends.
 
 **One box's failure is not the run's.** `AbandonBox` (a blocked leg, a failed `PickUp`, a box
 that never seated, a reach that gave up) drops that box, then fetches the next or presses for what is
@@ -261,6 +276,9 @@ Selling:
 [ai] Waiting at the sell station for you to step out of it
 [ai] Pressed the sell station's button for 3 trash boxes
 [ai] Sold 3 trash boxes for 1377
+[ai] Sold 4 trash boxes for 1840 - 2 more of this run to fetch
+[ai] Selling: another load - 2 trash boxes left, 4 at a time
+[ai] Selling: leaving the trash box at (-0.2, 0.6, 1.3) out of this run - someone took it
 [ai] A trash box lies 0.08m across the sell station's edge - loading it again
 [ai] Selling: your 'Energy_Cell' is in the sell station too - the trash box stays loaded, you sell
 [ai] Selling: the sell station opened again without selling - something is under its gate

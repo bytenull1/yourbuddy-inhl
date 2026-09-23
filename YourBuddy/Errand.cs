@@ -20,6 +20,10 @@ namespace YourBuddy
         Vector3 FloorUnderBuddy();
         Vector3 GroundPos(float height);
         bool OnMyVessel(Transform what);
+        /// <summary>
+        /// Switches on the content of the room `what` lies in, as the game does for the player's own room.
+        /// </summary>
+        void LoadRoomOf(Transform what);
         void FacePoint(Vector3 point);
         /// <summary>
         /// Stands where it is, turning to `point`: the work at the end of a leg.
