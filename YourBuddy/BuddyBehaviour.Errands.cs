@@ -32,6 +32,7 @@ namespace YourBuddy
         internal string StartPlayNow() => play.StartNow("No play: ");
         internal string StartTerminalNow(string which) => lifeSupport.StartNow(which);
 
+        string IErrandBody.Name => Name;
         Transform IErrandBody.Transform => transform;
         BuddyHands IErrandBody.Hands => hands;
         ErrandLeg? IErrandBody.Leg => reachTask;
@@ -78,6 +79,8 @@ namespace YourBuddy
         void IErrandBody.FinishRoute() => FinishRoute();
         string? IErrandBody.BusyForCommand() => BusyForCommand();
         Player? IErrandBody.PilotPlayer() => PilotPlayer();
+        bool IErrandBody.TakenByAnother(Transform what) => BuddyManager.TakenByAnother(what, this);
+        bool IErrandBody.AnotherBuddyWhere(System.Func<Vector3, bool> test) => BuddyManager.AnotherBuddyWhere(test, this);
         bool IErrandBody.IsAboardPlayerShip() => IsAboardPlayerShip();
         int IErrandBody.FeltTemperature(Environment env) => FeltTemperature(env);
     }

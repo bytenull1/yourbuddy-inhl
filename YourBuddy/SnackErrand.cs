@@ -216,7 +216,7 @@ namespace YourBuddy
 
             foreach (Food food in SceneScan.ThisFrame<Food>())
             {
-                if (ContainedFood.Contains(food) || !Edible(food)) continue;
+                if (ContainedFood.Contains(food) || !Edible(food) || Body.TakenByAnother(food.transform)) continue;
 
                 Vector3 point = ItemPoint(food);
                 if (!InBounds(point, here, floorY, food.transform)) continue;
@@ -246,7 +246,7 @@ namespace YourBuddy
         /// <summary>
         /// Why the snack is off limits now, or null. Checked at every step of the task.
         /// </summary>
-        private static string? SnackBlocker(SnackTask task)
+        private string? SnackBlocker(SnackTask task)
         {
             if (task.Own == null || !task.Own.gameObject.activeInHierarchy) return "it is gone";
 
@@ -259,7 +259,10 @@ namespace YourBuddy
                     : null;
             }
             // Opening or closing a hiding spot's door sets the player's hidden flag. docs/snacks.md §1
-            return task.Hideout != null && task.Hideout.CurrentInteractor != null ? "you are hiding in it" : null;
+            if (task.Hideout != null && task.Hideout.CurrentInteractor != null) return "you are hiding in it";
+
+            // Another buddy snacking or hiding there: docs/invariants.md#one-buddy-per-target
+            return Body.TakenByAnother(task.Own) ? "another buddy is using it" : null;
         }
 
         /// <summary>

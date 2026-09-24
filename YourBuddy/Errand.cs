@@ -9,6 +9,10 @@ namespace YourBuddy
     /// </summary>
     internal interface IErrandBody
     {
+        /// <summary>
+        /// "Buddy 2": replies to a command name who answers.
+        /// </summary>
+        string Name { get; }
         Transform Transform { get; }
         BuddyHands Hands { get; }
         /// <summary>
@@ -49,6 +53,14 @@ namespace YourBuddy
 
         string? BusyForCommand();
         Player? PilotPlayer();
+        /// <summary>
+        /// Another buddy's leg or hide holds `what`: docs/invariants.md#one-buddy-per-target
+        /// </summary>
+        bool TakenByAnother(Transform what);
+        /// <summary>
+        /// Another living, loaded buddy stands where `test` says.
+        /// </summary>
+        bool AnotherBuddyWhere(System.Func<Vector3, bool> test);
         bool IsAboardPlayerShip();
         int FeltTemperature(Environment env);
     }
@@ -125,7 +137,7 @@ namespace YourBuddy
             Skips.Ignore = true;
             try
             {
-                return TryStart(out string report) ? "Buddy " + report : refused + report;
+                return TryStart(out string report) ? Body.Name + " " + report : refused + report;
             }
             finally
             {
@@ -155,7 +167,9 @@ namespace YourBuddy
             return false;
         }
 
-        protected string? TakeBlocker(Grabbable? item) => Items.TakeBlocker(item, Body.Hands.Item);
+        protected string? TakeBlocker(Grabbable? item) =>
+            Items.TakeBlocker(item, Body.Hands.Item) ??
+            (item != null && Body.TakenByAnother(item.transform) ? "another buddy is after it" : null);
 
         /// <summary>
         /// The nearest of `count` points, flat, from the buddy.

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using BepInEx.Logging;
 using Newtonsoft.Json;
+using Space;
 using TMPro;
 using UnityEngine.UI;
 using UnityEngine;
@@ -15,24 +17,308 @@ namespace YourBuddy
     /// </summary>
     public sealed class BuddyManager : MonoBehaviour
     {
-        public static BuddyBehaviour? CurrentBuddy;
+        // Every buddy in the scene, alive or dead, in spawn order.
+        private static readonly List<BuddyBehaviour> Buddies = [];
+        private static BuddyBehaviour? _focus;
+        // The buddy whose code is running, for YourBuddyPlugin.Log. docs/logging.md#4-rules-for-adding-logs
+        private static BuddyBehaviour? _acting;
+        private static readonly Dictionary<string, ManualLogSource> LogSources = [];
         private static bool _tickLogged = false;
 
         // Pending spawn after loading a save
         private static BuddySaveFile? _pendingSpawn = null;
 
-        // Lifecare scan integration (game internals access lives in GameInternals)
-        private static Image? _buddyLifeIcon = null;
+        // Lifecare scan integration (game internals access lives in GameInternals): one map icon per buddy.
+        private sealed class LifeIcon
+        {
+            public Image? Icon;
+            /// <summary>
+            /// Ship-local position at the last scan's end, or null when not drawn.
+            /// </summary>
+            public Vector3? LocalPos;
+            /// <summary>
+            /// Cloned on the current display, so a missing clone was lost rather than never made.
+            /// </summary>
+            public bool Created;
+        }
+        private static readonly Dictionary<BuddyBehaviour, LifeIcon> LifeIcons = [];
         private static LifecareDisplay? _lifeDisplay = null;
         private static float _lifeHookAt = 0f;
-        private static Vector3? _lastBuddyLocalPos = null;
         private static bool _scanWasActive = false;
         private static bool _terminalWasEnabled = false;
 
-        // Gates the buddy closed, with the moment of each close. Gate.OnClosed fires at
-        // the end of the animation, so this must outlive the Close() call itself.
-        private static readonly List<KeyValuePair<Gate, float>> BuddyClosedGates = [];
+        // Gates a buddy closed, when, and who closed it. Gate.OnClosed fires at the end of the
+        // animation, so this must outlive the Close() call itself.
+        private readonly struct BuddyClose(Gate gate, float at, BuddyBehaviour by)
+        {
+            public readonly Gate Gate = gate;
+            public readonly float At = at;
+            public readonly BuddyBehaviour By = by;
+        }
+        private static readonly List<BuddyClose> BuddyClosedGates = [];
         private const float BuddyCloseWindow = 6f;
+
+        // ------------------------------------------------------------------
+        // The buddies: registry, focus, names. docs/architecture.md#6-buddy-lifecycle
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Every buddy in the scene, alive or dead. Handlers for game events iterate Snapshot(),
+        /// because a callback may despawn.
+        /// </summary>
+        internal static IReadOnlyList<BuddyBehaviour> All => Buddies;
+
+        internal static BuddyBehaviour[] Snapshot() => [.. Buddies];
+
+        internal static int LivingCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (BuddyBehaviour buddy in Buddies)
+                {
+                    if (buddy != null && !buddy.IsDead) count++;
+                }
+                return count;
+            }
+        }
+
+        internal static void Register(BuddyBehaviour buddy)
+        {
+            if (!Buddies.Contains(buddy)) Buddies.Add(buddy);
+        }
+
+        /// <summary>
+        /// Idempotent: Despawn calls it at once, OnDestroy again at the end of the frame.
+        /// </summary>
+        internal static void Unregister(BuddyBehaviour buddy)
+        {
+            Buddies.Remove(buddy);
+            if (_focus == buddy) _focus = null;
+            RemoveLifeIcon(buddy);
+        }
+
+        /// <summary>
+        /// Out of the registry now, destroyed at the end of the frame: a respawn in the same frame
+        /// gets the numbers and names back.
+        /// </summary>
+        public static void Despawn(BuddyBehaviour buddy)
+        {
+            Unregister(buddy);
+            if (buddy != null) Destroy(buddy.gameObject);
+        }
+
+        public static void DespawnAll()
+        {
+            for (int i = Buddies.Count - 1; i >= 0; i--) Despawn(Buddies[i]);
+        }
+
+        /// <summary>
+        /// Who a command without a target means: the buddy last talked to or named while it lives,
+        /// else the nearest living one, else any - so a corpse can still be despawned.
+        /// </summary>
+        internal static BuddyBehaviour? Focus
+        {
+            get
+            {
+                if (_focus != null && !_focus.IsDead) return _focus;
+
+                BuddyBehaviour? nearest = NearestLiving();
+                if (nearest != null) return nearest;
+
+                if (_focus != null) return _focus;
+
+                return Buddies.Count > 0 ? Buddies[0] : null;
+            }
+        }
+
+        internal static void SetFocus(BuddyBehaviour buddy) => _focus = buddy;
+
+        private static BuddyBehaviour? NearestLiving()
+        {
+            GameManager gm = GameManager.Instance;
+            Player? pilot = gm != null && gm.PlayerShip != null ? gm.PlayerShip.Pilot : null;
+            bool hasPlayer = pilot != null && pilot.Controller != null;
+            Vector3 from = Vector3.zero;
+            if (hasPlayer) from = pilot!.Controller!.CachedTransform.position; // hasPlayer checked both
+
+            BuddyBehaviour? best = null;
+            float bestSqr = float.MaxValue;
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy == null || buddy.IsDead) continue;
+                if (!hasPlayer) return buddy;
+
+                float sqr = (buddy.transform.position - from).sqrMagnitude;
+                if (sqr >= bestSqr) continue;
+
+                best = buddy;
+                bestSqr = sqr;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// `wanted` when no buddy has it, else the lowest number free.
+        /// </summary>
+        internal static int FreeNumber(int wanted = 0)
+        {
+            if (wanted > 0 && ByNumber(wanted) == null) return wanted;
+
+            int number = 1;
+            while (ByNumber(number) != null) number++;
+
+            return number;
+        }
+
+        internal static BuddyBehaviour? ByNumber(int number)
+        {
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy != null && buddy.Number == number) return buddy;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// "Buddy" / "Buddy N": a name is also a console target and a log source.
+        /// </summary>
+        internal static string NameFor(int number) => number == 1 ? "Buddy" : "Buddy " + number;
+
+        /// <summary>
+        /// A console target: case and spaces ignored, so "@buddy2" is "Buddy 2".
+        /// </summary>
+        internal static BuddyBehaviour? ByName(string name)
+        {
+            string key = TargetKey(name);
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy != null && TargetKey(buddy.Name) == key) return buddy;
+            }
+            return null;
+        }
+
+        private static string TargetKey(string name) => name.Replace(" ", "").ToLowerInvariant();
+
+        // ------------------------------------------------------------------
+        // Log attribution: docs/logging.md#4-rules-for-adding-logs
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// One BepInEx source per buddy name, kept for the session: names repeat across loads.
+        /// </summary>
+        internal static ManualLogSource LogSourceFor(string name)
+        {
+            if (!LogSources.TryGetValue(name, out ManualLogSource source))
+            {
+                source = BepInEx.Logging.Logger.CreateLogSource("YourBuddy:" + name);
+                LogSources[name] = source;
+            }
+            return source;
+        }
+
+        /// <summary>
+        /// The source YourBuddyPlugin.Log writes to while a buddy's code runs, or null.
+        /// </summary>
+        internal static ManualLogSource? ActingLog => _acting != null ? _acting.LogSource : null;
+
+        /// <summary>
+        /// Marks `buddy` as the one running until the scope is disposed. Never held across a yield.
+        /// </summary>
+        internal static ActingScope Acting(BuddyBehaviour buddy)
+        {
+            ActingScope scope = new(_acting);
+            _acting = buddy;
+            return scope;
+        }
+
+        internal readonly struct ActingScope(BuddyBehaviour? previous) : IDisposable
+        {
+            public void Dispose() => _acting = previous;
+        }
+
+        // ------------------------------------------------------------------
+        // What one buddy asks about the others. docs/invariants.md#one-buddy-per-target
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Any buddy's own body, a corpse included: docs/invariants.md#buddies-never-block-each-other
+        /// </summary>
+        internal static bool IsBuddyBody(Transform t)
+        {
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy != null && buddy.IsOwnBody(t)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Another buddy's errand leg or hide holds this.
+        /// </summary>
+        internal static bool TakenByAnother(Transform what, BuddyBehaviour me)
+        {
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy != null && buddy != me && buddy.Holds(what)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Another living, loaded buddy stands where `test` says.
+        /// </summary>
+        internal static bool AnotherBuddyWhere(Func<Vector3, bool> test, BuddyBehaviour me)
+        {
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy == null || buddy == me || buddy.IsDead || !buddy.isActiveAndEnabled) continue;
+                if (test(buddy.transform.position)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Another buddy tracked in this room, which keeps it loaded.
+        /// docs/invariants.md#the-buddy-loads-rooms-by-the-door-rule
+        /// </summary>
+        internal static BuddyBehaviour? OtherTrackedIn(Room room, BuddyBehaviour me)
+        {
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy != null && buddy != me && buddy.TracksRoom(room)) return buddy;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Body colliders of two buddies ignore each other, a dead one's ragdoll included. Both must be
+        /// enabled and active for IgnoreCollision, so OnEnable repeats it.
+        /// docs/invariants.md#buddies-never-block-each-other
+        /// </summary>
+        internal static void IgnoreBodies(BuddyBehaviour a, BuddyBehaviour b)
+        {
+            if (a == null || b == null || a == b) return;
+
+            CharacterController? aCc = a.Controller;
+            CharacterController? bCc = b.Controller;
+            Ignore(aCc, bCc);
+            foreach (Collider part in b.SolidParts()) Ignore(aCc, part);
+            foreach (Collider part in a.SolidParts()) Ignore(bCc, part);
+        }
+
+        internal static void IgnoreAllBodies(BuddyBehaviour buddy)
+        {
+            foreach (BuddyBehaviour other in Buddies) IgnoreBodies(buddy, other);
+        }
+
+        private static void Ignore(Collider? a, Collider? b)
+        {
+            if (a == null || b == null || !a.enabled || !b.enabled) return;
+            if (!a.gameObject.activeInHierarchy || !b.gameObject.activeInHierarchy) return;
+
+            Physics.IgnoreCollision(a, b);
+        }
 
         /// <summary>
         /// Which vessel the floor under a world position belongs to. Tri-state on
@@ -134,41 +420,47 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Records that the buddy - not the player, not the game - issued a close on
+        /// Records that a buddy - not the player, not the game - issued a close on
         /// this gate, so the EntryDetector patch can tell the two apart.
         /// </summary>
-        internal static void NoteBuddyClosedGate(Gate gate)
+        internal static void NoteBuddyClosedGate(Gate gate, BuddyBehaviour by)
         {
             if (gate == null) return;
 
             for (int i = BuddyClosedGates.Count - 1; i >= 0; i--)
             {
-                if (BuddyClosedGates[i].Key == gate || BuddyClosedGates[i].Key == null ||
-                    Time.time - BuddyClosedGates[i].Value > BuddyCloseWindow)
+                if (BuddyClosedGates[i].Gate == gate || BuddyClosedGates[i].Gate == null ||
+                    Time.time - BuddyClosedGates[i].At > BuddyCloseWindow)
                 {
                     BuddyClosedGates.RemoveAt(i);
                 }
             }
-            BuddyClosedGates.Add(new KeyValuePair<Gate, float>(gate, Time.time));
+            BuddyClosedGates.Add(new BuddyClose(gate, Time.time, by));
         }
 
         /// <summary>
-        /// True when the buddy closed this gate within the last BuddyCloseWindow.
+        /// True when a buddy closed this gate within the last BuddyCloseWindow; `by` is that buddy,
+        /// or null once it is gone.
         /// </summary>
-        internal static bool GateWasClosedByBuddy(Gate gate)
+        internal static bool GateWasClosedByBuddy(Gate gate, out BuddyBehaviour? by)
         {
+            by = null;
             if (gate == null) return false;
 
             bool found = false;
             for (int i = BuddyClosedGates.Count - 1; i >= 0; i--)
             {
-                if (BuddyClosedGates[i].Key == null ||
-                    Time.time - BuddyClosedGates[i].Value > BuddyCloseWindow)
+                if (BuddyClosedGates[i].Gate == null ||
+                    Time.time - BuddyClosedGates[i].At > BuddyCloseWindow)
                 {
                     BuddyClosedGates.RemoveAt(i);
                     continue;
                 }
-                if (BuddyClosedGates[i].Key == gate) found = true;
+                if (BuddyClosedGates[i].Gate != gate) continue;
+
+                found = true;
+                BuddyBehaviour closer = BuddyClosedGates[i].By;
+                by = closer != null ? closer : null;
             }
             return found;
         }
@@ -196,31 +488,18 @@ namespace YourBuddy
             GameManager gm = GameManager.Instance;
             bool sceneReady = gm != null && gm.SceneFullyLoaded && gm.PlayerShip != null && gm.PlayerShip.Pilot != null;
 
-            // Spawn a buddy saved with this save file once the game scene is fully loaded.
-            if (_pendingSpawn != null)
+            // A buddy destroyed without Despawn (scene unload) leaves its slot in OnDestroy; this is the backstop.
+            for (int i = Buddies.Count - 1; i >= 0; i--)
             {
-                if (sceneReady)
-                {
-                    BuddySaveFile data = _pendingSpawn;
-                    _pendingSpawn = null;
-                    if (data.Alive)
-                    {
-                        Vector3 position = RestorePosition(data);
-                        Quaternion rotation = RestoreRotation(data);
-                        YourBuddyPlugin.Log.LogInfo($"[mgr] Restoring buddy from save at {position}");
-                        YourBuddyPlugin.SpawnBuddy(position, rotation);
-                        if (CurrentBuddy != null)
-                        {
-                            AttachToOwner(CurrentBuddy, data.Owner);
-                            BuddyCryoSpawn.ResumeSleep(CurrentBuddy, data.SleepingCapsule);
-                            if (data.KnownPinCodes != null) foreach (int code in data.KnownPinCodes) CurrentBuddy.LearnPinCode(code);
-                        }
-                    }
-                    else
-                    {
-                        YourBuddyPlugin.Log.LogInfo("[mgr] Buddy was dead in this save file - not spawning. Use 'spawn_buddy'.");
-                    }
-                }
+                if (Buddies[i] == null) Buddies.RemoveAt(i);
+            }
+
+            // Spawn the buddies saved with this save file once the game scene is fully loaded.
+            if (_pendingSpawn != null && sceneReady)
+            {
+                BuddySaveFile data = _pendingSpawn;
+                _pendingSpawn = null;
+                RestoreBuddies(data);
             }
 
             // After the save's own buddy, so a restored one is never doubled by the new-game wake-up.
@@ -234,15 +513,50 @@ namespace YourBuddy
             // has to be re-asserted rather than set once.
             if (AiDebug.Any) AiDebug.Apply();
 
-            if (CurrentBuddy != null && CurrentBuddy.gameObject.activeInHierarchy && Time.time >= _lifeHookAt)
+            if (AnyActive() && Time.time >= _lifeHookAt)
             {
                 _lifeHookAt = Time.time + 0.1f; // Call more frequently to catch scan state changes
                 TryHookLifecare();
-                UpdateBuddyLifeIcon();
+                UpdateBuddyLifeIcons();
             }
         }
 
-        private static Vector3 RestorePosition(BuddySaveFile data)
+        private static bool AnyActive()
+        {
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy != null && buddy.gameObject.activeInHierarchy) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Every living buddy the save holds, then the door codes - learned even when none of them lives.
+        /// </summary>
+        private static void RestoreBuddies(BuddySaveFile data)
+        {
+            foreach (BuddyState state in BuddySaveFile.StatesOf(data))
+            {
+                string who = state.Name ?? "Buddy";
+                if (!state.Alive)
+                {
+                    YourBuddyPlugin.Log.LogInfo($"[mgr] {who} was dead in this save file - not spawning. Use 'spawn_buddy'.");
+                    continue;
+                }
+                Vector3 position = RestorePosition(state);
+                Quaternion rotation = RestoreRotation(state);
+                YourBuddyPlugin.Log.LogInfo($"[mgr] Restoring {who} from save at {position}");
+                BuddyBehaviour? buddy = YourBuddyPlugin.SpawnBuddy(position, rotation, state.Number);
+                if (buddy == null) continue;
+
+                using ActingScope _ = Acting(buddy);
+                AttachToOwner(buddy, state.Owner);
+                BuddyCryoSpawn.ResumeSleep(buddy, state.SleepingCapsule);
+            }
+            if (data.KnownPinCodes != null) foreach (int code in data.KnownPinCodes) BuddyBehaviour.LearnPinCode(code);
+        }
+
+        private static Vector3 RestorePosition(BuddyState data)
         {
             // The frame it was standing in wins: a station's world position changes
             // while the ship flies. docs/invariants.md#the-buddy-rides-its-own-floor
@@ -286,22 +600,13 @@ namespace YourBuddy
             YourBuddyPlugin.Log.LogInfo($"[mgr] Buddy placed onto '{owner}'");
         }
 
-        private static Quaternion RestoreRotation(BuddySaveFile data)
+        private static Quaternion RestoreRotation(BuddyState data)
         {
             if (data.Rotation is { Length: 4 })
             {
                 return new Quaternion(data.Rotation[0], data.Rotation[1], data.Rotation[2], data.Rotation[3]);
             }
             return Quaternion.identity;
-        }
-
-        public static void DespawnBuddy()
-        {
-            if (CurrentBuddy != null)
-            {
-                Destroy(CurrentBuddy.gameObject);
-                CurrentBuddy = null;
-            }
         }
 
         // ------------------------------------------------------------------
@@ -319,79 +624,97 @@ namespace YourBuddy
             LifecareDisplay display = gm.PlayerShip.LifecareController.Display;
             if (display == null) return;
 
-            // Re-hook when the display changed or our clone went missing: the game may
-            // rebuild the terminal UI while the display object itself survives.
-            // docs/lifecare.md
-            bool iconLost = _buddyLifeIcon == null || _buddyLifeIcon.transform.parent == null;
-            if (_lifeDisplay == display && !iconLost) return;
-
             Image? breathless = GameInternals.LifecareDisplayAccess.GetBreathlessIcon(display);
             if (breathless == null) return;
 
-            if (iconLost && _lifeDisplay == display)
+            // A new terminal: the old clones and the last scan's snapshot belong to the old one.
+            bool newDisplay = _lifeDisplay != display;
+            if (newDisplay)
             {
-                YourBuddyPlugin.Log.LogInfo("[mgr] Lifecare buddy icon was lost - re-creating it");
+                foreach (LifeIcon old in LifeIcons.Values)
+                {
+                    if (old.Icon != null) Destroy(old.Icon.gameObject);
+                    old.Icon = null;
+                    old.LocalPos = null;
+                    old.Created = false;
+                }
+                _lifeDisplay = display;
             }
 
-            // Clone the breathless icon as the buddy's own map icon.
-            GameObject clone = Instantiate(breathless.gameObject, breathless.transform.parent);
-            clone.name = "BuddyLifeIcon";
-            _buddyLifeIcon = clone.GetComponent<Image>();
-            if (_buddyLifeIcon == null)
+            // Re-hook when our clone went missing: the game may rebuild the terminal UI while the
+            // display object itself survives. docs/lifecare.md
+            foreach (BuddyBehaviour buddy in Buddies)
             {
-                Destroy(clone);
-                return;
+                if (buddy == null) continue;
+
+                if (!LifeIcons.TryGetValue(buddy, out LifeIcon? entry))
+                {
+                    entry = new LifeIcon();
+                    LifeIcons[buddy] = entry;
+                }
+                if (entry.Icon != null && entry.Icon.transform.parent != null) continue;
+
+                if (entry.Created)
+                {
+                    using ActingScope _ = Acting(buddy);
+                    YourBuddyPlugin.Log.LogInfo("[mgr] Lifecare buddy icon was lost - re-creating it");
+                }
+
+                // Clone the breathless icon as the buddy's own map icon. The last scan's snapshot is
+                // kept: it is still valid, and dropping it would blank the icon until the next scan.
+                GameObject clone = Instantiate(breathless.gameObject, breathless.transform.parent);
+                clone.name = "BuddyLifeIcon";
+                entry.Icon = clone.GetComponent<Image>();
+                if (entry.Icon == null)
+                {
+                    Destroy(clone);
+                    continue;
+                }
+                entry.Icon.enabled = false;
+                entry.Created = true;
             }
-            _buddyLifeIcon.enabled = false;
-            // Keep the last scan's snapshot when we are only replacing a lost clone on
-            // the same terminal - the scan result is still valid, and dropping it would
-            // blank the icon until the player scanned again.
-            if (_lifeDisplay != display) _lastBuddyLocalPos = null;
-            _lifeDisplay = display;
         }
 
-        private static void UpdateBuddyLifeIcon()
+        /// <summary>
+        /// A buddy that is gone takes its icon and its count with it.
+        /// </summary>
+        private static void RemoveLifeIcon(BuddyBehaviour buddy)
         {
-            if (_lifeDisplay == null || _buddyLifeIcon == null) return;
+            if (!LifeIcons.TryGetValue(buddy, out LifeIcon? entry)) return;
+
+            LifeIcons.Remove(buddy);
+            if (entry.Icon != null) Destroy(entry.Icon.gameObject);
+            RecountLifeforms(_lifeDisplay);
+        }
+
+        private static void UpdateBuddyLifeIcons()
+        {
+            if (_lifeDisplay == null) return;
 
             // Check if terminal is enabled (not in boot/loading state)
             LoadingAnimator? bootLoading = GameInternals.LifecareDisplayAccess.GetBootLoading(_lifeDisplay);
             bool terminalEnabled = bootLoading == null || !bootLoading.gameObject.activeSelf;
 
-            // If terminal just turned off, hide the icon and reset
+            // If terminal just turned off, hide the icons and reset
             if (!terminalEnabled && _terminalWasEnabled)
             {
                 _terminalWasEnabled = false;
                 _scanWasActive = false;
-                if (_buddyLifeIcon.enabled)
+                foreach (LifeIcon entry in LifeIcons.Values)
                 {
-                    _buddyLifeIcon.enabled = false;
-                    RecountLifeforms(_lifeDisplay);
+                    if (entry.Icon != null && entry.Icon.enabled) entry.Icon.enabled = false;
                 }
+                RecountLifeforms(_lifeDisplay);
                 return;
             }
 
-            // Track when terminal turns on
-            if (terminalEnabled && !_terminalWasEnabled)
-            {
-                _terminalWasEnabled = true;
-                // Restore the icon if we have a cached position from a previous scan
-                if (_lastBuddyLocalPos.HasValue)
-                {
-                    float scale = GameInternals.LifecareDisplayAccess.GetScale(_lifeDisplay);
-                    _buddyLifeIcon.enabled = true;
-                    _buddyLifeIcon.transform.localPosition = -new Vector3(_lastBuddyLocalPos.Value.x * scale, _lastBuddyLocalPos.Value.z * scale, 0f);
-                    RecountLifeforms(_lifeDisplay);
-                }
-            }
+            // Turned on: the cached positions from a previous scan are drawn below.
+            if (terminalEnabled) _terminalWasEnabled = true;
 
             // Only update when a scan is actively running.
             // The game uses scanLoading.gameObject.activeSelf to indicate an active scan.
             LoadingAnimator? scanLoading = GameInternals.LifecareDisplayAccess.GetScanLoading(_lifeDisplay);
             bool scanIsActive = scanLoading != null && scanLoading.gameObject.activeSelf;
-
-            BuddyBehaviour? buddy = CurrentBuddy;
-            Transform? ship = ShipTransform;
 
             // Track scan state transitions - detect when scan ends
             if (scanIsActive && !_scanWasActive)
@@ -401,82 +724,102 @@ namespace YourBuddy
             }
             else if (!scanIsActive && _scanWasActive)
             {
-                // Scan just ended - capture the buddy's current position now
+                // Scan just ended - capture every buddy's position now
                 _scanWasActive = false;
-                _lastBuddyLocalPos = null; // Clear any previous cached position
-
-                // A snapshot taken when the scan finishes, like the game's own player
-                // and Breathless icons: a buddy not aboard at that instant is not drawn
-                // until the next scan. docs/lifecare.md
-                if (buddy != null && !buddy.IsDead && ship != null)
+                foreach (KeyValuePair<BuddyBehaviour, LifeIcon> pair in LifeIcons)
                 {
-                    bool aboard = buddy.IsAboardPlayerShip();
-                    if (aboard)
-                    {
-                        _lastBuddyLocalPos = ship.InverseTransformPoint(buddy.transform.position);
-                    }
-                    if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
-                    {
-                        YourBuddyPlugin.Log.LogInfo(
-                            "[mgr] Lifecare scan finished: buddy aboard=" + aboard +
-                            ", pos=" + buddy.transform.position.ToString("0.0") +
-                            ", trackedRoom=" + buddy.TrackedRoomName +
-                            " -> icon " + (_lastBuddyLocalPos.HasValue ? "shown" : "hidden"));
-                    }
+                    using ActingScope _ = Acting(pair.Key);
+                    CaptureScan(pair.Key, pair.Value);
                 }
-                else if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
-                {
-                    YourBuddyPlugin.Log.LogInfo(
-                        "[mgr] Lifecare scan finished with no live buddy to draw (buddy=" +
-                        (buddy == null ? "null" : buddy.IsDead ? "dead" : "ok") + ", ship=" + (ship == null ? "null" : "ok") + ")");
-                }
-
                 UpdateIconVisibility();
-
-                if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
-                {
-                    // The rendered state, not our bookkeeping: is the clone still in a
-                    // live UI hierarchy, and did our count survive to the label?
-                    // Our own flags have reported "shown" while the player saw nothing.
-                    TMP_Text? label = GameInternals.LifecareDisplayAccess.GetLifeformsLabel(_lifeDisplay);
-                    Image? playerIcon = GameInternals.LifecareDisplayAccess.GetPlayerIcon(_lifeDisplay);
-                    YourBuddyPlugin.Log.LogInfo(
-                        "[mgr] Lifecare icon state: enabled=" + _buddyLifeIcon.enabled +
-                        ", activeInHierarchy=" + _buddyLifeIcon.gameObject.activeInHierarchy +
-                        ", parent=" + (_buddyLifeIcon.transform.parent != null ? _buddyLifeIcon.transform.parent.name : "none") +
-                        ", localPos=" + _buddyLifeIcon.transform.localPosition.ToString("0.0") +
-                        ", playerIcon=" + (playerIcon != null && playerIcon.enabled) +
-                        ", label=" + (label != null ? label.text : "<no label>"));
-                }
+                LogIconState();
             }
 
             // Re-assert every poll, not only on scan edges: whatever the game does to
-            // this UI in between, the icon and count are restored within 0.1 s instead
+            // this UI in between, the icons and count are restored within 0.1 s instead
             // of staying wrong until the next scan.
             if (terminalEnabled) UpdateIconVisibility();
+        }
 
-            static void UpdateIconVisibility()
+        /// <summary>
+        /// A snapshot taken when the scan finishes, like the game's own player and Breathless icons:
+        /// a buddy not aboard at that instant is not drawn until the next scan. docs/lifecare.md
+        /// </summary>
+        private static void CaptureScan(BuddyBehaviour buddy, LifeIcon entry)
+        {
+            entry.LocalPos = null;
+            Transform? ship = ShipTransform;
+            if (buddy != null && !buddy.IsDead && ship != null)
             {
-                // Only called after UpdateBuddyLifeIcon checked _lifeDisplay and _buddyLifeIcon.
-                if (_lastBuddyLocalPos == null)
+                bool aboard = buddy.IsAboardPlayerShip();
+                if (aboard) entry.LocalPos = ship.InverseTransformPoint(buddy.transform.position);
+
+                if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
                 {
-                    if (_buddyLifeIcon!.enabled)
-                    {
-                        _buddyLifeIcon.enabled = false;
-                        RecountLifeforms(_lifeDisplay);
-                    }
-                    return;
+                    YourBuddyPlugin.Log.LogInfo(
+                        "[mgr] Lifecare scan finished: buddy aboard=" + aboard +
+                        ", pos=" + buddy.transform.position.ToString("0.0") +
+                        ", trackedRoom=" + buddy.TrackedRoomName +
+                        " -> icon " + (entry.LocalPos.HasValue ? "shown" : "hidden"));
+                }
+            }
+            else if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
+            {
+                YourBuddyPlugin.Log.LogInfo(
+                    "[mgr] Lifecare scan finished with no live buddy to draw (buddy=" +
+                    (buddy == null ? "null" : buddy.IsDead ? "dead" : "ok") + ", ship=" + (ship == null ? "null" : "ok") + ")");
+            }
+        }
+
+        /// <summary>
+        /// The rendered state, not our bookkeeping: is each clone still in a live UI hierarchy, and did
+        /// our count survive to the label? Our own flags have reported "shown" while the player saw nothing.
+        /// </summary>
+        private static void LogIconState()
+        {
+            if (YourBuddyPlugin.ConfigDebugLevel.Value < 1 || _lifeDisplay == null) return;
+
+            TMP_Text? label = GameInternals.LifecareDisplayAccess.GetLifeformsLabel(_lifeDisplay);
+            Image? playerIcon = GameInternals.LifecareDisplayAccess.GetPlayerIcon(_lifeDisplay);
+            foreach (KeyValuePair<BuddyBehaviour, LifeIcon> pair in LifeIcons)
+            {
+                Image? icon = pair.Value.Icon;
+                if (icon == null) continue;
+
+                using ActingScope _ = Acting(pair.Key);
+                YourBuddyPlugin.Log.LogInfo(
+                    "[mgr] Lifecare icon state: enabled=" + icon.enabled +
+                    ", activeInHierarchy=" + icon.gameObject.activeInHierarchy +
+                    ", parent=" + (icon.transform.parent != null ? icon.transform.parent.name : "none") +
+                    ", localPos=" + icon.transform.localPosition.ToString("0.0") +
+                    ", playerIcon=" + (playerIcon != null && playerIcon.enabled) +
+                    ", label=" + (label != null ? label.text : "<no label>"));
+            }
+        }
+
+        private static void UpdateIconVisibility()
+        {
+            if (_lifeDisplay == null) return;
+
+            float scale = GameInternals.LifecareDisplayAccess.GetScale(_lifeDisplay);
+            foreach (LifeIcon entry in LifeIcons.Values)
+            {
+                if (entry.Icon == null) continue;
+
+                if (entry.LocalPos == null)
+                {
+                    if (entry.Icon.enabled) entry.Icon.enabled = false;
+                    continue;
                 }
 
                 // Display the captured position
-                float scale = GameInternals.LifecareDisplayAccess.GetScale(_lifeDisplay);
-                Vector3 wanted = -new Vector3(_lastBuddyLocalPos.Value.x * scale, _lastBuddyLocalPos.Value.z * scale, 0f);
-                if (!_buddyLifeIcon!.gameObject.activeSelf) _buddyLifeIcon.gameObject.SetActive(true);
+                Vector3 wanted = -new Vector3(entry.LocalPos.Value.x * scale, entry.LocalPos.Value.z * scale, 0f);
+                if (!entry.Icon.gameObject.activeSelf) entry.Icon.gameObject.SetActive(true);
 
-                _buddyLifeIcon.enabled = true;
-                _buddyLifeIcon.transform.localPosition = wanted;
-                RecountLifeforms(_lifeDisplay);
+                entry.Icon.enabled = true;
+                entry.Icon.transform.localPosition = wanted;
             }
+            RecountLifeforms(_lifeDisplay);
         }
 
         /// <summary>
@@ -513,9 +856,15 @@ namespace YourBuddy
 
             Image? playerIcon = GameInternals.LifecareDisplayAccess.GetPlayerIcon(display);
             if (playerIcon != null && playerIcon.enabled) count++;
-            // Only the icon belonging to this display: the postfix fires for whichever
+            // Only the icons belonging to this display: the postfix fires for whichever
             // LifecareDisplay the game touched.
-            if (_buddyLifeIcon != null && _buddyLifeIcon.enabled && display == _lifeDisplay) count++;
+            if (display == _lifeDisplay)
+            {
+                foreach (LifeIcon entry in LifeIcons.Values)
+                {
+                    if (entry.Icon != null && entry.Icon.enabled) count++;
+                }
+            }
 
             // Assigning TMP text forces a mesh rebuild, and this now runs on every poll.
             string text = count.ToString();
@@ -540,9 +889,12 @@ namespace YourBuddy
 
             try
             {
-                BuddyBehaviour? buddy = CurrentBuddy;
-                BuddySaveFile data = buddy == null ? new BuddySaveFile { Exists = false } : CaptureSaveFile(buddy);
-                data = data with { OpenedCapsule = BuddyCryoSpawn.OpenedCapsule, SleepingCapsule = BuddyCryoSpawn.SleepingCapsule };
+                List<BuddyState> states = [];
+                foreach (BuddyBehaviour buddy in Buddies)
+                {
+                    if (buddy != null) states.Add(CaptureState(buddy));
+                }
+                BuddySaveFile data = BuddySaveFile.Of(states, [.. BuddyBehaviour.KnownPinCodes], BuddyCryoSpawn.OpenedCapsule);
 
                 string path = Path.Combine(SaveParser.SaveFilesPath, saveFileName + ".buddy");
                 WriteAtomically(path, JsonConvert.SerializeObject(data, Formatting.Indented));
@@ -574,19 +926,24 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Whether the living buddy is inside this hiding spot, for the game's own Interact.
+        /// Whether a living buddy is inside this hiding spot, for the game's own Interact.
         /// </summary>
         public static bool BuddyIsHidingIn(HidingSpot spot)
         {
-            BuddyBehaviour? buddy = CurrentBuddy;
-            return spot != null && buddy != null && !buddy.IsDead && buddy.IsHiddenIn(spot);
+            if (spot == null) return false;
+
+            foreach (BuddyBehaviour buddy in Buddies)
+            {
+                if (buddy != null && !buddy.IsDead && buddy.IsHiddenIn(spot)) return true;
+            }
+            return false;
         }
 
         /// <summary>
-        /// The buddy as the sidecar stores it. The ship-local position is what a load prefers,
+        /// One buddy as the sidecar stores it. The ship-local position is what a load prefers,
         /// so it is written whenever there is a ship to be local to.
         /// </summary>
-        private static BuddySaveFile CaptureSaveFile(BuddyBehaviour buddy)
+        private static BuddyState CaptureState(BuddyBehaviour buddy)
         {
             Transform? ship = ShipTransform;
             // A hidden buddy is saved outside its spot: the load knows nothing of hiding.
@@ -610,16 +967,17 @@ namespace YourBuddy
                 ownerLocal = [ownerPoint.x, ownerPoint.y, ownerPoint.z];
             }
 
-            return new BuddySaveFile
+            return new BuddyState
             {
-                Exists = true,
+                Number = buddy.Number,
+                Name = buddy.Name,
                 Alive = !buddy.IsDead,
                 Owner = buddy.CurrentOwner,
                 OwnerLocalPosition = ownerLocal,
                 ShipLocalPosition = shipLocal,
                 WorldPosition = [pos.x, pos.y, pos.z],
                 Rotation = [rot.x, rot.y, rot.z, rot.w],
-                KnownPinCodes = [.. buddy.KnownPinCodes]
+                SleepingCapsule = BuddyCryoSpawn.SleepingCapsuleOf(buddy)
             };
         }
 

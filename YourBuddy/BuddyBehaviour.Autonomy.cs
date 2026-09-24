@@ -336,18 +336,18 @@ namespace YourBuddy
         /// </summary>
         private string? BusyForCommand(bool whileAlert = false, bool preemptErrand = false)
         {
-            if (IsDead) return "The buddy is dead";
+            if (IsDead) return Name + " is dead";
 
-            if (Asleep || !gameObject.activeInHierarchy) return "Buddy is not awake here";
+            if (Asleep || !gameObject.activeInHierarchy) return Name + " is not awake here";
 
-            if (catchInProgress || mode == BuddyMode.Flee) return "Buddy is already fleeing the Breathless";
+            if (catchInProgress || mode == BuddyMode.Flee) return Name + " is already fleeing the Breathless";
 
-            if (!whileAlert && fearState != FearState.Calm) return "Buddy is too scared for that";
+            if (!whileAlert && fearState != FearState.Calm) return Name + " is too scared for that";
 
-            if (reachTask != null && !preemptErrand) return "Buddy is busy " + DescribeReachTask();
+            if (reachTask != null && !preemptErrand) return Name + " is busy " + DescribeReachTask();
 
             // A goto is a standing order of yours, not something the buddy chose: it is not an errand.
-            return GotoUnderway ? "Buddy is walking to a node you sent it to" : null;
+            return GotoUnderway ? Name + " is walking to a node you sent it to" : null;
         }
 
         private static Player? PilotPlayer()

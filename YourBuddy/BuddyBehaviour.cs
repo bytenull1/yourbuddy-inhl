@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Text;
+using BepInEx.Logging;
 using Space;
 using UnityEngine;
 
@@ -18,6 +19,16 @@ namespace YourBuddy
         private GameObject? animatedModel;
         private Collider itemBlocker = null!; // SpawnBuddy calls Init before the first frame
         private CharacterController? playerCharacterController;
+
+        /// <summary>
+        /// Its console number ("@2") and name, unique among the buddies; set by Init.
+        /// </summary>
+        internal int Number { get; private set; }
+        internal string Name { get; private set; } = "Buddy";
+        /// <summary>
+        /// Where its lines go while it acts: docs/logging.md#4-rules-for-adding-logs
+        /// </summary>
+        internal ManualLogSource LogSource { get; private set; } = null!; // set by Init, before the first frame
 
         private BuddyMode mode = BuddyMode.Follow;
         internal bool IsDead { get; private set; }
@@ -125,9 +136,9 @@ namespace YourBuddy
         }
         private readonly List<PendingDoorClose> pendingDoorCloses = [];
 
-        // Gates the buddy cannot get through right now, fed to the path search so it
-        // routes around them. docs/invariants.md#locked-doors-block-edges
-        private readonly List<Gate> impassableGates = [];
+        // Gates no buddy can get through right now, fed to the path search so it routes
+        // around them. docs/invariants.md#locked-doors-block-edges
+        private static readonly List<Gate> ImpassableGates = [];
 
         // Monster catch sequence
         private bool catchInProgress = false;
@@ -230,11 +241,30 @@ namespace YourBuddy
         private float baseFloorY = 0f;
         private bool hasBaseFloor = false;
 
-        // Scene caches
-        private List<EntryDetector>? cachedDetectors = null;
+        // Scene caches every buddy shares: docs/invariants.md#door-knowledge-is-shared
+        private static List<EntryDetector>? _cachedDetectors = null;
         // The detectors that drive each gate, switched off or not.
-        private readonly Dictionary<Gate, List<EntryDetector>> detectorsByGate = [];
-        private List<Airlock>? cachedAirlocks = null;
+        private static readonly Dictionary<Gate, List<EntryDetector>> DetectorsByGate = [];
+        private static List<Airlock>? _cachedAirlocks = null;
+
+        /// <summary>
+        /// A new scene: every shared cache refills on first use, which skips the SceneScan budget.
+        /// The door codes reset with their GameManager. docs/invariants.md#door-knowledge-is-shared
+        /// </summary>
+        internal static void ResetWorldCaches()
+        {
+            _cachedDetectors = null;
+            DetectorsByGate.Clear();
+            _detectorsRefreshAt = 0f;
+            SellRooms.Clear();
+            _cachedAirlocks = null;
+            _airlocksRefreshAt = 0f;
+            PasswordGates.Clear();
+            _passwordGatesRefreshAt = 0f;
+            ImpassableGates.Clear();
+            _impassableGatesRefreshAt = 0f;
+            catching = null;
+        }
 
         // Pre-allocated physics buffers: the whisker/diagnostic probes run every frame,
         // so they must not allocate (use the non-allocating NonAlloc methods).
@@ -245,8 +275,16 @@ namespace YourBuddy
         /// Called once by YourBuddyPlugin.SpawnBuddy, right after AddComponent and before Start.
         /// </summary>
         internal void Init(GameObject? ragdoll, Rigidbody? ragdollBody, GameObject? model, Collider blocker,
-            CharacterController? playerController, float speed)
+            CharacterController? playerController, float speed, int number, string buddyName)
         {
+            Number = number;
+            Name = buddyName;
+            LogSource = BuddyManager.LogSourceFor(buddyName);
+            // Buddies spawned together would otherwise run each slow phase and replan in the same frame.
+            int stagger = number % 4;
+            slowPhase = stagger;
+            slowTimer = stagger * 0.015f;
+            navPathRecalcAt = Time.time + stagger * 0.055f;
             ragdollObject = ragdoll;
             ragdollRigidbody = ragdollBody;
             animatedModel = model;
@@ -262,9 +300,48 @@ namespace YourBuddy
         internal bool IsPlayerBody(Transform t) =>
             playerCharacterController != null && t.IsChildOf(playerCharacterController.transform);
 
+        /// <summary>
+        /// Its own body, or its ragdoll once that has been let go on death.
+        /// </summary>
+        internal bool IsOwnBody(Transform t) =>
+            t.IsChildOf(transform) || (ragdollObject != null && t.IsChildOf(ragdollObject.transform));
+
+        internal CharacterController? Controller => GetComponent<CharacterController>();
+
+        /// <summary>
+        /// What another buddy's controller must not bump: the item blocker, and the ragdoll once dead.
+        /// docs/invariants.md#buddies-never-block-each-other
+        /// </summary>
+        internal IEnumerable<Collider> SolidParts()
+        {
+            if (itemBlocker != null) yield return itemBlocker;
+
+            if (!IsDead || ragdollObject == null) yield break;
+
+            foreach (Collider part in ragdollObject.GetComponentsInChildren<Collider>()) yield return part;
+        }
+
+        /// <summary>
+        /// Whether its current errand leg or hide is about `t`: docs/invariants.md#one-buddy-per-target
+        /// </summary>
+        internal bool Holds(Transform t)
+        {
+            if (IsDead || t == null) return false;
+
+            if (hideSpot != null && hideState != HideState.None && hideSpot.transform == t) return true;
+
+            return reachTask != null && reachTask.Holds(t);
+        }
+
+        /// <summary>
+        /// Tracked in this room and able to hold it loaded: a parked buddy holds nothing.
+        /// </summary>
+        internal bool TracksRoom(Room room) =>
+            !IsDead && isActiveAndEnabled && (room == forcedRoom || room == currentRoomRef);
+
         private void Start()
         {
-
+            using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
             cc = GetComponent<CharacterController>();
             anims = GetComponentsInChildren<Animator>();
             SaveParser.OnFileSaveInitiated.AddListener(OnGameSaving);
@@ -290,10 +367,8 @@ namespace YourBuddy
 
             stuckCheckPosition = transform.position;
             ComputeOriginToFeet();
-
-            // The graph holds no gameplay rules, so it asks us which doors are shut to
-            // the buddy. docs/invariants.md#locked-doors-block-edges
-            BuddyNodeGraph.SegmentBlockedByDoor = SegmentBlockedByDoor;
+            // Again now every collider is live; OnEnable ran during activation.
+            BuddyManager.IgnoreAllBodies(this);
         }
 
         /// <summary>
@@ -365,6 +440,8 @@ namespace YourBuddy
         private void Update()
         {
             if (IsDead || cc == null) return;
+
+            using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
 
             GameManager gm = GameManager.Instance;
             if (gm == null || gm.PlayerShip == null) return;
@@ -470,7 +547,11 @@ namespace YourBuddy
                 ReportObstacles(desired);
             }
 
-            if (!wantMove) desired = Vector3.zero;
+            if (!wantMove)
+            {
+                desired = Vector3.zero;
+                TrySpaceOut();
+            }
 
             UpdateIdleRecovery(wantMove);
             UpdateStuckDetection(wantMove);
@@ -526,7 +607,8 @@ namespace YourBuddy
 
             if (!YourBuddyPlugin.ConfigShowHud.Value) return;
 
-            if (BuddyManager.CurrentBuddy != this) return;
+            // One panel, for the buddy commands go to.
+            if (BuddyManager.Focus != this) return;
 
             if (GameManager.Instance == null) return;
 
@@ -540,7 +622,8 @@ namespace YourBuddy
                 hudMeasuredText = text;
                 hudTextHeight = GUI.skin.label.CalcHeight(new GUIContent(text), HudWidth - 25f);
             }
-            GUI.Box(new Rect(10f, 10f, HudWidth, hudTextHeight + 32f), "YourBuddy");
+            GUI.Box(new Rect(10f, 10f, HudWidth, hudTextHeight + 32f),
+                BuddyManager.All.Count > 1 ? "YourBuddy - " + Name : "YourBuddy");
             GUI.Label(new Rect(20f, 32f, HudWidth - 15f, hudTextHeight + 4f), text);
         }
 
@@ -596,8 +679,25 @@ namespace YourBuddy
             return statusText;
         }
 
+        /// <summary>
+        /// buddy_list's line: "#2 Buddy 2 * - Follow (tidying up), on ShipyardStation, 4.1 m away".
+        /// </summary>
+        internal string ListLine(bool focused)
+        {
+            string state = IsDead ? "dead" : !gameObject.activeInHierarchy ? "parked" : Asleep ? "asleep" : mode.ToString();
+            if (!IsDead && DescribeReachTask() is { } task) state += " (" + task + ")";
+
+            Player? player = PilotPlayer();
+            string away = player != null && player.Controller != null
+                ? ", " + Vector3.Distance(transform.position, player.Controller.CachedTransform.position).ToString("0.0") + " m away"
+                : "";
+            return "#" + Number + " " + Name + (focused ? " *" : "") + " - " + state +
+                   (CurrentOwner != null ? ", on " + CurrentOwner : "") + away;
+        }
+
         private void OnDestroy()
         {
+            using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
             SaveParser.OnFileSaveInitiated.RemoveListener(OnGameSaving);
             hands.Drop("the buddy is gone");
             ForceLeaveHidingSpot("the buddy is gone");
@@ -608,9 +708,9 @@ namespace YourBuddy
             // The ragdoll gets unparented on death - clean it up with the buddy.
             if (ragdollObject != null) Destroy(ragdollObject);
 
-            if (BuddyManager.CurrentBuddy == this) BuddyManager.CurrentBuddy = null;
+            if (catching == this) catching = null;
 
-            if (BuddyNodeGraph.SegmentBlockedByDoor == SegmentBlockedByDoor) BuddyNodeGraph.SegmentBlockedByDoor = null;
+            BuddyManager.Unregister(this);
         }
     }
 

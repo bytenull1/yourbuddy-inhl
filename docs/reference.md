@@ -276,6 +276,21 @@ See [fear.md §6](fear.md#6-hiding-in-a-closet-or-locker). Walking up uses the `
 | `TalkRange` | 2.4 m | to the buddy's capsule; shorter than the player's reach |
 | `LookAngle` | 30° | cone to the *nearest* point of the capsule; a chest point fails close up |
 
+### Several buddies - `BuddyBehaviour.cs`
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `BuddySpacing` | 0.6 m | an idle buddy this near a lower-numbered one (flat) steps aside |
+| `SpacingSameDeck` | 1 m | height difference beyond which the other is on another deck |
+| `SpacingStep` / `SpacingCooldown` | 0.8 m / 3 s | how far it steps, and how often at most |
+
+### Spawning several - `Patches.cs`
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `SpawnSpacing` | 0.8 m | gap between buddies in `spawn_buddy N`'s row |
+| `SpawnSameDeck` | 0.5 m | a row point is used only on the middle point's deck, else it falls back to the middle |
+
 ### Carrying the corpse - `BuddyCorpse.cs`
 
 | Constant | Value | Meaning |
@@ -335,6 +350,12 @@ Which sound: [game-model.md §6](game-model.md#6-footstep-sounds).
 The full command list is in the [README](../README.md#console-commands-reference). Commands live in
 `Patches.cs`; order bodies live in `BuddyCommands.cs` so the [dialog](dialog.md) shares them.
 `buddy_goto` calls `FindPath` then `ApplyRouteOrder`, so `NavPath` changes must update it.
+
+**Which buddy.** A per-buddy command takes `@2` (a number), `@buddy2` (a name, case and spaces
+ignored) or `@all` anywhere among its arguments (`Patches.ForTargets`). Without one it goes to
+`BuddyManager.Focus`: the buddy last talked to or named, else the nearest living one. Naming exactly
+one moves the focus, which is also the buddy the HUD shows. `buddy_list` lists numbers and names and
+marks the focus. `spawn_buddy N` replaces every buddy with N.
 
 **`ai_notarget` is player-only on purpose.** Both monster AI components kill from an
 `ObjectDetector` UnityEvent that fires even when the component is disabled. So the two `DetectItem`

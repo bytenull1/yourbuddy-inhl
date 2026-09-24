@@ -103,13 +103,13 @@ namespace YourBuddy
             string? busy = body.BusyForCommand();
             if (busy != null) return busy;
 
-            if (!body.IsAboardPlayerShip()) return "Buddy is not aboard your ship";
+            if (!body.IsAboardPlayerShip()) return body.Name + " is not aboard your ship";
 
             // IsAboardPlayerShip is false without a player ship.
             SpaceShip ship = GameManager.Instance.PlayerShip!;
             Controller? controller = kind == TerminalKind.Oxygen ? ship.OxygenController : ship.ClimatController;
             return TryStartTerminal(kind, controller, "you asked", true, out string report)
-                ? "Buddy " + report
+                ? body.Name + " " + report
                 : "Not switching on the " + TerminalName(kind) + ": " + report;
         }
 
@@ -119,6 +119,8 @@ namespace YourBuddy
         private bool TryStartTerminal(TerminalKind kind, Controller? controller, string why, bool forced, out string report)
         {
             string? blocker = TerminalBlocker(controller, out Switch? powerSwitch);
+            // controller is set whenever TerminalBlocker found nothing. docs/invariants.md#one-buddy-per-target
+            if (blocker == null && body.TakenByAnother(controller!.transform)) blocker = "another buddy is on it";
             if (blocker != null)
             {
                 report = blocker;

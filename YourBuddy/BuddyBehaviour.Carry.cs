@@ -10,12 +10,20 @@ namespace YourBuddy
     {
         private BuddyHands hands = null!; // created in Init, before the first frame
 
-        private void LateUpdate() => hands.Follow(MoveSpeed);
+        private void LateUpdate()
+        {
+            using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
+            hands.Follow(MoveSpeed);
+        }
 
         /// <summary>
         /// Before the game writes the save: docs/invariants.md#a-carried-item-is-put-down-before-a-save
         /// </summary>
-        private void OnGameSaving() => hands.Drop("the game is saving");
+        private void OnGameSaving()
+        {
+            using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
+            hands.Drop("the game is saving");
+        }
 
         /// <summary>
         /// Whether a candidate belongs to the vessel the buddy is riding. The enlarged search radii

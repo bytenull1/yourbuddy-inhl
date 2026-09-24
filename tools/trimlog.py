@@ -16,6 +16,10 @@ Usage
     python tools/trimlog.py LogOutput.log --stats         # shape histogram, no body
     python tools/trimlog.py LogOutput.log --tag nav,ai    # only these subsystems
     python tools/trimlog.py LogOutput.log --all           # keep non-YourBuddy lines too
+    python tools/trimlog.py LogOutput.log --buddy "Buddy 2"   # only that buddy's lines
+
+Each buddy logs under its own source, `YourBuddy:<name>`. When a capture holds more than one,
+every line is prefixed with the name (`Buddy 2| [ai] ...`); with one, output is as before.
     ... | python tools/trimlog.py -                       # or read stdin
 
 Write the result next to the repo and hand the agent that file, not the raw log.
@@ -41,24 +45,27 @@ def shape(text):
 
 
 def parse(line):
-    """-> (keep, level, tag, text) with the BepInEx prefix removed."""
+    """-> (keep, level, who, tag, text) with the BepInEx prefix removed. `who` is the buddy
+    named by a `YourBuddy:<name>` source, or '' for the plugin's own lines."""
     line = line.rstrip('\n').rstrip()
     m = BEPINEX.match(line)
     if not m:
-        return False, '', '', line
+        return False, '', '', '', line
     level = m.group('level')
     source = m.group('source').strip()
+    who = source.split(':', 1)[1] if source.startswith('YourBuddy:') else ''
     text = line[m.end():]
     tag = ''
     t = TAG.match(text)
     if t:
         tag = t.group('tag')
         text = text[t.end():]
-    return source.startswith('YourBuddy'), level, tag, text
+    return source.startswith('YourBuddy'), level, who, tag, text
 
 
-def emit(out, level, tag, text):
-    out.append('%s%s%s' % (LEVEL_MARK.get(level, ''), '[%s] ' % tag if tag else '', text))
+def emit(out, level, who, tag, text, named):
+    out.append('%s%s%s%s' % (LEVEL_MARK.get(level, ''), '%s| ' % who if named and who else '',
+                             '[%s] ' % tag if tag else '', text))
 
 
 def main():
@@ -72,6 +79,7 @@ def main():
     ap.add_argument('--stats', action='store_true',
                     help='print a shape histogram instead of the log body')
     ap.add_argument('--all', action='store_true', help='keep lines from other sources too')
+    ap.add_argument('--buddy', metavar='NAME', help="only this buddy's lines (its YourBuddy:<name> source)")
     args = ap.parse_args()
 
     stream = sys.stdin if args.path == '-' else open(args.path, 'r', encoding='utf-8', errors='replace')
@@ -81,23 +89,28 @@ def main():
     for raw in stream:
         if not raw.strip():
             continue
-        mine, level, tag, text = parse(raw)
+        mine, level, who, tag, text = parse(raw)
         if not mine and not args.all:
             # Lines the mod did not write, and free-text notes the user added to a
             # capture by hand -- those are evidence, so keep them.
             if BEPINEX.match(raw.strip()):
                 continue
-            level, tag, text = '', '', raw.rstrip('\n').rstrip()
+            level, who, tag, text = '', '', '', raw.rstrip('\n').rstrip()
         if wanted is not None and tag and tag not in wanted:
             continue
-        rows.append((level, tag, text))
+        if args.buddy is not None and who and who != args.buddy:
+            continue
+        rows.append((level, who, tag, text))
     if stream is not sys.stdin:
         stream.close()
 
+    # Names only when there is more than one buddy to tell apart.
+    named = len({who for _level, who, _tag, _text in rows if who}) > 1
+
     if args.stats:
         counts = {}
-        for level, tag, text in rows:
-            key = ('[%s] ' % tag if tag else '') + shape(text)
+        for level, who, tag, text in rows:
+            key = ('%s| ' % who if named and who else '') + ('[%s] ' % tag if tag else '') + shape(text)
             counts[key] = counts.get(key, 0) + 1
         for key, n in sorted(counts.items(), key=lambda kv: -kv[1]):
             print('%6d  %s' % (n, key))
@@ -113,13 +126,13 @@ def main():
         # so exact repeating-block detection almost never fires on them, while the
         # same handful of shapes still accounts for most of the file.
         total = {}
-        for _level, tag, text in rows:
-            key = (tag, shape(text))
+        for _level, who, tag, text in rows:
+            key = (who, tag, shape(text))
             total[key] = total.get(key, 0) + 1
         seen = {}
         dropped = 0
-        for level, tag, text in rows:
-            key = (tag, shape(text))
+        for level, who, tag, text in rows:
+            key = (who, tag, shape(text))
             n = seen[key] = seen.get(key, 0) + 1
             # First N and last N of each shape: the drift between them is often the
             # finding (a position that never changes means a livelock).
@@ -127,7 +140,7 @@ def main():
                 if dropped:
                     out.append('    ... %d lines of shapes already shown ...' % dropped)
                     dropped = 0
-                emit(out, level, tag, text)
+                emit(out, level, who, tag, text, named)
             else:
                 dropped += 1
         if dropped:
@@ -138,7 +151,7 @@ def main():
             reps = 1
             while i + reps < len(rows) and rows[i + reps][1:] == rows[i][1:]:
                 reps += 1
-            emit(out, *rows[i])
+            emit(out, *rows[i], named)
             if reps > 1:
                 out.append('    ... x%d identical ...' % (reps - 1))
             i += reps

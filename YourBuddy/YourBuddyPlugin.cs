@@ -22,10 +22,12 @@ namespace YourBuddy
         private static YourBuddyPlugin Instance { get; set; }
         private static ManualLogSource? _fallbackLog;
         /// <summary>
-        /// The plugin's logger; anything logging before Awake shares one stand-in source.
+        /// The acting buddy's logger while its code runs, else the plugin's; anything logging before
+        /// Awake shares one stand-in source. docs/logging.md#4-rules-for-adding-logs
         /// </summary>
         public static ManualLogSource Log =>
-            Instance != null ? Instance.Logger : (_fallbackLog ??= BepInEx.Logging.Logger.CreateLogSource("YourBuddyMod"));
+            BuddyManager.ActingLog ??
+            (Instance != null ? Instance.Logger : (_fallbackLog ??= BepInEx.Logging.Logger.CreateLogSource("YourBuddyMod")));
         private static BuddyNodeEditor _nodeEditor;
         public static BuddyNodeEditor NodeEditor
         {
@@ -207,6 +209,10 @@ namespace YourBuddy
 
             GameInternals.ResolveAll();
 
+            // Door knowledge is the same for every buddy, so the graph asks it once:
+            // docs/invariants.md#door-knowledge-is-shared
+            BuddyNodeGraph.SegmentBlockedByDoor = BuddyBehaviour.SegmentBlockedByDoor;
+
             GameObject managerGo = new("YourBuddyManager");
             DontDestroyOnLoad(managerGo);
             managerGo.AddComponent<BuddyManager>();
@@ -248,18 +254,16 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Spawns a Buddy NPC at the specified position and rotation.
+        /// Spawns one more buddy, beside any that exist. `wantedNumber` is kept when free (a save's
+        /// own); otherwise the next free ones are used. Null with no game running.
         /// </summary>
-        public static void SpawnBuddy(Vector3 position, Quaternion rotation)
+        public static BuddyBehaviour? SpawnBuddy(Vector3 position, Quaternion rotation, int wantedNumber = 0)
         {
-            if (GameManager.Instance == null) return;
-
-            // Remove any existing buddy first - there can only be one.
-            BuddyManager.DespawnBuddy();
+            if (GameManager.Instance == null) return null;
 
             // Get the player prefab from GameManager
             Player? playerPrefab = GameInternals.GameManagerAccess.GetPlayerPrefab(GameManager.Instance);
-            if (playerPrefab == null) return;
+            if (playerPrefab == null) return null;
 
             // Instantiate the buddy and immediately deactivate to prevent Start()/Awake() from crashing
             GameObject npcGo = Instantiate(playerPrefab.gameObject, position, rotation);
@@ -435,15 +439,21 @@ namespace YourBuddy
                 }
             }
 
-            // Add AI and Activate
+            // Add AI and Activate. Registered first, so OnEnable finds the other buddies to pass through.
+            int buddyNumber = BuddyManager.FreeNumber(wantedNumber);
+            string buddyName = BuddyManager.NameFor(buddyNumber);
+            npcGo.name = "YourBuddy " + buddyName;
             BuddyBehaviour buddy = npcGo.AddComponent<BuddyBehaviour>();
             buddy.Init(ragdollObject, ragdollRigidbody, animatedModel, blocker,
-                realPlayer != null ? realPlayer.GetComponent<CharacterController>() : null, ConfigMoveSpeed.Value);
+                realPlayer != null ? realPlayer.GetComponent<CharacterController>() : null, ConfigMoveSpeed.Value,
+                buddyNumber, buddyName);
             npcGo.AddComponent<BuddyDialog>();
+            BuddyManager.Register(buddy);
 
             npcGo.SetActive(true);
-            BuddyManager.CurrentBuddy = buddy;
-            Log.LogInfo($"[mod] Buddy successfully spawned at {position}");
+            using BuddyManager.ActingScope _ = BuddyManager.Acting(buddy);
+            Log.LogInfo($"[mod] {buddyName} successfully spawned at {position}");
+            return buddy;
         }
 
         private static void IgnorePlayerTrigger(HeadTrigger? trigger, CharacterController? buddyCc, Collider? blocker)

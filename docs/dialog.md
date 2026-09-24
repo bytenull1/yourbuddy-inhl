@@ -18,6 +18,11 @@ Look at the buddy and press **Interact**. `BuddyDialog` listens to
 | `!PlayerIsBusy` | the player is not aiming at or holding an `Interactable` - **the game's interaction wins**. Read from `PlayerController.focusedInteractable`; if a game update breaks that field, a ray along the view within reach decides instead, so a lost field never hands terminals' keypresses to the dialog |
 | `!SightBlocked` | one ray on `ProbeLayers`; without it the window opens through walls |
 
+Every buddy's window hears the key. Only one window is open at a time, and of the buddies that pass
+every gate, the one at the smallest view angle answers (ties: the lower number). Its name is the
+title. Opening it makes that buddy the **focus**, so console commands without a target go to it too
+([reference.md §2](reference.md#2-debug-commands)).
+
 While the window is open the buddy stands still and faces the player (`inDialog`). The mod frees the
 cursor and calls `InputHandler.SwitchToUIInput()`, like `AssistanceBot.Talk`, and reverses both on
 close (**Escape** or the close box).
@@ -68,7 +73,12 @@ every event and must **not** be gated on `Repaint`
 
 `BuddyDialogCommands.Run` keyword-matches like the game's `AssistanceBot` ("follow" and "follow me"
 both work). A bare number is a door code. Everything calls `BuddyCommands`, the same code the console
-uses.
+uses, for the buddy being talked to.
+
+**Everyone.** "everyone", "everybody", "all of you" or "both of you" anywhere in the text gives the
+order to every living, awake buddy, one reply line each ("everyone follow me"). The group word is
+removed before matching. A password is told once: codes are shared
+([door-knowledge-is-shared](invariants.md#door-knowledge-is-shared)).
 
 Matching order matters - it is a substring test ("trash box" contains "trash"). The one exception
 is a goto that names a room, which is tried right after "decide" ("go to the workshop" contains
@@ -86,7 +96,7 @@ is a goto that names a room, which is tried right after "decide" ("go to the wor
 | play / toy | `buddy_play` | a play session ([items.md §5](items.md#5-idle-play)) |
 | snack / eat / food / hungry | `buddy_snack` | eat or drink something nearby ([snacks.md](snacks.md)) |
 | goto *room* | `buddy_goto <i>` (a node, not a room) | `FindPath` + `ApplyRouteOrder` ([below](#goto-by-room)) |
-| password *nnnn* | `buddy_password <code>` | adds the code to `knownPinCodes` |
+| password *nnnn* | `buddy_password <code>` | adds the code to the codes every buddy knows |
 
 **Follow, Wander, Stay, Goto and "decide" are orders.** They are recorded as the order in force
 ([an-order-is-not-a-mode](invariants.md#an-order-is-not-a-mode)). Given during a flee, an order waits

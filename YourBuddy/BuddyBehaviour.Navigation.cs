@@ -82,6 +82,15 @@ namespace YourBuddy
         /// How far above its own floor plane counts as "perched on something".
         /// </summary>
         private const float IdleAboveFloorDelta = 0.35f;
+        /// <summary>
+        /// An idle buddy this near a lower-numbered one (flat, same deck) steps SpacingStep away from
+        /// it, at most once per SpacingCooldown.
+        /// </summary>
+        private const float BuddySpacing = 0.6f;
+        private const float SpacingSameDeck = 1f;
+        private const float SpacingStep = 0.8f;
+        private const float SpacingCooldown = 3f;
+        private float spaceOutAt = 0f;
 
         private float doorBlockedLogAt = 0f;
 
@@ -383,7 +392,7 @@ namespace YourBuddy
             doorBlockedLogAt = Time.time + 10f;
             YourBuddyPlugin.Log.LogInfo(
                 "[ai] No route that avoids a door I cannot open - waiting here" +
-                (impassableGates.Count > 0 ? " (" + impassableGates.Count + " closed to me)" : ""));
+                (ImpassableGates.Count > 0 ? " (" + ImpassableGates.Count + " closed to me)" : ""));
         }
 
         /// <summary>
@@ -746,6 +755,34 @@ namespace YourBuddy
             followStepOffTarget = transform.position + dir * Random.Range(1.5f, 2.5f);
             followStepOffUntil = Time.time + 1.2f;
             YourBuddyPlugin.Log.LogInfo("[ai] No reachable wander targets - stepping off to re-plan");
+        }
+
+        /// <summary>
+        /// Buddies walk through each other, so two that stop at the same spot would stand inside each
+        /// other: the higher number steps aside, never both. docs/invariants.md#buddies-never-block-each-other
+        /// </summary>
+        private void TrySpaceOut()
+        {
+            if (Time.time < spaceOutAt || Time.time < followStepOffUntil) return;
+            if (mode is not (BuddyMode.Follow or BuddyMode.Wander) || hideState != HideState.None) return;
+
+            foreach (BuddyBehaviour other in BuddyManager.All)
+            {
+                if (other == null || other == this || other.IsDead || other.Number > Number || !other.isActiveAndEnabled) continue;
+
+                Vector3 away = transform.position - other.transform.position;
+                if (Mathf.Abs(away.y) > SpacingSameDeck) continue;
+
+                away.y = 0f;
+                if (away.sqrMagnitude > BuddySpacing * BuddySpacing) continue;
+
+                if (away.sqrMagnitude < 0.0001f) away = transform.right;
+                followStepOffTarget = transform.position + away.normalized * SpacingStep;
+                followStepOffUntil = Time.time + SpacingStep / Mathf.Max(0.5f, MoveSpeed);
+                spaceOutAt = Time.time + SpacingCooldown;
+                if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2) YourBuddyPlugin.Log.LogInfo("[ai] Stepping aside for " + other.Name);
+                return;
+            }
         }
 
         private Vector3 UpdateRoute(out bool wantMove)

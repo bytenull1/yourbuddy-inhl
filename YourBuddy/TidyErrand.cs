@@ -323,11 +323,14 @@ namespace YourBuddy
         /// <summary>
         /// Why a container may not be opened now, or null. docs/invariants.md#a-snack-closes-what-it-opened
         /// </summary>
-        private static string? ContainerBlocker(TrashContainer container)
+        private string? ContainerBlocker(TrashContainer container)
         {
             if (container.Root == null || !container.Root.gameObject.activeInHierarchy) return "it is gone";
 
-            return container.Hideout != null && container.Hideout.CurrentInteractor != null ? "you are hiding in it" : null;
+            if (container.Hideout != null && container.Hideout.CurrentInteractor != null) return "you are hiding in it";
+
+            // Another buddy snacking or hiding there: docs/invariants.md#one-buddy-per-target
+            return Body.TakenByAnother(container.Root) ? "another buddy is using it" : null;
         }
 
         /// <summary>

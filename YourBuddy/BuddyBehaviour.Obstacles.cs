@@ -119,7 +119,9 @@ namespace YourBuddy
             {
                 return true;
             }
-            return false;
+            // Another buddy is walked through, never hopped or steered around:
+            // docs/invariants.md#buddies-never-block-each-other
+            return BuddyManager.IsBuddyBody(collider.transform);
         }
 
         /// <summary>

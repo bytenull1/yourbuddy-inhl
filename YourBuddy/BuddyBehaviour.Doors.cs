@@ -31,14 +31,16 @@ namespace YourBuddy
 
         // Gates unlocked by pin codes, mapped to the panel that opens them (refreshed
         // periodically). The panel carries both the code and the position to walk to.
-        private readonly Dictionary<Gate, DoorPinCode> passwordGates = [];
-        private float passwordGatesRefreshAt = 0f;
+        private static readonly Dictionary<Gate, DoorPinCode> PasswordGates = [];
+        private static float _passwordGatesRefreshAt = 0f;
 
-        // Door codes the player told the buddy, through the dialog. Persisted in the
-        // .buddy sidecar; the vanilla save is never touched. docs/doors.md
-        private readonly HashSet<int> knownPinCodes = [];
+        // Door codes the player told any buddy, through the dialog; every buddy knows them all.
+        // Persisted in the .buddy sidecar; the vanilla save is never touched. docs/doors.md
+        private static readonly HashSet<int> KnownCodes = [];
+        // The game the codes were told in, so a save written from the menu cannot take the last game's.
+        private static GameManager? _codesIn;
 
-        private float impassableGatesRefreshAt = 0f;
+        private static float _impassableGatesRefreshAt = 0f;
         private const float ImpassableGatesTtl = 1f;
         /// <summary>
         /// Cheap first pass before the gate's volume is tested at all.
@@ -125,7 +127,7 @@ namespace YourBuddy
         /// May the buddy open this gate itself? Door handling only.
         /// This is not the routing question: docs/invariants.md#opening-is-not-passing
         /// </summary>
-        private bool GateIsPassable(Gate gate)
+        private static bool GateIsPassable(Gate gate)
         {
             if (gate == null || !gate.gameObject.activeInHierarchy) return false;
 
@@ -142,8 +144,7 @@ namespace YourBuddy
             DoorPinCode panel = PinPanelFor(gate);
             if (panel == null) return true;
 
-            int? code = GameInternals.DoorPinCodeAccess.GetPinCode(panel);
-            return code.HasValue && knownPinCodes.Contains(code.Value);
+            return CodeKnown(GameInternals.DoorPinCodeAccess.GetPinCode(panel));
         }
 
         /// <summary>
@@ -151,7 +152,7 @@ namespace YourBuddy
         /// shut when the buddy arrives: locked, closed to the player, or a pin door it has no code for.
         /// docs/invariants.md#opening-is-not-passing
         /// </summary>
-        private bool GateBlocksRouting(Gate gate)
+        private static bool GateBlocksRouting(Gate gate)
         {
             if (gate == null || !gate.gameObject.activeInHierarchy) return false;
 
@@ -167,8 +168,7 @@ namespace YourBuddy
             DoorPinCode panel = PinPanelFor(gate);
             if (panel == null) return false;
 
-            int? code = GameInternals.DoorPinCodeAccess.GetPinCode(panel);
-            return !(code.HasValue && knownPinCodes.Contains(code.Value));
+            return !CodeKnown(GameInternals.DoorPinCodeAccess.GetPinCode(panel));
         }
 
         /// <summary>
@@ -176,10 +176,10 @@ namespace YourBuddy
         /// detectors drive opens only through one that is switched on, and needs a suit if that one does.
         /// docs/invariants.md#the-buddy-opens-only-what-the-player-could
         /// </summary>
-        private string? WhyClosedToPlayer(Gate gate)
+        private static string? WhyClosedToPlayer(Gate gate)
         {
             RefreshDetectors();
-            if (!detectorsByGate.TryGetValue(gate, out List<EntryDetector>? detectors)) return null;
+            if (!DetectorsByGate.TryGetValue(gate, out List<EntryDetector>? detectors)) return null;
 
             bool driven = false;
             bool suitOnly = false;
@@ -223,25 +223,29 @@ namespace YourBuddy
         /// The whole map is rebuilt every 5 s - the set of panels only changes with the
         /// scene, and a wholesale refresh cannot go stale per entry.
         /// </summary>
-        private DoorPinCode PinPanelFor(Gate gate)
+        private static DoorPinCode PinPanelFor(Gate gate)
         {
-            if (Time.time >= passwordGatesRefreshAt && SceneScan.MayRescan(passwordGatesRefreshAt <= 0f))
+            RefreshPasswordGates();
+            return PasswordGates.GetValueOrDefault(gate);
+        }
+
+        private static void RefreshPasswordGates()
+        {
+            if (Time.time < _passwordGatesRefreshAt || !SceneScan.MayRescan(_passwordGatesRefreshAt <= 0f)) return;
+
+            PasswordGates.Clear();
+            foreach (DoorPinCode pin in FindObjectsOfType<DoorPinCode>(true))
             {
-                passwordGates.Clear();
-                foreach (DoorPinCode pin in FindObjectsOfType<DoorPinCode>(true))
-                {
-                    Gate? wired = GameInternals.DoorPinCodeAccess.GetWiredGate(pin);
-                    if (wired != null) passwordGates[wired] = pin;
-                }
-                passwordGatesRefreshAt = Time.time + 5f;
+                Gate? wired = GameInternals.DoorPinCodeAccess.GetWiredGate(pin);
+                if (wired != null) PasswordGates[wired] = pin;
             }
-            return passwordGates.GetValueOrDefault(gate);
+            _passwordGatesRefreshAt = Time.time + 5f;
         }
 
         /// <summary>
         /// True for gates unlocked through a pin code, whatever the buddy knows.
         /// </summary>
-        private bool IsPasswordGate(Gate gate) => PinPanelFor(gate) != null;
+        private static bool IsPasswordGate(Gate gate) => PinPanelFor(gate) != null;
 
         /// <summary>
         /// Enters a code the player gave the buddy on the gate's own panel. Returns
@@ -273,32 +277,32 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Gates the buddy cannot currently get through, for the path search.
+        /// Gates no buddy can currently get through, for the path search.
         /// Short TTL: lock and open state both change during play.
         /// </summary>
-        private void RefreshImpassableGates()
+        private static void RefreshImpassableGates()
         {
-            if (Time.time < impassableGatesRefreshAt) return;
+            if (Time.time < _impassableGatesRefreshAt) return;
 
-            impassableGatesRefreshAt = Time.time + ImpassableGatesTtl;
-            impassableGates.Clear();
+            _impassableGatesRefreshAt = Time.time + ImpassableGatesTtl;
+            ImpassableGates.Clear();
             foreach (Gate gate in NavProbe.Gates)
             {
-                if (GateBlocksRouting(gate)) impassableGates.Add(gate);
+                if (GateBlocksRouting(gate)) ImpassableGates.Add(gate);
             }
         }
 
         /// <summary>
-        /// True when a->b passes through a gate the buddy cannot open; a corridor
-        /// running past a shut airlock door has to stay routable.
-        /// docs/invariants.md#locked-doors-block-edges
+        /// True when a->b passes through a gate the buddies cannot open; a corridor
+        /// running past a shut airlock door has to stay routable. Bound once as
+        /// BuddyNodeGraph.SegmentBlockedByDoor. docs/invariants.md#locked-doors-block-edges
         /// </summary>
-        private bool SegmentBlockedByDoor(Vector3 a, Vector3 b)
+        internal static bool SegmentBlockedByDoor(Vector3 a, Vector3 b)
         {
             RefreshImpassableGates();
-            if (impassableGates.Count == 0) return false;
+            if (ImpassableGates.Count == 0) return false;
 
-            foreach (Gate gate in impassableGates)
+            foreach (Gate gate in ImpassableGates)
             {
                 if (gate == null) continue;
 
@@ -326,34 +330,48 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Records a door code the player gave the buddy. True when it is new.
+        /// Records a door code the player gave a buddy. True when it is new.
         /// </summary>
-        public bool LearnPinCode(int code) => knownPinCodes.Add(code);
+        public static bool LearnPinCode(int code) => Codes().Add(code);
 
         /// <summary>
-        /// The codes the buddy has been told, for the save sidecar.
+        /// The codes the buddies have been told, for the save sidecar.
         /// </summary>
-        public IReadOnlyCollection<int> KnownPinCodes => knownPinCodes;
+        public static IReadOnlyCollection<int> KnownPinCodes => Codes();
+
+        /// <summary>
+        /// The code set of the running game: a new GameManager starts it empty.
+        /// </summary>
+        private static HashSet<int> Codes()
+        {
+            if (_codesIn == GameManager.Instance) return KnownCodes;
+
+            KnownCodes.Clear();
+            _codesIn = GameManager.Instance;
+            return KnownCodes;
+        }
+
+        private static bool CodeKnown(int? code) => code.HasValue && Codes().Contains(code.Value);
 
         /// <summary>
         /// True when a known code opens at least one password door in the scene.
         /// </summary>
-        public bool AnyKnownDoorMatches()
+        public static bool AnyKnownDoorMatches()
         {
-            foreach (KeyValuePair<Gate, DoorPinCode> entry in passwordGates)
+            RefreshPasswordGates();
+            foreach (KeyValuePair<Gate, DoorPinCode> entry in PasswordGates)
             {
-                int? code = GameInternals.DoorPinCodeAccess.GetPinCode(entry.Value);
-                if (code.HasValue && knownPinCodes.Contains(code.Value)) return true;
+                if (CodeKnown(GameInternals.DoorPinCodeAccess.GetPinCode(entry.Value))) return true;
             }
             return false;
         }
 
-        private bool IsAirlockGate(Gate gate)
+        private static bool IsAirlockGate(Gate gate)
         {
             RefreshAirlocks();
-            if (cachedAirlocks == null) return false;
+            if (_cachedAirlocks == null) return false;
 
-            foreach (Airlock airlock in cachedAirlocks)
+            foreach (Airlock airlock in _cachedAirlocks)
             {
                 if (GameInternals.AirlockAccess.GetOuterDoor(airlock) == gate) return true;
 
@@ -511,7 +529,7 @@ namespace YourBuddy
                 gate.Close();
                 // Tell the EntryDetector patch this close was ours, so it does not let
                 // the game re-file the player into whatever room this doorway leads to.
-                BuddyManager.NoteBuddyClosedGate(gate);
+                BuddyManager.NoteBuddyClosedGate(gate, this);
                 pending.Attempts++;
                 YourBuddyPlugin.Log.LogInfo("[ai] Closing door '" + gate.gameObject.name +
                                             "' behind itself (attempt " + pending.Attempts + ")");
@@ -648,14 +666,14 @@ namespace YourBuddy
                                         "') is in the doorway");
         }
 
-        private bool RoomIsAirlockChamber(Room? room)
+        private static bool RoomIsAirlockChamber(Room? room)
         {
             if (room == null) return false;
 
             RefreshAirlocks();
-            if (cachedAirlocks == null) return false;
+            if (_cachedAirlocks == null) return false;
 
-            foreach (Airlock airlock in cachedAirlocks)
+            foreach (Airlock airlock in _cachedAirlocks)
             {
                 Room? connected = GameInternals.AirlockAccess.GetConnectedRoom(airlock);
                 if (connected == room) return true;
@@ -669,9 +687,9 @@ namespace YourBuddy
         private void LoadRoomsAroundGate(Gate gate)
         {
             RefreshDetectors();
-            if (cachedDetectors == null) return;
+            if (_cachedDetectors == null) return;
 
-            foreach (EntryDetector detector in cachedDetectors)
+            foreach (EntryDetector detector in _cachedDetectors)
             {
                 if (detector == null) continue;
 

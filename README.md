@@ -14,7 +14,7 @@ In theory, the mod should reduce anxiety; in practice, after playing alone for a
 
 **The buddy**
 - A companion NPC that uses the player's model.
-- A new game starts with it asleep in the cryo capsule next to yours; it wakes shortly after you step out. In an existing save, `spawn_buddy` brings one in.
+- A new game starts with it asleep in the cryo capsule next to yours; it wakes shortly after you step out. In an existing save, `spawn_buddy` brings one in - or several: `spawn_buddy 3`.
 - Can be killed by deadly atmospheres or the Breathless, and becomes a ragdoll you can pick up and carry with the Grab key.
 
 **Orders**
@@ -131,25 +131,26 @@ You can change these values in the config file or via console commands (see belo
 
 | Command | Arguments | Description |
 |---------|-----------|-------------|
-| `spawn_buddy` | – | Spawns a buddy in front of you (replaces any existing buddy). |
-| `buddy_despawn` | – | Despawns the current buddy. |
-| `kill_buddy` | `[force]` | Kills the buddy (ragdoll), with an optional forward impulse force (0–100). |
-| `buddy_follow` | – | Switch to follow mode. |
-| `buddy_wander` | – | Switch to wander mode (uses nav nodes as points of interest). |
-| `buddy_stay` | – | Hold position until told otherwise. |
-| `buddy_stop` | – | Stop current route/wander and follow. |
-| `buddy_goto` | `<node_index>` | Walk the buddy to a specific nav-graph node (the dialog takes room names instead). |
-| `buddy_snack` | – | Make the buddy get a snack nearby right now (ignores the schedule and the `Snacks` setting). |
-| `buddy_tidy` | – | Make it clear the rubbish nearby into a trash can right now, several pieces in a row. |
-| `buddy_sell` | – | Make it take every trash box nearby to a sell station and sell them in one press. |
-| `buddy_play` | – | Make it go and mess about with something loose right now. |
-| `buddy_hide` | – | Make it get into a closet or locker now, whatever it is feeling. It stays in there **until you give it another order** - no timer, and the Breathless leaving does not bring it out. |
-| `buddy_mind` | – | Show what the buddy is weighing and when it acts next (the HUD's Mind / Why / Air / Snack / Tidy / Sell / Play lines). |
-| `buddy_bout` | – | End the current follow or wander stretch now, so the other one weighs full at its next decision (for testing). |
-| `buddy_terminal` | `<oxygen\|climate>` | Make the buddy switch that unit on now, whatever the air (for testing; only if it is off and not broken or faulted). |
+| `spawn_buddy` | `[number]` | Replaces every buddy with one in front of you, or with that many in a row. |
+| `buddy_list` | – | Lists the buddies with their numbers and names; `*` marks the one commands go to. |
+| `buddy_despawn` | `[@who]` | Despawns a buddy. |
+| `kill_buddy` | `[force] [@who]` | Kills a buddy (ragdoll), with an optional forward impulse force (0–100). |
+| `buddy_follow` | `[@who]` | Switch to follow mode. |
+| `buddy_wander` | `[@who]` | Switch to wander mode (uses nav nodes as points of interest). |
+| `buddy_stay` | `[@who]` | Hold position until told otherwise. |
+| `buddy_stop` | `[@who]` | Stop current route/wander and follow. |
+| `buddy_goto` | `<node_index> [@who]` | Walk the buddy to a specific nav-graph node (the dialog takes room names instead). |
+| `buddy_snack` | `[@who]` | Make the buddy get a snack nearby right now (ignores the schedule and the `Snacks` setting). |
+| `buddy_tidy` | `[@who]` | Make it clear the rubbish nearby into a trash can right now, several pieces in a row. |
+| `buddy_sell` | `[@who]` | Make it take every trash box nearby to a sell station and sell them in one press. |
+| `buddy_play` | `[@who]` | Make it go and mess about with something loose right now. |
+| `buddy_hide` | `[@who]` | Make it get into a closet or locker now, whatever it is feeling. It stays in there **until you give it another order** - no timer, and the Breathless leaving does not bring it out. |
+| `buddy_mind` | `[@who]` | Show what the buddy is weighing and when it acts next (the HUD's Mind / Why / Air / Snack / Tidy / Sell / Play lines). |
+| `buddy_bout` | `[@who]` | End the current follow or wander stretch now, so the other one weighs full at its next decision (for testing). |
+| `buddy_terminal` | `<oxygen\|climate> [@who]` | Make the buddy switch that unit on now, whatever the air (for testing; only if it is off and not broken or faulted). |
 | `buddy_auto` | `[on\|off]` | Let the buddy decide for itself (`on` also cancels the order in force), or stop it deciding. Saved in the config. |
-| `buddy_password` | `<code>` | Tell the buddy a door PIN code. It is used only on keypads whose own code matches, and is saved with your game. |
-| `buddy_speed` | `<value>` | Set movement speed (0.5–10 m/s). |
+| `buddy_password` | `<code>` | Tell the buddies a door PIN code - all of them learn it. It is used only on keypads whose own code matches, and is saved with your game. |
+| `buddy_speed` | `<value> [@who]` | Set movement speed (0.5–10 m/s). |
 | `buddy_node` | `add`, `count`, `clear`, `save`, `list`, `remove <index>` (alias `delete`), `link <a> <b>`, `unlink <index>`, `type <index> <ground\|stair>`, `bundled`, `unfork <owner>` | Manually manage the nav graph, including links and stair nodes. `link` toggles a link between two nodes; `unlink` removes every link of one node. `bundled` shows which ships and stations use the shipped graph; `unfork` hands one back to it. |
 | `ai_disable` | `[buddy\|monster\|all] [on\|off]` | Debug: freeze the buddy's AI, the Breathless's, or both. Nothing is written to your save, so a reload always clears it. |
 | `ai_notarget` | `[on\|off]` | Debug: the Breathless stops noticing **you** - it keeps wandering, and it still hunts the buddy. |
@@ -157,7 +158,7 @@ You can change these values in the config file or via console commands (see belo
 | `buddy_gates` | – | List every gate in the scene and the doorway carve-out it was given (opening width, whether it counts as a walkable passage). |
 | `debug_level` | `<0-3>` | Set debug log verbosity at runtime. |
 | `buddy_debug` | `[on/off]` | Toggle debug visuals (path, probes, target markers). |
-| `buddy_hud` | `[on/off]` | Toggle status HUD. |
+| `buddy_hud` | `[on/off]` | Toggle status HUD. It shows the buddy commands go to. |
 
 </details>
 
@@ -167,11 +168,15 @@ You can change these values in the config file or via console commands (see belo
 
 ### Spawning the Buddy
 
-Start a new game: your buddy sleeps in the cryo capsule next to yours and wakes a few seconds after you step out of your own. In an existing save, open the in‑game console (`~`) and type `spawn_buddy` - the NPC appears a few meters in front of you. There is only one buddy at a time: running the command again replaces it.
+Start a new game: your buddy sleeps in the cryo capsule next to yours and wakes a few seconds after you step out of your own. In an existing save, open the in‑game console (`~`) and type `spawn_buddy` - the NPC appears a few meters in front of you. Running the command again replaces it.
+
+**More than one.** `spawn_buddy 3` replaces your buddies with three, standing in a row. They are called Buddy, Buddy 2 and Buddy 3, and a save keeps all of them. They walk through each other, share the door codes you give, and never go for the same box, cupboard, sell station or closet. `buddy_list` shows who is who.
+
+**Which one a command means.** Every buddy command takes `@2`, `@buddy2` or `@all` anywhere among its arguments: `buddy_follow @all`, `buddy_goto 12 @3`. Without one, it goes to the buddy you last talked to or named - or, if that one is gone, the nearest. With a single buddy you never need any of this.
 
 ### Talking to the Buddy
 
-Walk up close, look at it and press **Interact**. Type an order, or pick one from the list behind the speech-bubble button; **Escape** closes the window. Wording is matched loosely, so "follow me" or "wait here" work too.
+Walk up close, look at it and press **Interact**. Type an order, or pick one from the list behind the speech-bubble button; **Escape** closes the window. Wording is matched loosely, so "follow me" or "wait here" work too. With several buddies, the one you look at most directly answers, and its name is on the window. Add "everyone" to give an order to all of them: "everyone follow me".
 
 | Order | What it does |
 |---|---|
@@ -260,7 +265,7 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 - [x] Check optimization and analyze performance. In particular, consider changing how rooms adjacent to NPC are loaded. View hot paths (calculations every frame, tick, high allocations).
 
 **Priority 2 - Major features**
-- [ ] Add support for multiple NPCs.
+- [x] Add support for multiple NPCs.
 - [ ] Convert the mod into a public library for NPC mods. Separate the core from the buddy-specific code, move it to a separate repository, and use the core as a dependency.
 - [ ] Add EVA suit support for dangerous atmospheres and space walks through FuelStation. A redrawn pilot suit texture is needed, since the game doesn’t have an isolated suit skin for the player model, only an item texture (I can't do that yet).
 

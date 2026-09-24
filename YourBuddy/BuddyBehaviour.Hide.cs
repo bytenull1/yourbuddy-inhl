@@ -193,6 +193,9 @@ namespace YourBuddy
         {
             if (spot.Mounted) return "you are hiding in it";
 
+            // Opening it would count as finding the one inside: docs/invariants.md#one-buddy-per-target
+            if (BuddyManager.TakenByAnother(spot.transform, this)) return "another buddy is using it";
+
             // `Mountable.locked` is not a lock. Closet.UpdateMountAvailability sets it to
             // `!leftDoor.Opened && !rightDoor.Opened` and Locker.CheckLockState to
             // `holder.Item != null || !door.Opened`: shut reads as locked. Shut is the state the buddy
@@ -597,7 +600,7 @@ namespace YourBuddy
         /// </summary>
         internal string StartHideNow()
         {
-            if (Hiding) return "Buddy is already hiding in " + hideName;
+            if (Hiding) return Name + " is already hiding in " + hideName;
 
             // Hiding is the one thing you ask for under pressure: it takes the buddy off a chore.
             // docs/invariants.md#a-command-outranks-an-errand
@@ -611,7 +614,7 @@ namespace YourBuddy
             // TryStartHide -> BeginHide dropped it, so only say so once the hide really started.
             if (doing != null) YourBuddyPlugin.Log.LogInfo($"[ai] Stopped {doing} - you asked me to hide");
 
-            return "Buddy " + report;
+            return Name + " " + report;
         }
 
         /// <summary>

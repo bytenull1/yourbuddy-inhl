@@ -146,7 +146,8 @@ a `SellTask`.
    only if ([the-buddy-sells-only-trash-boxes](invariants.md#the-buddy-sells-only-trash-boxes)):
    - at least one run box is still in the cage (`SellRun.InCage`);
    - nothing sellable but trash boxes is in the zone;
-   - the gate is fully open and **you are not in the catch zone** (waits up to 20 s);
+   - the gate is fully open, **you are not in the catch zone** and no other buddy stands in the zone
+     (waits up to 20 s);
    - then `Button.Interact(pilot)` - your press, your money.
 7. **Confirm:** every loaded box destroyed within 10 s → `Sold 3 trash boxes for N`. The gate open
    again 1.5 s after the press with boxes still there means something was under it; that station is

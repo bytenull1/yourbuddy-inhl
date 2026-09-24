@@ -40,10 +40,10 @@ namespace YourBuddy
             _openedIn != null && _openedIn == GameManager.Instance ? _openedCapsule : null;
 
         /// <summary>
-        /// The capsule the current buddy is still asleep in, or null.
+        /// The capsule this buddy is still asleep in, or null. At most one buddy sleeps: the new game's.
         /// </summary>
-        internal static string? SleepingCapsule =>
-            _sleeper != null && _sleeper == BuddyManager.CurrentBuddy ? _sleeperCapsule.Capsule.name : null;
+        internal static string? SleepingCapsuleOf(BuddyBehaviour buddy) =>
+            _sleeper != null && _sleeper == buddy ? _sleeperCapsule.Capsule.name : null;
 
         /// <summary>
         /// GameManager.Start is about to run; worldTime 0 is the game's own new-game test.
@@ -144,7 +144,7 @@ namespace YourBuddy
 
         private static void TrySpawn(GameManager gm)
         {
-            if (BuddyManager.CurrentBuddy != null)
+            if (BuddyManager.All.Count > 0)
             {
                 _armed = false;
                 YourBuddyPlugin.Log.LogInfo("[mgr] A buddy already exists - no cryo wake-up");
@@ -229,7 +229,7 @@ namespace YourBuddy
 
         private static void TickSleep(GameManager gm)
         {
-            if (_sleeper == null || _sleeper != BuddyManager.CurrentBuddy || _sleeper.IsDead)
+            if (_sleeper == null || _sleeper.IsDead)
             {
                 Transform capsule = _sleeperCapsule.Capsule;
                 YourBuddyPlugin.Log.LogInfo($"[mgr] The sleeping buddy is gone - cryo capsule '{(capsule != null ? capsule.name : "?")}' stays shut");
@@ -293,8 +293,7 @@ namespace YourBuddy
         private static BuddyBehaviour? Spawn(Vector3 position, Quaternion rotation, Transform frame)
         {
             _armed = false;
-            YourBuddyPlugin.SpawnBuddy(position, rotation);
-            BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
+            BuddyBehaviour? buddy = YourBuddyPlugin.SpawnBuddy(position, rotation);
             if (buddy == null)
             {
                 YourBuddyPlugin.Log.LogWarning("[mgr] New game: the buddy could not be spawned. Use 'spawn_buddy'.");

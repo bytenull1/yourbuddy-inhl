@@ -341,6 +341,23 @@ namespace YourBuddy
 
             public override bool Recover(string why) => errand.RecoverRun(this, why);
 
+            // The whole run: its station and every box it means to sell. docs/invariants.md#one-buddy-per-target
+            public override bool Holds(Transform t)
+            {
+                if (t == Own || (Parts.Station != null && t == Parts.Station.transform)) return true;
+                if (Run.Current != null && Run.Current.transform == t) return true;
+
+                foreach (Grabbable box in Run.Queue)
+                {
+                    if (box != null && box.transform == t) return true;
+                }
+                foreach (Grabbable box in Run.Loaded)
+                {
+                    if (box != null && box.transform == t) return true;
+                }
+                return false;
+            }
+
             public override Vector3 Approach(out bool wantMove) => errand.Approach(this, out wantMove);
 
             // A box in its hands is put down however the run ended.
@@ -377,6 +394,12 @@ namespace YourBuddy
             {
                 SellStationParts? parts = candidate.LoadedIn ?? NearestSellStation(candidate.Box.transform.position, out failure);
                 if (parts == null) continue;
+
+                if (Body.TakenByAnother(parts.Station.transform))
+                {
+                    failure = "another buddy is selling there";
+                    continue;
+                }
 
                 Grabbable? other = parts.OtherSellable();
                 if (other != null)
@@ -561,9 +584,16 @@ namespace YourBuddy
             SellStationParts? left = null;
             float bestSq = SellStationRadius * SellStationRadius;
             float leftSq = bestSq;
+            bool taken = false;
             foreach (SellStationParts parts in SellStations)
             {
                 float distSq = (parts.LoadPoint - from).sqrMagnitude;
+                // One run per station: another buddy's press would sell this one's boxes too.
+                if (distSq < bestSq && Body.TakenByAnother(parts.Station.transform))
+                {
+                    taken = true;
+                    continue;
+                }
                 if (Skips.Has(parts.Station.transform))
                 {
                     if (distSq >= leftSq) continue;
@@ -580,6 +610,7 @@ namespace YourBuddy
             // docs/logging.md §4: "there is no sell station" and "I am not using that one yet" are
             // different answers, and the second one is the one that looks like a bug from outside.
             failure = best != null ? null
+                : taken ? "another buddy is selling there"
                 : left != null
                     ? $"the sell station {Mathf.Sqrt(leftSq):0.0}m away is being left out for another " +
                       $"{Skips.Remaining(left.Station.transform):0}s"
@@ -885,6 +916,7 @@ namespace YourBuddy
             }
             string? waitingFor = !parts.Gate.FullyOpened ? "its gate to open"
                 : parts.CatchZone != null && parts.CatchZone.GetPlayerInZone() != null ? "you to step out of it"
+                : Body.AnotherBuddyWhere(parts.Covers) ? "the other buddy to step out of it"
                 : null;
             if (!WaitForStation(task, waitingFor) || Body.Leg != task) return;
 

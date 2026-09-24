@@ -96,5 +96,10 @@ namespace YourBuddy
         /// A flee drops this leg instead of resuming it once calm. docs/snacks.md §2
         /// </summary>
         public virtual bool EndsOnFlee => true;
+
+        /// <summary>
+        /// Whether this leg is about `t`, so no other buddy takes it: docs/invariants.md#one-buddy-per-target
+        /// </summary>
+        public virtual bool Holds(Transform t) => t == Own;
     }
 }

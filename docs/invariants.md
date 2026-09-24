@@ -671,7 +671,7 @@ and docking gates are checked first, so they stay routable.
 ### the-buddy-only-knows-codes-it-was-told
 
 **Rule.** The buddy opens a pin-code door only with `PinCode.ForceValidate()`, on a panel whose code
-is in `knownPinCodes`. Never `PinCode.Interact(null)`.
+is in the shared `KnownCodes`. Never `PinCode.Interact(null)`.
 
 **Why.** `Interact(null)` is the monster's branch: a random guess stored in the monster's save
 data. `ForceValidate` fires the panel's own `OnValidated → Gate.InvokeOpen`, so close-behind works
@@ -686,11 +686,11 @@ is in, the room behind a doorway while that door is open, both rooms of a door i
 errand's target room. It never loads the room behind a shut door it only walks past. It switches
 rooms off only as the game does when the player fully leaves one: once a door it shut has finished
 closing, away from the player, **both** rooms that doorway joins go off, whoever switched them on.
-A room stays on while the buddy or the player is in it, while the player is outside, while it holds a
-sell station ([a-sell-station-room-stays-loaded](#a-sell-station-room-stays-loaded)), or while
-another open door looks into it. The buddy's room is its tracked room. `EntryDetector`'s side test may only
-overrule that for the two rooms of its own doorway. Never across a doorway the game keeps loaded
-(`optimize` off).
+A room stays on while any active buddy or the player is in it, while the player is outside, while it
+holds a sell station ([a-sell-station-room-stays-loaded](#a-sell-station-room-stays-loaded)), or while
+another open door looks into it. A buddy's room is its tracked room. The release is done by the buddy
+that shut the door, and `EntryDetector`'s side test may only overrule its tracked room for the two
+rooms of its own doorway. Never across a doorway the game keeps loaded (`optimize` off).
 
 **Why.**
 - It used to load both rooms at every doorway within 3.5 m, open or shut, and switch none of them
@@ -706,8 +706,9 @@ overrule that for the two rooms of its own doorway. Never across a doorway the g
   - A room kept for a door still closing was never looked at again.
 
 **Enforced in.** `BuddyBehaviour.UpdateRoomTracking`, `LoadRoom`, `ReleaseRoomsAt` /
-`ReleaseRoom` / `ReasonToKeepLoaded`, `LoadRoomsAroundGate`, `SetForcedRoom`,
-`IErrandBody.LoadRoomOf`; `Patches.EntryDetector_DoorCheckForEnter_Postfix`.
+`ReleaseRoom` / `ReasonToKeepLoaded` (with `BuddyManager.OtherTrackedIn`), `LoadRoomsAroundGate`,
+`SetForcedRoom`, `IErrandBody.LoadRoomOf`; `Patches.EntryDetector_DoorCheckForEnter_Postfix`, which
+finds the closer through `BuddyManager.GateWasClosedByBuddy`.
 
 ---
 
@@ -779,7 +780,7 @@ never `MountPos`.
 
 **Why.** A load knows nothing of hiding and would drop the buddy inside the furniture.
 
-**Enforced in.** `BuddyBehaviour.HiddenSavePoint`, read by `BuddyManager.CaptureSaveFile`.
+**Enforced in.** `BuddyBehaviour.HiddenSavePoint`, read by `BuddyManager.CaptureState`.
 
 ### a-hidden-buddy-waits-out-a-monster-it-can-hear
 
@@ -893,7 +894,7 @@ Two special cases:
 
 ### an-unloaded-ship-parks-the-buddy
 
-**Rule.** When the ship unloads for a spacewalk, a buddy aboard is parked (`SetActive(false)`)
+**Rule.** When the ship unloads for a spacewalk, every buddy aboard is parked (`SetActive(false)`)
 before any room goes dark, and woken when the ship loads. A parked buddy keeps no room content
 loaded.
 
@@ -962,7 +963,7 @@ the player belongs to the player ship.
 ### mirror-the-vanilla-lifeform-clamp
 
 **Rule.** `RecountLifeforms` reproduces the game's clamp, `(breathless || any temp) ? 1 : 0` plus
-the player, then adds the buddy.
+the player, then adds each buddy icon shown on that display.
 
 **Why.** Summing separately over-reports during scripted events that use both.
 
@@ -981,14 +982,15 @@ the game's `Grabbable` (which allocates a save ID), and the cryo capsule is a pr
 ### the-buddy-sells-only-trash-boxes
 
 **Rule.** The buddy presses a sell button only when every `CanSell && Enabled` item in the zone is a
-`Trash_Box`, the player is outside the catch zone, the gate is fully open, and the buddy stands
+`Trash_Box`, the player is outside the catch zone, the gate is fully open, and every buddy stands
 outside the zone. It presses with `Button.Interact(pilot)`, so the player is paid. Otherwise the
 boxes stay loaded. A run presses once per load; the rule is checked right before each press.
 
 **Why.** `SellStation.Sell` sells everything in the zone and kills a player standing inside. A body
 under the gate trips its `AntiCrasher` and the sale silently fails.
 
-**Enforced in.** `SellErrand.PressButton` (and `TryStart`), `SellTask.StandAllowed`.
+**Enforced in.** `SellErrand.PressButton` (with `IErrandBody.AnotherBuddyWhere`) and `TryStart`,
+`SellTask.StandAllowed`.
 
 ### a-sell-station-room-stays-loaded
 
@@ -1027,6 +1029,57 @@ group, never in one `PatchAll`.
 one missing patch target would take every other patch down with it.
 
 **Enforced in.** `GameInternals`, `YourBuddyPlugin.ApplyPatches`.
+
+---
+
+## Several buddies
+
+### buddies-never-block-each-other
+
+**Rule.** Buddies walk through each other, alive or dead. Their controllers ignore each other's
+controller, item blocker and ragdoll. Every `NavProbe` filter and the buddy's own body probes (whiskers,
+auto-jump, stuck diagnostics, low ceiling) treat any buddy's body as a body.
+An idle buddy in Follow or Wander standing within `BuddySpacing` of a lower-numbered one steps aside;
+the lower one stays.
+
+**Why.** The probes ignore bodies. A controller that still collided with one would walk into a buddy
+its whiskers cannot see, and two buddies in one doorway would wedge each other. The player and the
+buddy already pass through each other for the same reason. The body probes once skipped only the
+buddy's own body and the player's, so a buddy ahead read as low furniture - shin blocked, head clear -
+and the one behind jumped. Without the spacing, two buddies that stop
+at the same spot stand inside each other; only one moves, or both would step apart forever.
+
+**Enforced in.** `BuddyManager.IgnoreBodies` (from `OnEnable`, `Start` and `Die`),
+`NavProbe.BelongsToABody` and `BuddyBehaviour.IsIgnorableCollider` via `BuddyManager.IsBuddyBody`,
+`BuddyBehaviour.TrySpaceOut`.
+
+### door-knowledge-is-shared
+
+**Rule.** Which gates block routing, the detector, pin panel and airlock caches behind that answer,
+and the door codes are static: one set for every buddy. `BuddyNodeGraph.SegmentBlockedByDoor` is bound
+once, at plugin load. The caches reset on every scene load; the codes reset with their `GameManager`.
+
+**Why.** Bound in each buddy's `Start` and cleared in its `OnDestroy`, the delegate belonged to one
+buddy: despawning it switched door routing off, and the others planned through locked doors. Per-buddy
+caches also repeated the same scene sweeps once per buddy.
+
+**Enforced in.** `BuddyBehaviour.SegmentBlockedByDoor` / `GateBlocksRouting` / `Codes`,
+`BuddyBehaviour.ResetWorldCaches` (from the `LoadGame` postfix and the `GameManager.Start` prefix),
+`YourBuddyPlugin.Awake`.
+
+### one-buddy-per-target
+
+**Rule.** What another buddy's errand leg or hide is about - an item, a container, a sell station and
+every box of its run, a life-support unit, a hiding spot - is not a candidate. The claim is read from
+that buddy's live state (`ErrandLeg.Holds`, `hideSpot`), never stored.
+
+**Why.** Two buddies raced for one box, and a second selling run at the same station would have its
+boxes sold by the first run's press. A buddy opening a closet another hides in reads to the hider as
+being found. A stored claim can outlive the errand that made it; a derived one cannot.
+
+**Enforced in.** `BuddyManager.TakenByAnother`, `BuddyBehaviour.Holds`, `SellTask.Holds`,
+`Errand.TakeBlocker`, `SnackBlocker`, `ContainerBlocker`, `SellErrand.TryStart` /
+`NearestSellStation`, `LifeSupport.TryStartTerminal`, `HideSpotBlocker`.
 
 ---
 

@@ -36,7 +36,11 @@ and trim before sharing.
 | `[internals]` | `GameInternals` | missing game members at load, then one summary line |
 | `[mod]` | plugin entry | startup, spawns, patch groups applied or failed |
 
-Tags are short because BepInEx already prefixes every line with `[Info   :YourBuddy Mod] `.
+Tags are short because BepInEx already prefixes every line with its source. The plugin's own lines
+come from `YourBuddy Mod`; everything a buddy does comes from that buddy's source, `YourBuddy:<name>`
+(`[Info   :YourBuddy:Buddy 2] [ai] Opening door 'Door02'`), static code such as `FindPath` included.
+`trimlog` names the buddy on each line when a capture holds more than one, and `--buddy "Buddy 2"`
+keeps one.
 
 ---
 
@@ -80,6 +84,10 @@ Other flags: `--tag nav,ai` to filter by tag, `--all` to keep other BepInEx sour
 - Throttle anything reachable every frame (2–5 s), and dedupe by subject, never with one global
   throttle.
 - One line per decision. Multi-line dumps break `--stats` and `--fold`.
+- **Buddy code runs inside `BuddyManager.Acting(buddy)`.** `YourBuddyPlugin.Log` writes to the acting
+  buddy's source, so a new entry point - a Unity message, a game event, a patch, a command - opens
+  that scope. A coroutine logs through `buddy.LogSource`: a scope must never outlive a `yield`. A line
+  logged outside any scope carries the plugin's source - nameless, never misattributed.
 
 ---
 

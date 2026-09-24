@@ -268,3 +268,9 @@ is dropped while the decider is standing down.
 - **A running task is not interrupted** by a better opportunity; the decider stands down until it
   ends.
 - **Opportunity uses straight-line distance**, not walk length. The plan attempt finds out the rest.
+- **Each buddy decides alone.** Buddies share no plan; they only leave alone what another is working
+  on - the item, container, sell station (with every box of its run), life-support unit or hiding
+  spot of its current leg or hide ([one-buddy-per-target](invariants.md#one-buddy-per-target)). The
+  refusal reads `another buddy is after it`, `... is using it`, `... is selling there` or
+  `... is on it`. Two buddies may still pick the same trash can or the same wander node; idle ones
+  then step apart ([buddies-never-block-each-other](invariants.md#buddies-never-block-each-other)).

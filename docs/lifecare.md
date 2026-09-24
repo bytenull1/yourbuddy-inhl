@@ -26,17 +26,17 @@ icon a raw world position (a game inconsistency).
 
 ## 2. What the mod adds
 
-- `TryHookLifecare` clones the breathless icon as `BuddyLifeIcon`, and re-creates it if destroyed,
-  keeping the last snapshot.
-- `UpdateBuddyLifeIcon` polls at 10 Hz. When a scan ends it snapshots the buddy's ship-local
-  position, like `EndScan`, then re-asserts the icon's state, position and count on every poll.
-- `RecountLifeforms` (postfix on `UpdateLifeformsCount`) shows vanilla's count plus the buddy
-  ([mirror-the-vanilla-lifeform-clamp](invariants.md#mirror-the-vanilla-lifeform-clamp)), only on
-  the display its clone lives in.
+- `TryHookLifecare` clones the breathless icon as a `BuddyLifeIcon` for each buddy, and re-creates a
+  destroyed one, keeping its last snapshot. A despawned buddy takes its clone with it.
+- `UpdateBuddyLifeIcons` polls at 10 Hz. When a scan ends it snapshots every buddy's ship-local
+  position, like `EndScan`, then re-asserts each icon's state, position and the count on every poll.
+- `RecountLifeforms` (postfix on `UpdateLifeformsCount`) shows vanilla's count plus each buddy icon
+  shown ([mirror-the-vanilla-lifeform-clamp](invariants.md#mirror-the-vanilla-lifeform-clamp)), only
+  on the display the clones live in.
 
 "Is the buddy aboard" comes from the floor, never a room
 ([aboard-is-answered-by-the-floor](invariants.md#aboard-is-answered-by-the-floor)). The mod writes
-only its clone and the label; it never touches `playerIcon`, `breathlessIcon` or `tempObjects`.
+only its clones and the label; it never touches `playerIcon`, `breathlessIcon` or `tempObjects`.
 
 A buddy that has never crossed a doorway takes the nearest `EntryDetector` at any range, once, so it
 has a room label from the start.

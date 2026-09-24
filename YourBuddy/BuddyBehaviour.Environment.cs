@@ -50,8 +50,8 @@ namespace YourBuddy
 
         private float baseFloorMismatchTimer = 0f;
 
-        private float detectorsRefreshAt = 0f;
-        private float airlocksRefreshAt = 0f;
+        private static float _detectorsRefreshAt = 0f;
+        private static float _airlocksRefreshAt = 0f;
         private List<Environment>? cachedEnvironments = null;
         private float environmentsRefreshAt = 0f;
 
@@ -66,9 +66,13 @@ namespace YourBuddy
         /// <summary>
         /// Rooms with a sell station, found when the doorways are rescanned. docs/invariants.md#a-sell-station-room-stays-loaded
         /// </summary>
-        private readonly List<Room> sellRooms = [];
+        private static readonly List<Room> SellRooms = [];
 
         private static readonly WaitForSeconds CatchReleaseDelay = new(1.5f);
+        /// <summary>
+        /// The buddy the Breathless is grabbing: its animator follows one target at a time.
+        /// </summary>
+        private static BuddyBehaviour? catching;
 
         // ------------------------------------------------------------------
         // Room tracking & content loading (so rooms "load" for the NPC too)
@@ -77,12 +81,12 @@ namespace YourBuddy
         private void UpdateRoomTracking()
         {
             RefreshDetectors();
-            if (cachedDetectors == null) return;
+            if (_cachedDetectors == null) return;
 
             // A save can restore one switched off.
             if (YourBuddyPlugin.ConfigSellTrash.Value)
             {
-                foreach (Room room in sellRooms) LoadRoom(room, "it holds a sell station");
+                foreach (Room room in SellRooms) LoadRoom(room, "it holds a sell station");
             }
 
             EntryDetector? best = null;
@@ -92,7 +96,7 @@ namespace YourBuddy
             float bestDistanceSquared = bootstrap ? float.MaxValue : DoorwaySideRadius * DoorwaySideRadius;
             Vector3 pos = transform.position;
 
-            foreach (EntryDetector detector in cachedDetectors)
+            foreach (EntryDetector detector in _cachedDetectors)
             {
                 if (detector == null || !detector.gameObject.activeInHierarchy) continue;
                 // An unbounded search would otherwise hand a buddy on the ship a docked
@@ -235,6 +239,7 @@ namespace YourBuddy
             // A parked buddy holds nothing loaded: docs/invariants.md#an-unloaded-ship-parks-the-buddy
             if (!contentEnabled && !IsDead && isActiveAndEnabled && forcedRoom != null)
             {
+                using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
                 LoadRoom(forcedRoom, "switched off by the game, the buddy is in it");
             }
         }
@@ -367,13 +372,14 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Why a room must stay on: the buddy or the player is in it, the player is outside (a station shows
+        /// Why a room must stay on: a buddy or the player is in it, the player is outside (a station shows
         /// every room then), it holds a sell station, or an open door looks into it.
         /// </summary>
         private string? ReasonToKeepLoaded(Room room)
         {
-            // The forced room's listener would switch it straight back on.
+            // The forced room's listener would switch it straight back on - any buddy's.
             if (room == forcedRoom || room == currentRoomRef) return "the buddy is still tracked in it";
+            if (BuddyManager.OtherTrackedIn(room, this) is { } other) return other.Name + " is in it";
 
             GameManager gm = GameManager.Instance;
             Player? pilot = gm != null && gm.PlayerShip != null ? gm.PlayerShip.Pilot : null;
@@ -386,7 +392,7 @@ namespace YourBuddy
             // Station rooms list no doors of their own, so the doorways are asked.
             RefreshDetectors();
             // RefreshDetectors always leaves the cache set.
-            foreach (EntryDetector detector in cachedDetectors!)
+            foreach (EntryDetector detector in _cachedDetectors!)
             {
                 if (detector == null) continue;
 
@@ -424,12 +430,12 @@ namespace YourBuddy
         /// <summary>
         /// Rooms with their content on, among those the active doorways join.
         /// </summary>
-        private int CountLoadedRooms()
+        private static int CountLoadedRooms()
         {
             LoadedRoomSet.Clear();
-            if (cachedDetectors == null) return 0;
+            if (_cachedDetectors == null) return 0;
 
-            foreach (EntryDetector detector in cachedDetectors)
+            foreach (EntryDetector detector in _cachedDetectors)
             {
                 if (detector == null) continue;
 
@@ -676,6 +682,9 @@ namespace YourBuddy
         /// </summary>
         private void OnEnable()
         {
+            // Collider pairs are only ignored between active colliders: an unparked buddy asks again.
+            BuddyManager.IgnoreAllBodies(this);
+
             GameManager gm = GameManager.Instance;
             if (gm == null || tickSource == gm) return;
 
@@ -698,6 +707,7 @@ namespace YourBuddy
         {
             if (!YourBuddyPlugin.ConfigMortal.Value || IsDead || Asleep || AiDebug.BuddyDisabled) return;
 
+            using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
             // Counted one tick late, as the player's is: the buff reaches HealthSystem through BuffBar.
             lifeThreatLevel = pendingThreat;
             pendingThreat = AtmosphereThreat(currentlyInSpace ? null : currentEnvironmentRef);
@@ -797,6 +807,8 @@ namespace YourBuddy
         private void BreathlessCheck()
         {
             if (!YourBuddyPlugin.ConfigMortal.Value || IsDead || catchInProgress) return;
+            // The monster is already grabbing another buddy (a parked one's catch stopped with it).
+            if (catching != null && catching != this && catching.catchInProgress && catching.isActiveAndEnabled) return;
             // Shut in a closet, it is out of reach: the walls block the monster. docs/fear.md §6
             if (hideState == HideState.Hidden) return;
             // The buddy's catch is the mod's own - the game's detectors never see it - so
@@ -816,7 +828,9 @@ namespace YourBuddy
         private System.Collections.IEnumerator CatchRoutine(Breathless breathless)
         {
             catchInProgress = true;
-            YourBuddyPlugin.Log.LogWarning("[ai] The Breathless grabbed the buddy");
+            catching = this;
+            // Its own source throughout: an acting scope must not outlive a yield.
+            LogSource.LogWarning("[ai] The Breathless grabbed the buddy");
             hasMoveTarget = false;
 
             // Remember the monster's cloaked/visible state so it can be restored after the kill.
@@ -834,6 +848,7 @@ namespace YourBuddy
                 if (killed || IsDead) return;
 
                 killed = true;
+                using BuddyManager.ActingScope scope = BuddyManager.Acting(this);
                 KillFromBreathless(breathless);
             }
 
@@ -848,7 +863,7 @@ namespace YourBuddy
             }
             catch (Exception ex)
             {
-                YourBuddyPlugin.Log.LogWarning($"[ai] Catch sequence failed: {ex.Message}");
+                LogSource.LogWarning($"[ai] Catch sequence failed: {ex.Message}");
             }
 
             float waited = 0f;
@@ -857,7 +872,11 @@ namespace YourBuddy
                 waited += Time.deltaTime;
                 yield return null;
             }
-            if (!killed && !IsDead) KillFromBreathless(breathless);
+            if (!killed && !IsDead)
+            {
+                using BuddyManager.ActingScope _ = BuddyManager.Acting(this);
+                KillFromBreathless(breathless);
+            }
 
             yield return CatchReleaseDelay;
 
@@ -871,7 +890,7 @@ namespace YourBuddy
                 // The Breathless may be destroyed mid-catch; the cleanup is best
                 // effort, but it must never kill the coroutine (catchInProgress
                 // is reset below and the buddy would freeze otherwise).
-                YourBuddyPlugin.Log.LogWarning("[ai] Breathless release cleanup failed: " + ex.Message);
+                LogSource.LogWarning("[ai] Breathless release cleanup failed: " + ex.Message);
             }
 
             // Restore to what the debug override says, not to what the flag happened to
@@ -879,6 +898,7 @@ namespace YourBuddy
             if (aggressorWasEnabled && aggressor != null && !AiDebug.MonsterHuntSuppressed) aggressor.enabled = true;
 
             catchInProgress = false;
+            if (catching == this) catching = null;
         }
 
         private void KillFromBreathless(Breathless breathless)
@@ -930,6 +950,8 @@ namespace YourBuddy
                     col.enabled = true;
                     if (playerCharacterController != null) Physics.IgnoreCollision(playerCharacterController, col);
                 }
+                // The corpse is a body too: docs/invariants.md#buddies-never-block-each-other
+                BuddyManager.IgnoreAllBodies(this);
 
                 if (ragdollRigidbody != null) ragdollRigidbody.AddForce(impulse, ForceMode.Impulse);
                 // The body can be picked up and carried, like the helper robot's.
@@ -951,47 +973,47 @@ namespace YourBuddy
         // Scene caches
         // ------------------------------------------------------------------
 
-        private void RefreshDetectors()
+        private static void RefreshDetectors()
         {
-            if (cachedDetectors != null && Time.time < detectorsRefreshAt) return;
-            if (!SceneScan.MayRescan(cachedDetectors == null)) return;
+            if (_cachedDetectors != null && Time.time < _detectorsRefreshAt) return;
+            if (!SceneScan.MayRescan(_cachedDetectors == null)) return;
 
             // Switched-off detectors too: a sealed room's doors have one. docs/invariants.md#the-buddy-opens-only-what-the-player-could
-            cachedDetectors = [];
-            detectorsRefreshAt = Time.time + 5f;
+            _cachedDetectors = [];
+            _detectorsRefreshAt = Time.time + 5f;
 
-            detectorsByGate.Clear();
+            DetectorsByGate.Clear();
             foreach (EntryDetector detector in FindObjectsOfType<EntryDetector>(true))
             {
-                if (detector.gameObject.activeInHierarchy) cachedDetectors.Add(detector);
+                if (detector.gameObject.activeInHierarchy) _cachedDetectors.Add(detector);
 
                 Gate? door = GameInternals.EntryDetectorAccess.GetDoor(detector);
                 if (door == null) continue;
 
-                if (!detectorsByGate.TryGetValue(door, out List<EntryDetector>? list)) detectorsByGate[door] = list = [];
+                if (!DetectorsByGate.TryGetValue(door, out List<EntryDetector>? list)) DetectorsByGate[door] = list = [];
                 list.Add(detector);
             }
 
-            sellRooms.Clear();
-            foreach (EntryDetector detector in cachedDetectors)
+            SellRooms.Clear();
+            foreach (EntryDetector detector in _cachedDetectors)
             {
                 AddSellRoom(GameInternals.EntryDetectorAccess.GetInnerRoom(detector));
                 AddSellRoom(GameInternals.EntryDetectorAccess.GetOuterRoom(detector));
             }
         }
 
-        private void AddSellRoom(Room? room)
+        private static void AddSellRoom(Room? room)
         {
-            if (room != null && !sellRooms.Contains(room) && SellPens.HoldsSellStation(room)) sellRooms.Add(room);
+            if (room != null && !SellRooms.Contains(room) && SellPens.HoldsSellStation(room)) SellRooms.Add(room);
         }
 
-        private void RefreshAirlocks()
+        private static void RefreshAirlocks()
         {
-            if (cachedAirlocks != null && Time.time < airlocksRefreshAt) return;
-            if (!SceneScan.MayRescan(cachedAirlocks == null)) return;
+            if (_cachedAirlocks != null && Time.time < _airlocksRefreshAt) return;
+            if (!SceneScan.MayRescan(_cachedAirlocks == null)) return;
 
-            cachedAirlocks = [.. FindObjectsOfType<Airlock>()];
-            airlocksRefreshAt = Time.time + 5f;
+            _cachedAirlocks = [.. FindObjectsOfType<Airlock>()];
+            _airlocksRefreshAt = Time.time + 5f;
         }
 
         private void RefreshEnvironments()

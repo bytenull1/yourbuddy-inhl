@@ -78,8 +78,11 @@ namespace YourBuddy
         /// </summary>
         private static int BodyLayer()
         {
-            BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-            if (buddy != null) return buddy.gameObject.layer;
+            // Every buddy is a clone of the same prefab, on the same layer.
+            foreach (BuddyBehaviour buddy in BuddyManager.All)
+            {
+                if (buddy != null) return buddy.gameObject.layer;
+            }
 
             Player? pilot = GameManager.Instance != null && GameManager.Instance.PlayerShip != null
                 ? GameManager.Instance.PlayerShip.Pilot
@@ -905,7 +908,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The buddy's or the player's own body. Split out of IsEdgeProbeIgnorable so
+        /// A buddy's or the player's own body. Split out of IsEdgeProbeIgnorable so
         /// the floor probe can treat the rest of that filter as a fallback, not a veto.
         /// </summary>
         private static bool IsBodyCollider(Collider collider)
@@ -924,8 +927,8 @@ namespace YourBuddy
 
         private static bool BelongsToABody(Transform t)
         {
-            BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-            if (buddy != null && t.IsChildOf(buddy.transform)) return true;
+            // Every buddy, alive or dead: docs/invariants.md#buddies-never-block-each-other
+            if (BuddyManager.IsBuddyBody(t)) return true;
 
             Player? pilot = GameManager.Instance != null && GameManager.Instance.PlayerShip != null
                 ? GameManager.Instance.PlayerShip.Pilot

@@ -30,9 +30,16 @@ namespace YourBuddy
         private bool open;
         private bool showCommands;
         private string input = "";
+        // The buddy's name as the title shows it, cached: OnGUI runs on every event.
+        private string titleText = "BUDDY";
         private Vector2 scroll;
         private readonly List<string> lines = [];
         private static readonly RaycastHit[] SightHits = new RaycastHit[16];
+        /// <summary>
+        /// Every buddy's window, so one Interact opens only the one looked at most directly.
+        /// </summary>
+        private static readonly List<BuddyDialog> Dialogs = [];
+        private static BuddyDialog? _open;
         /// <summary>
         /// Reused to measure log lines; OnGUI runs several times a frame.
         /// </summary>
@@ -42,6 +49,7 @@ namespace YourBuddy
         {
             buddy = GetComponent<BuddyBehaviour>();
             hitboxes = GetComponents<Collider>();
+            Dialogs.Add(this);
         }
 
         private void Update()
@@ -65,6 +73,7 @@ namespace YourBuddy
             if (subscribedTo != null) subscribedTo.OnInteract.RemoveListener(OnInteractPressed);
 
             if (open) Close();
+            Dialogs.Remove(this);
         }
 
         // ------------------------------------------------------------------
@@ -73,33 +82,47 @@ namespace YourBuddy
 
         private void OnInteractPressed()
         {
-            if (open || buddy == null || buddy.IsDead || buddy.Asleep || buddy.Hiding) return;
+            if (_open != null || !YourBuddyPlugin.ConfigDialog.Value) return;
 
-            if (!YourBuddyPlugin.ConfigDialog.Value) return;
+            // Every window hears the key; only the buddy looked at most directly answers. docs/dialog.md
+            float? mine = FacingAngle();
+            if (mine == null) return;
 
-            if (PlayerIsFacingMe()) OpenWindow();
+            foreach (BuddyDialog other in Dialogs)
+            {
+                if (other == this || other == null || other.FacingAngle() is not { } theirs) continue;
+
+                if (theirs < mine.Value || (theirs == mine.Value && other.buddy.Number < buddy.Number)) return;
+            }
+            OpenWindow();
         }
 
-        private bool PlayerIsFacingMe()
+        /// <summary>
+        /// The view angle to this buddy while the player could talk to it, else null.
+        /// </summary>
+        private float? FacingAngle()
         {
+            if (buddy == null || buddy.IsDead || buddy.Asleep || buddy.Hiding) return null;
+
             Player? player = GameManager.Instance != null && GameManager.Instance.PlayerShip != null ? GameManager.Instance.PlayerShip.Pilot : null;
-            if (player == null || player.Controller == null) return false;
+            if (player == null || player.Controller == null) return null;
 
             Transform cam = player.Controller.CameraAnimator != null
                 ? player.Controller.CameraAnimator.CachedTransform
                 : player.Controller.CachedTransform;
-            if (cam == null) return false;
+            if (cam == null) return null;
 
             Vector3 aim = NearestPointTo(cam.position) - cam.position;
             float reach = aim.magnitude;
-            if (reach > TalkRange) return false;
+            if (reach > TalkRange) return null;
 
-            if (reach > 0.01f && Vector3.Angle(cam.forward, aim) > LookAngle) return false;
+            float angle = reach > 0.01f ? Vector3.Angle(cam.forward, aim) : 0f;
+            if (angle > LookAngle) return null;
 
-            if (PlayerIsBusy(player.Controller, cam)) return false;
+            if (PlayerIsBusy(player.Controller, cam)) return null;
 
             Vector3 toBuddy = transform.position + Vector3.up * 0.6f - cam.position;
-            return !SightBlocked(cam.position, toBuddy, toBuddy.magnitude);
+            return SightBlocked(cam.position, toBuddy, toBuddy.magnitude) ? null : angle;
         }
 
         /// <summary>
@@ -207,6 +230,10 @@ namespace YourBuddy
         private void OpenWindow()
         {
             open = true;
+            _open = this;
+            // Console commands without a target now mean this buddy.
+            BuddyManager.SetFocus(buddy);
+            titleText = buddy.Name.ToUpperInvariant();
             showCommands = false;
             scroll = Vector2.zero;
             if (lines.Count == 0) Say("Standing by.");
@@ -218,6 +245,7 @@ namespace YourBuddy
         private void Close()
         {
             open = false;
+            if (_open == this) _open = null;
             if (buddy != null) buddy.InDialog = false;
             SetPlayerInUi(false);
         }
@@ -262,7 +290,7 @@ namespace YourBuddy
             if (text.Length == 0) return;
 
             Echo(text);
-            Say(BuddyDialogCommands.Run(text));
+            Say(BuddyDialogCommands.Run(buddy, text));
         }
 
         // ------------------------------------------------------------------
@@ -305,7 +333,7 @@ namespace YourBuddy
 
             Rect title = new(x + pad, y + pad, w - pad * 2f, titleH);
             DialogSkin.Panel(title);
-            GUI.Label(title, showCommands ? "COMMANDS" : "BUDDY", DialogSkin.Title);
+            GUI.Label(title, showCommands ? "COMMANDS" : titleText, DialogSkin.Title);
 
             float closeSide = titleH - 8f;
             Rect close = new(title.xMax - closeSide - 4f, title.y + 4f, closeSide, closeSide);
@@ -384,7 +412,7 @@ namespace YourBuddy
 
                 showCommands = false;
                 Echo(names[i]);
-                Say(BuddyDialogCommands.Run(names[i]));
+                Say(BuddyDialogCommands.Run(buddy, names[i]));
             }
 
             Rect back = new(body.x + 18f, body.yMax - 52f, 130f, 40f);

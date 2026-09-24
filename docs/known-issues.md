@@ -40,6 +40,19 @@ in that room, and a buddy that reaches space is placed next to the player instea
 - **To confirm:** read every `Airlock.connectedRoom` from `level1`.
 - **Minor effect.** A wrong fix could store a safe spot inside a chamber, so don't guess.
 
+### Buddies following one another through a door
+
+The first buddy closes a door behind itself once it has crossed. A second buddy still a few metres
+back is not in the doorway yet, so the door shuts in front of it and it opens it again. Harmless
+churn, and each close is logged. A fix would let the close wait for another buddy heading through
+the gate, which needs its plan; not done.
+
+### Per-buddy scene sweeps
+
+The environment and footstep caches are still per buddy, so their 5 s rescans grow with the number
+of buddies. `SceneScan` keeps it to one sweep per frame, so this costs latency, not spikes. The door
+caches are shared ([door-knowledge-is-shared](invariants.md#door-knowledge-is-shared)).
+
 ### The 0.85 m carve-out floor is wider than any real doorway
 
 Every door opening is 0.5625 m + margin, but the clamp floor is 0.85 m, so ~0.29 m of wall either

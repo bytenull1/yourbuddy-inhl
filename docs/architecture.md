@@ -12,13 +12,13 @@ Other classes reach the buddy through a few `internal` members, never its fields
 
 | File | Owns | Talks to | Doc |
 |---|---|---|---|
-| `YourBuddyPlugin.cs` | BepInEx entry, config, `SpawnBuddy` (clones the player prefab, strips components, shrinks the controller to 0.22 m), despawn | `BuddyManager`, `GameInternals` | [game-model](game-model.md) |
+| `YourBuddyPlugin.cs` | BepInEx entry, config, `Log`, `SpawnBuddy` (one more buddy: clones the player prefab, strips components, shrinks the controller to 0.22 m) | `BuddyManager`, `GameInternals` | [game-model](game-model.md) |
 | `Patches.cs` | every Harmony patch (one nested class per feature) and every console command | all | [game-model](game-model.md) |
-| `BuddyManager.cs` | singleton lifecycle: `Tick`, `.buddy` sidecar, lifecare, `FloorOwner`, buddy-closed gates | `BuddyBehaviour`, `BuddyNodeGraph`, `GameInternals` | [lifecare](lifecare.md) |
-| `BuddyBehaviour.cs` | state shared across partials, `Init`, `Update` / `SlowUpdate` dispatch, `FloorUnderBuddy`, `GroundPos`, HUD box and text | - | [reference](reference.md) |
-| `BuddyBehaviour.Navigation.cs` | `UpdateFollow` / `UpdateWander` / `UpdateRoute`, plan commitment, `AdvancePastReachedWaypoints`, `TryStepOff`, `StartRoute`, `SetMode` | `BuddyNodeGraph`, `NavProbe` | [navigation](navigation.md) |
+| `BuddyManager.cs` | the buddies: registry (`All`), `Focus`, numbers and names, `Acting` (log attribution), what one buddy asks about the others (`TakenByAnother`, `OtherTrackedIn`, `IgnoreBodies`); `Tick`, `.buddy` sidecar, lifecare icons, `FloorOwner`, buddy-closed gates | `BuddyBehaviour`, `BuddyNodeGraph`, `GameInternals` | [lifecare](lifecare.md) |
+| `BuddyBehaviour.cs` | state shared across partials, the scene caches all buddies share (`ResetWorldCaches`), `Init`, `Update` / `SlowUpdate` dispatch, `FloorUnderBuddy`, `GroundPos`, `Holds`, HUD box and text, `ListLine` | - | [reference](reference.md) |
+| `BuddyBehaviour.Navigation.cs` | `UpdateFollow` / `UpdateWander` / `UpdateRoute`, plan commitment, `AdvancePastReachedWaypoints`, `TryStepOff`, `TrySpaceOut`, `StartRoute`, `SetMode` | `BuddyNodeGraph`, `NavProbe` | [navigation](navigation.md) |
 | `BuddyBehaviour.Obstacles.cs` | body probes, whisker steering, auto-jump, `ApplyMovement`, stuck and oscillation recovery, `EmergencyUnstick`, blocker diagnostics | `NavProbe` | [navigation](navigation.md) |
-| `BuddyBehaviour.Doors.cs` | `GateIsPassable` / `GateBlocksRouting`, `HandleDoors`, close-behind, `DoorwayBlocker`, `StepOutOfDoorway`, room loading, door codes, `SegmentBlockedByDoor` | `NavProbe`, `GameInternals`, `BuddyManager` | [doors](doors.md) |
+| `BuddyBehaviour.Doors.cs` | `GateIsPassable` / `GateBlocksRouting`, `HandleDoors`, close-behind, `DoorwayBlocker`, `StepOutOfDoorway`, room loading, the shared door codes, `SegmentBlockedByDoor` | `NavProbe`, `GameInternals`, `BuddyManager` | [doors](doors.md) |
 | `BuddyBehaviour.Environment.cs` | room tracking, loading and release (`LoadRoom`, `ReleaseRoomsAt`), floor plane, environment and space protection, atmosphere damage, the Breathless catch, `IsAboardPlayerShip`, `ParkWithShip`, `Die` | `GameInternals`, `BuddyManager` | [game-model](game-model.md) |
 | `BuddyBehaviour.Fear.cs` | seeing the Breathless, stress, `FearState`, `HoldBackFromMonster`, the `Flee` mode | `NavProbe`, `BuddyNodeGraph`, `GameInternals` | [fear](fear.md) |
 | `BuddyBehaviour.Autonomy.cs` | orders (`ApplyOrder`, `ApplyRouteOrder`, `RevokeOrder`), persistence, expiry, stand-down, bouts | `BuddyNodeGraph` | [behaviour](behaviour.md) |
@@ -26,7 +26,7 @@ Other classes reach the buddy through a few `internal` members, never its fields
 | `BuddyBehaviour.Reach.cs` | the walk into reach: route to a node, probed straight walk, `InReach`, `Defer` / `Recover` on failure, `DropReachTask` | `BuddyNodeGraph`, `NavProbe` | [terminals](terminals.md) |
 | `BuddyBehaviour.Errands.cs` | owns the errands; implements `IErrandBody`, their only way into the buddy | every errand | [behaviour](behaviour.md) |
 | `BuddyBehaviour.Carry.cs` | the hands, putting down before a save, `OnMyVessel` | `BuddyHands` | [items](items.md) |
-| `ReachTask.cs` | `ReachTask` (what to reach, stand points, `StandAllowed`) and `ErrandLeg` (`Approach`, `End`, `Describe`, `EndsOnFlee`) | `SellPens` | [terminals](terminals.md) |
+| `ReachTask.cs` | `ReachTask` (what to reach, stand points, `StandAllowed`) and `ErrandLeg` (`Approach`, `End`, `Describe`, `EndsOnFlee`, `Holds`) | `SellPens` | [terminals](terminals.md) |
 | `Errand.cs` | `IErrandBody`, and the `Errand` base: due time, last result, skip list, `Defer`, `StartNow`, `Describe`, `Count` | - | [behaviour](behaviour.md#3-the-decider) |
 | `LifeSupport.cs` | switching on the oxygen generator or climate control | `IErrandBody` | [terminals](terminals.md) |
 | `SnackErrand.cs` | opening a container or finding loose food, eating one thing | `IErrandBody`, `Items`, `GameInternals` | [snacks](snacks.md) |
@@ -44,14 +44,14 @@ Other classes reach the buddy through a few `internal` members, never its fields
 | `NavProbe.cs` | **every physics probe**: floors, line of sight, `CanSee`, collider filter, gate cache | `BuddyManager` (buddy transform) | [probes](probes.md) |
 | `SceneScan.cs` | the scene-sweep budget: one timed `FindObjectsOfType` rescan per frame, and each frame's arrays for the errand collectors | - | [invariants](invariants.md#scene-sweeps-are-budgeted) |
 | `GameInternals.cs` | **every** reflection accessor into game types | - | [game-model](game-model.md) |
-| `BuddyDialog.cs` | the talk window: interaction hook, sight check, input handover, layout | `DialogSkin`, `BuddyDialogCommands` | [dialog](dialog.md) |
+| `BuddyDialog.cs` | the talk window: interaction hook, which buddy answers, sight check, input handover, layout | `DialogSkin`, `BuddyDialogCommands` | [dialog](dialog.md) |
 | `DialogSkin.cs` | how the window is drawn | - | [dialog](dialog.md) |
-| `BuddyDialogCommands.cs` | keyword-matching typed text to an order | `BuddyCommands`, `BuddyRooms` | [dialog](dialog.md) |
+| `BuddyDialogCommands.cs` | keyword-matching typed text to an order, for one buddy or everyone | `BuddyCommands`, `BuddyRooms` | [dialog](dialog.md) |
 | `BuddyRooms.cs` | the docked station's rooms by name, which nodes stand in each | `BuddyNodeGraph` | [dialog](dialog.md#goto-by-room) |
-| `BuddyCommands.cs` | the orders, shared by dialog and console; the only caller of `ApplyOrder` / `ApplyRouteOrder` / `RevokeOrder` | `BuddyBehaviour`, `BuddyNodeGraph` | [behaviour](behaviour.md) |
+| `BuddyCommands.cs` | the orders, shared by dialog and console, each for the buddy the caller chose; the only caller of `ApplyOrder` / `ApplyRouteOrder` / `RevokeOrder` | `BuddyBehaviour`, `BuddyNodeGraph` | [behaviour](behaviour.md) |
 | `BuddyCryoSpawn.cs` | a new game's buddy asleep in a prop cryo capsule until after the player's pod opens | `YourBuddyPlugin`, `BuddyManager`, `GameInternals` | [game-model](game-model.md#the-cryo-room) |
 | `BuddyCorpse.cs` | makes the dead ragdoll carryable, without the game's `Grabbable` | - | [invariants](invariants.md#mod-state-never-enters-the-vanilla-save) |
-| `BuddyMode.cs`, `BuddySaveFile.cs` | enums (`BuddyMode`, `FearState`, `OrderPersistence`) and the save DTO | - | - |
+| `BuddyMode.cs`, `BuddySaveFile.cs` | enums (`BuddyMode`, `FearState`, `OrderPersistence`) and the save DTOs (`BuddySaveFile`, `BuddyState`) | - | - |
 | `AiDebug.cs` | `ai_disable` / `ai_notarget`; sole owner of the monster's component flags | - | [reference](reference.md) |
 | `IsExternalInit.cs` | lets netstandard2.1 compile `init` and records | - | - |
 
@@ -75,8 +75,8 @@ BuddyBehaviour.Mind ──▶ Errand / LifeSupport ──▶ IErrandBody ◀─�
 Errands never see `BuddyBehaviour`: everything they may do to it is a member of `IErrandBody`,
 which the buddy implements explicitly.
 
-One back-edge: `NavProbe` reads `BuddyManager.CurrentBuddy` to ignore the buddy's own colliders. It
-works with no buddy spawned.
+One back-edge: `NavProbe` reads `BuddyManager.All` to ignore every buddy's colliders. It works with
+no buddy spawned.
 
 **`NavProbe` is the bottom of the stack.** Nothing else may duplicate its collider filter
 ([one-probe-basis](invariants.md#one-probe-basis)).
@@ -148,12 +148,13 @@ Details: [navigation.md](navigation.md).
 | Gate list | `NavProbe.CachedGates` | 5 s TTL; `InvalidateGates()` on scene load and dock change |
 | Gate placement per frame | `NavProbe.FrameGates` | every frame ([probes.md](probes.md#caches)) |
 | Gate openings | `NavProbe.GateOpenings` | `InvalidateGates()` only |
-| Impassable gates | `BuddyBehaviour.impassableGates` | 1 s TTL |
+| Impassable gates | `BuddyBehaviour.ImpassableGates` (shared) | 1 s TTL; `ResetWorldCaches` |
 | Node edges, id index | `BuddyNodeGraph._edges`, `NodesById` | `_edgesDirty`, dock change, ship layout change |
 | Node hover | `BuddyNodeGraph.NodeHover` | 3 s TTL; cleared on edge rebuild |
 | Space objects | `BuddyNodeGraph.SpaceObjects` | 5 s TTL, or at once when one is destroyed |
-| Detectors / airlocks / environments | `BuddyBehaviour` | 5 s TTL each |
-| Password gates → panels | `BuddyBehaviour.passwordGates` | rebuilt every 5 s |
+| Detectors / airlocks | `BuddyBehaviour` (shared) | 5 s TTL each; `ResetWorldCaches` |
+| Environments | `BuddyBehaviour`, per buddy | 5 s TTL |
+| Password gates → panels | `BuddyBehaviour.PasswordGates` (shared) | rebuilt every 5 s; `ResetWorldCaches` |
 | Footstep doorways | `BuddyBehaviour.footstepDetectors` | 5 s TTL |
 | Sell station pens | `SellPens.Pens` | 10 s TTL |
 | Buddy-closed gates | `BuddyManager.BuddyClosedGates` | 6 s window |
@@ -161,7 +162,9 @@ Details: [navigation.md](navigation.md).
 | Scene arrays for the collectors | `SceneScan.ThisFrame` | every frame |
 
 TTL caches heal themselves; don't add invalidation hooks. Gates and edges need explicit invalidation
-because a dock or scene change alters the *set* of objects.
+because a dock or scene change alters the *set* of objects. The caches every buddy shares are static,
+so they would outlive a scene: `ResetWorldCaches` empties them on every load
+([door-knowledge-is-shared](invariants.md#door-knowledge-is-shared)).
 
 A timed rescan asks `SceneScan.MayRescan` first, so at most one runs per frame; the others keep their
 list a frame longer ([scene-sweeps-are-budgeted](invariants.md#scene-sweeps-are-budgeted)).
@@ -177,11 +180,13 @@ Owner transforms and docked state are **not** cached: `OwnerSnapshot` resolves t
 |---|---|---|
 | `BepInEx/config/YourBuddyRoutes/nodegraph.json` | `BuddyNodeGraph.Save` (F6, or 20 s after a change) | your own nodes and manual links per owner, and which owners you forked |
 | `BepInEx/config/YourBuddyRoutes/nodegraph.bundled.json` | `BuddyNodeGraph.LoadBundled`, from an embedded resource | the shipped graph; rewritten when `BundleVersion` changes |
-| `<save>.buddy` sidecar | `SaveParser.WriteSaveFile` postfix | owner and owner-local position, rotation, alive, door codes, cryo capsule state |
+| `<save>.buddy` sidecar | `SaveParser.WriteSaveFile` postfix | every buddy (`Buddies`: number, name, owner and owner-local position, rotation, alive, sleeping capsule), the shared door codes, the opened cryo capsule |
 
 The game never reads `.buddy` files, so uninstalling the mod is save-safe
 ([mod-state-never-enters-the-vanilla-save](invariants.md#mod-state-never-enters-the-vanilla-save)).
-Mode, orders and stress are not saved: a loaded buddy is in Follow, with no order, Calm.
+Mode, orders and stress are not saved: a loaded buddy is in Follow, with no order, Calm. The sidecar
+also writes the first buddy into the old single-buddy fields, so an older mod version restores that one;
+a sidecar without `Buddies` is read as one buddy (`BuddySaveFile.StatesOf`).
 
 `nodegraph.json` is user data and **evidence** for routing questions - read it. The bundled file is a
 build input: regenerate it with `tools/bundle_nodegraph.py`, never by hand
@@ -194,15 +199,16 @@ swept on `SyncSavePreviews`.
 
 ## 6. Buddy lifecycle
 
-Three ways in, all through `YourBuddyPlugin.SpawnBuddy`:
+Three ways in, all through `YourBuddyPlugin.SpawnBuddy`, which adds one buddy to `BuddyManager.All`
+(no cap):
 
-- `spawn_buddy`;
-- a save's sidecar (`BuddyManager.Tick`);
+- `spawn_buddy [N]`, which despawns every buddy first and spawns N in a row;
+- a save's sidecar (`BuddyManager.Tick`), every buddy it holds;
 - **a new game** (`SpawnOnNewGame`): the buddy spawns **asleep** (no AI, no `SlowUpdate`, no dialog)
   in the nearest shut prop capsule beside the player's pod, or at the Shipyard's origin if none can
   be used ([game-model.md](game-model.md#the-cryo-room)). It wakes `WakeAfterPodOpenSeconds` after
   the player's pod starts opening: the monitor fades, the door opens, then the AI starts. A save made
-  while asleep restores it asleep.
+  while asleep restores it asleep. A new game has one buddy, so at most one ever sleeps.
 
 `SpawnBuddy`:
 
@@ -213,7 +219,16 @@ Three ways in, all through `YourBuddyPlugin.SpawnBuddy`:
 4. shrink the `CharacterController` radius to 0.22 m so it fits any doorway;
 5. add `BuddyBehaviour` and `BuddyDialog`.
 
-Only one buddy exists. Ragdoll bodies stay kinematic until `Die()`, which attaches `BuddyCorpse`.
+Each buddy has a number (the lowest free; `@2` in commands) and a name from it (`Buddy`, `Buddy 2`), both saved. Commands without a target go to `BuddyManager.Focus`: the buddy last
+talked to or named, else the nearest living one. `Despawn` leaves the registry at once, so a respawn in
+the same frame gets the numbers back. Ragdoll bodies stay kinematic until `Die()`, which attaches
+`BuddyCorpse`.
+
+Buddies pass through each other ([buddies-never-block-each-other](invariants.md#buddies-never-block-each-other)),
+share what they know about doors ([door-knowledge-is-shared](invariants.md#door-knowledge-is-shared)) and
+leave alone what another is working on ([one-buddy-per-target](invariants.md#one-buddy-per-target)).
+`Init` staggers each buddy's `SlowUpdate` phase and first replan by its number, so buddies spawned
+together do not spend the same frames.
 
 **Space protection:** the buddy remembers a safe spot in the frame it rides; if it ends up in open
 space it is teleported back and replans. It will not follow the player onto a spacewalk.
@@ -251,7 +266,10 @@ spacewalk ([an-unloaded-ship-parks-the-buddy](invariants.md#an-unloaded-ship-par
 | the whisker capsule | only `BodyCastCapsule` ([whiskers-are-body-shaped](invariants.md#whiskers-are-body-shaped)) |
 | what steering treats as an obstacle | only `NavProbe.HitIsWalkableGround` ([walkable-ground-is-not-an-obstacle](invariants.md#walkable-ground-is-not-an-obstacle)) |
 | the shipped node graph | regenerate with `tools/bundle_nodegraph.py` **and bump `BundleVersion`**, or installs won't pick it up |
-| what the sidecar stores | `BuddySaveFile`, `CaptureSaveFile` and `RestorePosition` together |
+| what the sidecar stores | `BuddySaveFile` / `BuddyState`, `CaptureState` and `RestorePosition` together |
+| something a buddy works on that others must leave alone | `ErrandLeg.Holds`, and a `TakenByAnother` check where candidates are collected ([one-buddy-per-target](invariants.md#one-buddy-per-target)) |
+| state every buddy should share | a static in the owning partial, emptied by `ResetWorldCaches` ([door-knowledge-is-shared](invariants.md#door-knowledge-is-shared)) |
+| a new entry point into buddy code (a Unity message, an event, a patch, a command) | wrap it in `BuddyManager.Acting(buddy)`, or its lines lose the buddy's name ([logging.md §4](logging.md#4-rules-for-adding-logs)) |
 | which ship nodes are live | only `OwnerSnapshot` (`IsLive`, `WorldOf`, `LinkIsLive`) ([a-ship-node-rides-its-room](invariants.md#a-ship-node-rides-its-room)) |
 | matching a scene object to its vessel | only `TryVesselOf` ([a-station-owns-its-interior-by-reference](invariants.md#a-station-owns-its-interior-by-reference)) |
 | where a body's floor height comes from | only `FloorUnderBuddy` / `FloorUnderPlayer`; `FindPath` takes `start.y` as given ([the-start-point-is-already-a-floor](invariants.md#the-start-point-is-already-a-floor)) |

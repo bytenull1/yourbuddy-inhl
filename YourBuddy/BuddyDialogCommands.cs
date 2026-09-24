@@ -18,45 +18,54 @@ namespace YourBuddy
             ["Follow", "Wander", "Stay", "Hide", "Tidy", "Sell", "Play", "Snack", "Goto", "Decide", "Password"];
 
         private static readonly string[] GotoWords = ["goto", "go to", "walk", "move to"];
+        /// <summary>
+        /// Words that give an order to every buddy at once, not only the one being talked to.
+        /// </summary>
+        private static readonly string[] GroupWords = ["everyone", "everybody", "all of you", "both of you"];
 
-        internal static string Run(string text)
+        /// <summary>
+        /// `buddy` is the one being talked to; a group word hands each order to every living, awake buddy.
+        /// </summary>
+        internal static string Run(BuddyBehaviour buddy, string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return "...";
 
             string lower = text.Trim().ToLowerInvariant();
+            List<BuddyBehaviour> targets = Targets(buddy, ref lower);
 
             // First: "decide for yourself whether to follow" is not a follow order.
-            if (Has(lower, "decide", "yourself", "autonom", "your call", "own mind")) return BuddyCommands.DecideForYourself();
+            if (Has(lower, "decide", "yourself", "autonom", "your call", "own mind")) return ForAll(targets, BuddyCommands.DecideForYourself);
 
             // Before the rest, so "go to the workshop" is not a wander order ("work"). A goto that
             // names no room falls through, so "stay, do not walk" is still a stay order.
             if (Has(lower, GotoWords) && BuddyRooms.TryResolve(lower, out BuddyRooms.Entry? room, out List<BuddyRooms.Entry>? several))
             {
                 return room != null
-                    ? BuddyCommands.GoToRoom(room)
+                    ? ForAll(targets, b => BuddyCommands.GoToRoom(b, room))
                     : "Which one? " + BuddyRooms.Join(several!); // several is set when room is not
             }
 
             // Before Follow, so "come and hide" is not a follow order.
-            if (Has(lower, "hide", "closet", "locker", "conceal")) return BuddyCommands.Hide();
+            if (Has(lower, "hide", "closet", "locker", "conceal")) return ForAll(targets, BuddyCommands.Hide);
 
-            if (Has(lower, "follow", "come", "heel")) return BuddyCommands.Follow();
+            if (Has(lower, "follow", "come", "heel")) return ForAll(targets, BuddyCommands.Follow);
 
-            if (Has(lower, "job", "wander", "own thing", "work", "busy")) return BuddyCommands.Wander();
+            if (Has(lower, "job", "wander", "own thing", "work", "busy")) return ForAll(targets, BuddyCommands.Wander);
 
-            if (Has(lower, "stay", "wait", "hold", "stop", "halt")) return BuddyCommands.Stay();
+            if (Has(lower, "stay", "wait", "hold", "stop", "halt")) return ForAll(targets, BuddyCommands.Stay);
 
             // Sell before tidy: "trash box" contains "trash".
-            if (Has(lower, "sell", "trash box", "money", "cash")) return BuddyCommands.Sell();
+            if (Has(lower, "sell", "trash box", "money", "cash")) return ForAll(targets, BuddyCommands.Sell);
 
-            if (Has(lower, "tidy", "clean", "trash", "rubbish", "garbage", "litter", "bin")) return BuddyCommands.Tidy();
+            if (Has(lower, "tidy", "clean", "trash", "rubbish", "garbage", "litter", "bin")) return ForAll(targets, BuddyCommands.Tidy);
 
-            if (Has(lower, "play", "toy")) return BuddyCommands.Play();
+            if (Has(lower, "play", "toy")) return ForAll(targets, BuddyCommands.Play);
 
-            if (Has(lower, "snack", "eat", "food", "hungry")) return BuddyCommands.Snack();
+            if (Has(lower, "snack", "eat", "food", "hungry")) return ForAll(targets, BuddyCommands.Snack);
 
             if (Has(lower, GotoWords)) return BuddyRooms.Prompt();
 
+            // Codes are shared, so a password is told once, whoever hears it. docs/invariants.md#door-knowledge-is-shared
             if (Has(lower, "password", "code", "pin", "key"))
             {
                 return TryNumber(lower, out int code)
@@ -71,6 +80,45 @@ namespace YourBuddy
             }
 
             return "I don't know that one. Try: " + string.Join(", ", Names);
+        }
+
+        /// <summary>
+        /// The buddy talked to, or with a group word (removed from `lower`) every living, awake buddy.
+        /// </summary>
+        private static List<BuddyBehaviour> Targets(BuddyBehaviour buddy, ref string lower)
+        {
+            bool group = false;
+            foreach (string word in GroupWords)
+            {
+                if (lower.IndexOf(word, StringComparison.Ordinal) < 0) continue;
+
+                lower = lower.Replace(word, " ");
+                group = true;
+            }
+            if (!group) return [buddy];
+
+            List<BuddyBehaviour> all = [];
+            foreach (BuddyBehaviour other in BuddyManager.Snapshot())
+            {
+                if (other != null && !other.IsDead && !other.Asleep) all.Add(other);
+            }
+            return all;
+        }
+
+        /// <summary>
+        /// One reply line per buddy, each order run as that buddy.
+        /// </summary>
+        private static string ForAll(List<BuddyBehaviour> targets, Func<BuddyBehaviour, string> order)
+        {
+            if (targets.Count == 0) return "Nobody is awake to hear that";
+
+            List<string> replies = [];
+            foreach (BuddyBehaviour target in targets)
+            {
+                using BuddyManager.ActingScope _ = BuddyManager.Acting(target);
+                replies.Add(order(target));
+            }
+            return string.Join("\n", replies);
         }
 
         private static bool Has(string text, params string[] keywords)

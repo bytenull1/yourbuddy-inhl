@@ -21,6 +21,11 @@ namespace YourBuddy
         /// allowed to decide which room they are in.
         /// </summary>
         private const float PlayerAtDoorwayRadius = 2.5f;
+        /// <summary>
+        /// Gap between buddies in spawn_buddy's row, and the most a point's floor may differ from the middle's.
+        /// </summary>
+        private const float SpawnSpacing = 0.8f;
+        private const float SpawnSameDeck = 0.5f;
 
         [HarmonyPatch, Description("the manager tick: HUD state, save restore, nav-graph autosave")]
         internal static class Tick
@@ -50,6 +55,7 @@ namespace YourBuddy
             public static void GameManager_Start_Prefix()
             {
                 SaveData? save = SceneLoader.Instance != null ? SceneLoader.Instance.SaveData : null;
+                BuddyBehaviour.ResetWorldCaches();
                 BuddyCryoSpawn.OnGameStarting(save is { worldTime: 0 });
             }
         }
@@ -74,31 +80,54 @@ namespace YourBuddy
 
                 ConsoleMenu console = __instance;
 
-                commands["spawn_buddy"] = delegate
+                // Replaces every buddy: one as before, or a number for that many. docs/reference.md#2-debug-commands
+                commands["spawn_buddy"] = delegate (string[] args)
                 {
                     Player? player = GameManager.Instance != null && GameManager.Instance.PlayerShip != null ? GameManager.Instance.PlayerShip.Pilot : null;
                     if (player == null) return;
 
-                    Vector3 spawnPos = player.Controller.CachedTransform.position + player.Controller.CachedTransform.forward * 2f;
-                    YourBuddyPlugin.SpawnBuddy(spawnPos, player.Controller.CachedTransform.rotation);
-                    Print(console, "Buddy spawned in front of you");
+                    int count = 1;
+                    if (args.Length > 0 && (!int.TryParse(args[0], out count) || count < 1))
+                    {
+                        Print(console, "Usage: spawn_buddy [number] - replaces every buddy with that many (1 by default)");
+                        return;
+                    }
+
+                    BuddyManager.DespawnAll();
+                    Transform view = player.Controller.CachedTransform;
+                    BuddyBehaviour? first = null;
+                    int spawned = 0;
+                    for (int i = 0; i < count; i++)
+                    {
+                        BuddyBehaviour? buddy = YourBuddyPlugin.SpawnBuddy(SpawnPoint(view, i, count), view.rotation);
+                        if (buddy == null) continue;
+
+                        if (first == null) first = buddy;
+                        spawned++;
+                    }
+                    if (first == null)
+                    {
+                        Print(console, "No buddy could be spawned - see the log");
+                        return;
+                    }
+                    BuddyManager.SetFocus(first);
+                    Print(console, spawned == 1
+                        ? first.Name + " spawned in front of you"
+                        : spawned + " buddies spawned in front of you");
                 };
 
-                commands["buddy_despawn"] = delegate
+                commands["buddy_despawn"] = args => ForTargets(console, args, (buddy, _) =>
                 {
-                    if (BuddyManager.CurrentBuddy == null) { Print(console, "No buddy exists"); return; }
-                    BuddyManager.DespawnBuddy();
-                    Print(console, "Buddy despawned");
-                };
+                    BuddyManager.Despawn(buddy);
+                    return buddy.Name + " despawned";
+                });
 
-                commands["kill_buddy"] = delegate (string[] args)
+                commands["kill_buddy"] = args => ForTargets(console, args, (buddy, rest) =>
                 {
-                    BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-                    if (buddy == null) { Print(console, "No buddy exists"); return; }
-                    if (buddy.IsDead) { Print(console, "Buddy is already dead"); return; }
+                    if (buddy.IsDead) return buddy.Name + " is already dead";
 
                     float force = 6f;
-                    if (args.Length > 0 && float.TryParse(args[0], out float parsedForce))
+                    if (rest.Length > 0 && float.TryParse(rest[0], out float parsedForce))
                     {
                         force = Mathf.Clamp(parsedForce, 0f, 100f);
                     }
@@ -107,30 +136,37 @@ namespace YourBuddy
                     if (player != null) impulse += player.Controller.CachedTransform.forward * force;
 
                     buddy.Die(impulse);
-                    Print(console, "Buddy killed");
+                    return buddy.Name + " killed";
+                });
+
+                commands["buddy_list"] = delegate
+                {
+                    if (BuddyManager.All.Count == 0) { Print(console, "No buddy exists"); return; }
+
+                    BuddyBehaviour? focus = BuddyManager.Focus;
+                    foreach (BuddyBehaviour buddy in BuddyManager.All)
+                    {
+                        if (buddy != null) Print(console, buddy.ListLine(buddy == focus));
+                    }
+                    Print(console, "@2 or @name (without spaces) names one buddy in a command, @all every one; * is who commands go to");
                 };
 
                 // The orders share their bodies with the dialog window - BuddyCommands.cs.
-                commands["buddy_follow"] = delegate { Print(console, BuddyCommands.Follow()); };
-                commands["buddy_wander"] = delegate { Print(console, BuddyCommands.Wander()); };
-                commands["buddy_stay"] = delegate { Print(console, BuddyCommands.Stay()); };
-                commands["buddy_stop"] = delegate { Print(console, BuddyCommands.Follow()); };
-                commands["buddy_snack"] = delegate { Print(console, BuddyCommands.Snack()); };
-                commands["buddy_tidy"] = delegate { Print(console, BuddyCommands.Tidy()); };
-                commands["buddy_sell"] = delegate { Print(console, BuddyCommands.Sell()); };
-                commands["buddy_play"] = delegate { Print(console, BuddyCommands.Play()); };
-                commands["buddy_hide"] = delegate { Print(console, BuddyCommands.Hide()); };
-                commands["buddy_mind"] = delegate { Print(console, BuddyCommands.Mind()); };
-                commands["buddy_bout"] = delegate { Print(console, BuddyCommands.EndBout()); };
-                commands["buddy_terminal"] = delegate (string[] args)
-                {
-                    if (args.Length < 1)
-                    {
-                        Print(console, "Usage: buddy_terminal <oxygen|climate> - switch that unit on now, if it is off");
-                        return;
-                    }
-                    Print(console, BuddyCommands.Terminal(args[0]));
-                };
+                commands["buddy_follow"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Follow(b));
+                commands["buddy_wander"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Wander(b));
+                commands["buddy_stay"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Stay(b));
+                commands["buddy_stop"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Follow(b));
+                commands["buddy_snack"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Snack(b));
+                commands["buddy_tidy"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Tidy(b));
+                commands["buddy_sell"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Sell(b));
+                commands["buddy_play"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Play(b));
+                commands["buddy_hide"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Hide(b));
+                commands["buddy_mind"] = args => ForTargets(console, args, (b, _) => BuddyCommands.Mind(b));
+                commands["buddy_bout"] = args => ForTargets(console, args, (b, _) => BuddyCommands.EndBout(b));
+                commands["buddy_terminal"] = args => ForTargets(console, args, (b, rest) =>
+                    rest.Length < 1
+                        ? "Usage: buddy_terminal <oxygen|climate> [@who] - switch that unit on now, if it is off"
+                        : BuddyCommands.Terminal(b, rest[0]));
                 commands["buddy_auto"] = delegate (string[] args)
                 {
                     Print(console, BuddyCommands.SetAutonomy(Toggle(args, 0, YourBuddyPlugin.ConfigAutonomy.Value)));
@@ -146,37 +182,30 @@ namespace YourBuddy
                     Print(console, BuddyCommands.GivePassword(args[0]));
                 };
 
-                commands["buddy_goto"] = delegate (string[] args)
-                {
-                    if (args.Length < 1 || !int.TryParse(args[0], out int nodeIdx))
-                    {
-                        Print(console, "Usage: buddy_goto <node_index> - walk the buddy to a specific node");
-                        return;
-                    }
-                    Print(console, BuddyCommands.GoToNode(nodeIdx));
-                };
+                commands["buddy_goto"] = args => ForTargets(console, args, (b, rest) =>
+                    rest.Length < 1 || !int.TryParse(rest[0], out int nodeIdx)
+                        ? "Usage: buddy_goto <node_index> [@who] - walk a buddy to a specific node"
+                        : BuddyCommands.GoToNode(b, nodeIdx));
 
-                commands["buddy_speed"] = delegate (string[] args)
+                commands["buddy_speed"] = args => ForTargets(console, args, (b, rest) =>
                 {
-                    BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-                    if (buddy == null || buddy.IsDead) { Print(console, "No living buddy exists"); return; }
-                    if (args.Length < 1 || !float.TryParse(args[0], out float speed))
-                    {
-                        Print(console, "Usage: buddy_speed <meters per second>");
-                        return;
-                    }
-                    buddy.MoveSpeed = Mathf.Clamp(speed, 0.5f, 10f);
-                    Print(console, "Buddy speed set to " + buddy.MoveSpeed);
-                };
+                    if (b.IsDead) return b.Name + " is dead";
+                    if (rest.Length < 1 || !float.TryParse(rest[0], out float speed)) return "Usage: buddy_speed <meters per second> [@who]";
+
+                    b.MoveSpeed = Mathf.Clamp(speed, 0.5f, 10f);
+                    return b.Name + " speed set to " + b.MoveSpeed;
+                });
 
                 commands["buddy_debug"] = delegate (string[] args)
                 {
-                    BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-                    if (buddy == null) { Print(console, "No buddy exists"); return; }
+                    if (BuddyManager.All.Count == 0) { Print(console, "No buddy exists"); return; }
 
                     YourBuddyPlugin.ConfigDebugVisuals.Value = Toggle(args, 0, YourBuddyPlugin.ConfigDebugVisuals.Value);
 
-                    buddy.EnsureDebugVisuals(YourBuddyPlugin.ConfigDebugVisuals.Value);
+                    foreach (BuddyBehaviour buddy in BuddyManager.All)
+                    {
+                        if (buddy != null) buddy.EnsureDebugVisuals(YourBuddyPlugin.ConfigDebugVisuals.Value);
+                    }
                     Print(console, "Debug visuals: " + (YourBuddyPlugin.ConfigDebugVisuals.Value ? "ON (yellow=path, green/red=probe, cyan=target)" : "OFF"));
                 };
 
@@ -466,7 +495,7 @@ namespace YourBuddy
                 __state = null;
 
                 Gate? gate = GameInternals.EntryDetectorAccess.GetDoor(__instance);
-                if (gate == null || !BuddyManager.GateWasClosedByBuddy(gate)) return;
+                if (gate == null || !BuddyManager.GateWasClosedByBuddy(gate, out _)) return;
 
                 Player? player = GameInternals.EntryDetectorAccess.GetCurrentPlayer(__instance);
                 if (player == null || player.Controller == null) return;
@@ -484,15 +513,18 @@ namespace YourBuddy
                 if (__state != null) GameInternals.EntryDetectorAccess.SetCurrentPlayer(__instance, __state);
 
                 Gate? gate = GameInternals.EntryDetectorAccess.GetDoor(__instance);
-                if (gate == null || !BuddyManager.GateWasClosedByBuddy(gate)) return;
+                if (gate == null || !BuddyManager.GateWasClosedByBuddy(gate, out BuddyBehaviour? closer)) return;
 
                 // At the doorway the game has just switched rooms for the player. Anywhere else it switched
                 // nothing, so the buddy puts back what it loaded: docs/invariants.md#the-buddy-loads-rooms-by-the-door-rule
                 Player? player = GameInternals.EntryDetectorAccess.GetCurrentPlayer(__instance);
                 if (player != null && player.Controller != null && PlayerAtDoorway(player, gate)) return;
 
-                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-                if (buddy != null) buddy.ReleaseRoomsAt(__instance);
+                // The closer's own side test decides; every other buddy keeps its room through ReasonToKeepLoaded.
+                if (closer == null) return;
+
+                using BuddyManager.ActingScope _ = BuddyManager.Acting(closer);
+                closer.ReleaseRoomsAt(__instance);
             }
 
             private static bool PlayerAtDoorway(Player player, Gate gate) =>
@@ -508,8 +540,14 @@ namespace YourBuddy
             [HarmonyPostfix]
             public static void Gate_FailClose_Postfix(Gate __instance)
             {
-                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-                if (buddy != null) buddy.NoteCloseFailed(__instance);
+                // Each ignores a gate it is not standing in, so only the one in the way takes the close over.
+                foreach (BuddyBehaviour buddy in BuddyManager.Snapshot())
+                {
+                    if (buddy == null) continue;
+
+                    using BuddyManager.ActingScope _ = BuddyManager.Acting(buddy);
+                    buddy.NoteCloseFailed(__instance);
+                }
             }
         }
 
@@ -573,8 +611,9 @@ namespace YourBuddy
             [HarmonyPostfix]
             public static void SceneLoader_LoadGame_Postfix(string saveName)
             {
-                // New scene: the 5 s gate cache may reference destroyed gates.
+                // New scene: the 5 s gate caches may reference destroyed gates.
                 NavProbe.InvalidateGates();
+                BuddyBehaviour.ResetWorldCaches();
                 AiDebug.Reset();
                 YourBuddyPlugin.Log.LogInfo($"[mgr] LoadGame('{saveName}') detected");
                 if (SceneLoader.Instance == null) return;
@@ -640,36 +679,26 @@ namespace YourBuddy
         internal static class Docking
         {
             /// <summary>
-            /// What Undock is about to do to the buddy, judged before the station's content
-            /// (and every collider in it) is switched off.
-            /// </summary>
-            //
-            public enum UndockState
-            {
-                NotDocked,
-                Docked,
-                BuddyInCollar
-            }
-
-            /// <summary>
-            /// Undock is a no-op unless something was actually docked, and moving the buddy
-            /// for a call that did nothing would be a teleport out of nowhere.
+            /// The buddies in the undocking collar, judged before the station's content (and every
+            /// collider in it) is switched off. Null when nothing was docked: Undock is then a no-op, and
+            /// moving a buddy for it would be a teleport out of nowhere.
             /// </summary>
             [HarmonyPatch(typeof(Docker), nameof(Docker.Undock))]
             [HarmonyPrefix]
-            public static void Docker_Undock_Prefix(Docker __instance, out UndockState __state)
+            public static void Docker_Undock_Prefix(Docker __instance, out List<BuddyBehaviour>? __state)
             {
-                __state = UndockState.NotDocked;
+                __state = null;
                 if (__instance == null || !__instance.IsDocked) return;
 
-                __state = UndockState.Docked;
-
-                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-                if (buddy != null && buddy.gameObject.activeInHierarchy &&
-                    NavProbe.TryFloorCollider(buddy.transform.position, out Collider? floor) && floor != null &&
-                    floor.GetComponentInParent<Docker>() == __instance)
+                __state = [];
+                foreach (BuddyBehaviour buddy in BuddyManager.All)
                 {
-                    __state = UndockState.BuddyInCollar;
+                    if (buddy != null && buddy.gameObject.activeInHierarchy &&
+                        NavProbe.TryFloorCollider(buddy.transform.position, out Collider? floor) && floor != null &&
+                        floor.GetComponentInParent<Docker>() == __instance)
+                    {
+                        __state.Add(buddy);
+                    }
                 }
             }
 
@@ -680,21 +709,24 @@ namespace YourBuddy
             /// </summary>
             [HarmonyPatch(typeof(Docker), nameof(Docker.Undock))]
             [HarmonyPostfix]
-            public static void Docker_Undock_Postfix(SpaceShip ship, UndockState __state)
+            public static void Docker_Undock_Postfix(SpaceShip ship, List<BuddyBehaviour>? __state)
             {
-                if (__state == UndockState.NotDocked) return;
+                if (__state == null || ship == null || ship.Airlock == null) return;
 
-                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
-                if (buddy == null || buddy.IsDead || ship == null || ship.Airlock == null) return;
-
-                if (__state != UndockState.BuddyInCollar)
+                foreach (BuddyBehaviour buddy in BuddyManager.Snapshot())
                 {
-                    if (!buddy.gameObject.activeInHierarchy) return;
+                    if (buddy == null || buddy.IsDead) continue;
 
-                    BuddyManager.FloorOwner(buddy.transform.position, out string? owner, out _);
-                    if (owner != null) return;
+                    if (!__state.Contains(buddy))
+                    {
+                        if (!buddy.gameObject.activeInHierarchy) continue;
+
+                        BuddyManager.FloorOwner(buddy.transform.position, out string? owner, out _);
+                        if (owner != null) continue;
+                    }
+                    using BuddyManager.ActingScope scope = BuddyManager.Acting(buddy);
+                    buddy.PullAboard(ship.Airlock.transform.position);
                 }
-                buddy.PullAboard(ship.Airlock.transform.position);
             }
         }
 
@@ -707,7 +739,7 @@ namespace YourBuddy
             /// </summary>
             public struct ShipRebuildState
             {
-                public bool Aboard;
+                public BuddyBehaviour Buddy;
                 public int LayoutBefore;
                 public bool HadFloor;
                 public CustomRoom? Room;
@@ -721,28 +753,34 @@ namespace YourBuddy
             [HarmonyPatch(typeof(StorymodeShipBuilder), nameof(StorymodeShipBuilder.SetShipLevel))]
             [HarmonyPrefix]
             public static void StorymodeShipBuilder_SetShipLevel_Prefix(StorymodeShipBuilder __instance,
-                out ShipRebuildState __state)
+                out List<ShipRebuildState>? __state)
             {
-                __state = default;
+                __state = null;
                 SpaceShip? ship = GameManager.Instance != null ? GameManager.Instance.PlayerShip : null;
-                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
                 if (ship == null || __instance == null || __instance != ship.StorymodeShipBuilder) return;
 
-                if (buddy == null || buddy.IsDead || !buddy.gameObject.activeInHierarchy || !buddy.IsAboardPlayerShip())
+                int layoutBefore = BuddyNodeGraph.ShipLayoutSignature();
+                foreach (BuddyBehaviour buddy in BuddyManager.All)
                 {
-                    return;
+                    if (buddy == null || buddy.IsDead || !buddy.gameObject.activeInHierarchy || !buddy.IsAboardPlayerShip())
+                    {
+                        continue;
+                    }
+
+                    ShipRebuildState state = new() { Buddy = buddy, LayoutBefore = layoutBefore };
+                    if (NavProbe.TryFloorCollider(buddy.transform.position, out Collider? floor) && floor != null)
+                    {
+                        state.HadFloor = true;
+                        CustomRoom room = floor.GetComponentInParent<CustomRoom>();
+                        if (room != null && Array.IndexOf(ship.Rooms, room) >= 0)
+                        {
+                            state.Room = room;
+                            state.RoomAt = ship.transform.InverseTransformPoint(room.transform.position);
+                        }
+                    }
+                    __state ??= [];
+                    __state.Add(state);
                 }
-
-                __state.Aboard = true;
-                __state.LayoutBefore = BuddyNodeGraph.ShipLayoutSignature();
-                if (!NavProbe.TryFloorCollider(buddy.transform.position, out Collider? floor) || floor == null) return;
-
-                __state.HadFloor = true;
-                CustomRoom room = floor.GetComponentInParent<CustomRoom>();
-                if (room == null || Array.IndexOf(ship.Rooms, room) < 0) return;
-
-                __state.Room = room;
-                __state.RoomAt = ship.transform.InverseTransformPoint(room.transform.position);
             }
 
             /// <summary>
@@ -751,29 +789,39 @@ namespace YourBuddy
             /// </summary>
             [HarmonyPatch(typeof(StorymodeShipBuilder), nameof(StorymodeShipBuilder.SetShipLevel))]
             [HarmonyPostfix]
-            public static void StorymodeShipBuilder_SetShipLevel_Postfix(byte level, ShipRebuildState __state)
+            public static void StorymodeShipBuilder_SetShipLevel_Postfix(byte level, List<ShipRebuildState>? __state)
             {
-                if (!__state.Aboard) return;
+                if (__state == null) return;
 
-                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
                 SpaceShip? ship = GameManager.Instance != null ? GameManager.Instance.PlayerShip : null;
-                if (buddy == null || buddy.IsDead || ship == null) return;
+                if (ship == null) return;
 
-                bool debug = YourBuddyPlugin.ConfigDebugLevel.Value >= 1;
-                if (BuddyNodeGraph.ShipLayoutSignature() == __state.LayoutBefore)
+                if (BuddyNodeGraph.ShipLayoutSignature() == __state[0].LayoutBefore)
                 {
-                    if (debug)
+                    if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
                     {
-                        YourBuddyPlugin.Log.LogInfo($"[ai] Ship rebuilt (stage {level}), layout unchanged - buddy left as it was");
+                        YourBuddyPlugin.Log.LogInfo($"[ai] Ship rebuilt (stage {level}), layout unchanged - buddies left as they were");
                     }
                     return;
                 }
 
-                CustomRoom? room = __state.Room;
+                foreach (ShipRebuildState state in __state)
+                {
+                    if (state.Buddy == null || state.Buddy.IsDead) continue;
+
+                    using BuddyManager.ActingScope _ = BuddyManager.Acting(state.Buddy);
+                    RideRebuild(state, ship, level);
+                }
+            }
+
+            private static void RideRebuild(ShipRebuildState state, SpaceShip ship, byte level)
+            {
+                BuddyBehaviour buddy = state.Buddy;
+                CustomRoom? room = state.Room;
                 if (room == null)
                 {
-                    buddy.RideShipRebuild(level, Vector3.zero, __state.HadFloor,
-                        __state.HadFloor ? "on a floor of no room, which does not move" : "no floor under it to judge by");
+                    buddy.RideShipRebuild(level, Vector3.zero, state.HadFloor,
+                        state.HadFloor ? "on a floor of no room, which does not move" : "no floor under it to judge by");
                 }
                 else if (!room.EnabledStructure)
                 {
@@ -782,7 +830,7 @@ namespace YourBuddy
                 }
                 else
                 {
-                    Vector3 shift = ship.transform.InverseTransformPoint(room.transform.position) - __state.RoomAt;
+                    Vector3 shift = ship.transform.InverseTransformPoint(room.transform.position) - state.RoomAt;
                     string what = shift.sqrMagnitude < 0.0001f
                         ? $"'{room.gameObject.name}' did not move"
                         : $"moved with '{room.gameObject.name}' by {shift:0.00}";
@@ -803,12 +851,17 @@ namespace YourBuddy
             [HarmonyPrefix]
             public static void SpaceShip_SetContentEnabled_Prefix(SpaceShip __instance, bool value)
             {
-                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
                 GameManager gm = GameManager.Instance;
-                if (buddy == null || gm == null || __instance != gm.PlayerShip) return;
+                if (gm == null || __instance != gm.PlayerShip) return;
 
-                if (value) buddy.UnparkFromShip();
-                else buddy.ParkWithShip();
+                foreach (BuddyBehaviour buddy in BuddyManager.Snapshot())
+                {
+                    if (buddy == null) continue;
+
+                    using BuddyManager.ActingScope _ = BuddyManager.Acting(buddy);
+                    if (value) buddy.UnparkFromShip();
+                    else buddy.ParkWithShip();
+                }
             }
         }
 
@@ -825,7 +878,7 @@ namespace YourBuddy
             [HarmonyPrefix]
             public static bool Room_SetContentEnabled_Prefix(Room __instance, bool state)
             {
-                if (state || BuddyManager.CurrentBuddy == null || !YourBuddyPlugin.ConfigSellTrash.Value ||
+                if (state || BuddyManager.All.Count == 0 || !YourBuddyPlugin.ConfigSellTrash.Value ||
                     !SellPens.HoldsSellStation(__instance))
                 {
                     return true;
@@ -837,6 +890,75 @@ namespace YourBuddy
                 }
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Runs a per-buddy command for each buddy "@2", "@buddy2" or "@all" names, anywhere in `args`, or
+        /// for the focused one; `run` gets the other arguments. Naming exactly one moves the focus to it.
+        /// docs/reference.md#2-debug-commands
+        /// </summary>
+        private static void ForTargets(ConsoleMenu console, string[] args, Func<BuddyBehaviour, string[], string> run)
+        {
+            List<string> rest = [];
+            List<BuddyBehaviour> targets = [];
+            bool named = false;
+            foreach (string arg in args)
+            {
+                if (arg.Length < 2 || arg[0] != '@')
+                {
+                    rest.Add(arg);
+                    continue;
+                }
+                named = true;
+                string who = arg.Substring(1);
+                if (who.Equals("all", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (BuddyBehaviour buddy in BuddyManager.All)
+                    {
+                        if (buddy != null && !targets.Contains(buddy)) targets.Add(buddy);
+                    }
+                    continue;
+                }
+                BuddyBehaviour? found = int.TryParse(who, out int number) ? BuddyManager.ByNumber(number) : BuddyManager.ByName(who);
+                if (found == null)
+                {
+                    Print(console, "No buddy called '" + arg + "' - buddy_list shows them");
+                    return;
+                }
+                if (!targets.Contains(found)) targets.Add(found);
+            }
+            if (!named)
+            {
+                BuddyBehaviour? focus = BuddyManager.Focus;
+                if (focus != null) targets.Add(focus);
+            }
+            if (targets.Count == 0)
+            {
+                Print(console, "No buddy exists");
+                return;
+            }
+            if (named && targets.Count == 1) BuddyManager.SetFocus(targets[0]);
+
+            string[] others = [.. rest];
+            foreach (BuddyBehaviour buddy in targets)
+            {
+                using BuddyManager.ActingScope _ = BuddyManager.Acting(buddy);
+                Print(console, run(buddy, others));
+            }
+        }
+
+        /// <summary>
+        /// Spawn_buddy's row: 2 m ahead, SpawnSpacing apart across the view. A point with no floor, or no
+        /// knee-height walk to it on the same deck from the middle one, falls back to the middle.
+        /// </summary>
+        private static Vector3 SpawnPoint(Transform view, int index, int count)
+        {
+            Vector3 middle = view.position + view.forward * 2f;
+            float offset = (index - (count - 1) * 0.5f) * SpawnSpacing;
+            if (Mathf.Abs(offset) < 0.01f) return middle;
+
+            Vector3 point = middle + view.right * offset;
+            return NavProbe.TryFloorHeight(point, out _) && NavProbe.WalkLos(middle, point, SpawnSameDeck) ? point : middle;
         }
 
         /// <summary>

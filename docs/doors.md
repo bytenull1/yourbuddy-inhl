@@ -88,9 +88,11 @@ room across instead. Level 2 adds why a room stayed on:
 
 ### Password doors
 
-The player gives a code through the [dialog](dialog.md) or `buddy_password`. Codes live in
-`knownPinCodes` and are saved in the `.buddy` sidecar
-([mod-state-never-enters-the-vanilla-save](invariants.md#mod-state-never-enters-the-vanilla-save)).
+The player gives a code through the [dialog](dialog.md) or `buddy_password`. Codes live in the
+static `KnownCodes`, so every buddy knows a code told to any of them
+([door-knowledge-is-shared](invariants.md#door-knowledge-is-shared)), and are saved once in the
+`.buddy` sidecar ([mod-state-never-enters-the-vanilla-save](invariants.md#mod-state-never-enters-the-vanilla-save)).
+They belong to the running game: a new `GameManager` starts them empty.
 
 At a shut pin-code door whose code it knows, the buddy walks within `PinPanelReachDist` of the panel
 and calls `PinCode.ForceValidate()`. The door opens through the game's own wiring
@@ -159,6 +161,13 @@ The buddy never closes a door it did not open - that would shut doors behind the
 for the rest of the session. `Patches.Gate_FailClose_Postfix → NoteCloseFailed` arms a close when the
 buddy is within `DoorwaySelfRadius` and the gate is not an airlock or password gate. It must not
 re-arm a gate already pending ([fail-close-must-not-rearm](invariants.md#fail-close-must-not-rearm)).
+
+The postfix asks every buddy. Only one standing in the doorway acts, so when buddy A closes a door on
+buddy B, B takes the close over and steps out. Another buddy in the doorway is a blocker like any
+other: A's close waits for it (`Waiting to close 'Door02': 'YourBuddy Buddy 2' ... is in the doorway`).
+
+When a closed door releases its rooms, the buddy that closed it runs `ReleaseRoomsAt`, and a room any
+other active buddy is tracked in stays on (`Keeping room 'X' loaded: Buddy 2 is in it`).
 
 ---
 
