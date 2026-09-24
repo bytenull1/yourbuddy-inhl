@@ -224,7 +224,7 @@ A leg whose ends are on different decks is a flight of stairs
 | steer `StairLegLookahead` along the leg, not at its end | turning onto a flight doesn't clip the railing end |
 | no whisker detours, stuck sidestep or auto-jump | whiskers see the flight overhead as a wall; a sidestep runs along the landing; a railing looks like furniture |
 | a waypoint whose outgoing leg the buddy is on counts as reached | a mid-flight replan doesn't send it back up |
-| a waypoint whose outgoing leg the buddy is *off* is never left | the 3D advance can't hand over an unwalkable leg |
+| a waypoint whose outgoing leg the buddy is *off* is never left | going down, the 3D advance reaches a marker from the flight above |
 | leaving the leg's decks ends the plan | [off-the-flight-is-off-the-plan](invariants.md#off-the-flight-is-off-the-plan) |
 
 Which legs exist is still decided by the user's links.
@@ -308,6 +308,7 @@ Rules that came out of this stairwell:
 [an-entry-must-be-walkable-not-merely-visible](invariants.md#an-entry-must-be-walkable-not-merely-visible),
 [a-detour-may-not-step-off-a-ledge](invariants.md#a-detour-may-not-step-off-a-ledge),
 [a-grounded-buddy-stands-on-its-own-feet](invariants.md#a-grounded-buddy-stands-on-its-own-feet),
+[floors-ignore-the-gate-frame-rule](invariants.md#floors-ignore-the-gate-frame-rule),
 [a-barred-waypoint-is-a-preference-not-a-wall](invariants.md#a-barred-waypoint-is-a-preference-not-a-wall),
 [a-stale-plan-is-worse-than-none](invariants.md#a-stale-plan-is-worse-than-none),
 [a-stair-leg-is-walked-not-improvised](invariants.md#a-stair-leg-is-walked-not-improvised),

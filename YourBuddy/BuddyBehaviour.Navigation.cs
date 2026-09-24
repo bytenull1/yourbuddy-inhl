@@ -430,7 +430,7 @@ namespace YourBuddy
                 if (TryStairLegBand(navPathIndex + 1, out float low, out float high))
                 {
                     // Reached is not enough: never advance into a flight whose decks the buddy
-                    // is off. docs/invariants.md#off-the-flight-is-off-the-plan
+                    // is off. docs/invariants.md#waypoint-advance-is-dual
                     if (feetY < low || feetY > high) break;
 
                     // ...but already walking it counts as reached, as after a mid-flight

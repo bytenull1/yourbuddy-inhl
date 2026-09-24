@@ -835,8 +835,19 @@ namespace YourBuddy
         {
             if (collider == null) return true;
 
-            if (IsBodyCollider(collider)) return true;
+            if (IsBodyCollider(collider) || IsPassableInterface(collider)) return true;
 
+            // Frame proxies around a gate. Judged per hit point, so a wall that merely
+            // Parents a gate keeps blocking everywhere except at its doorway.
+            return HitIsGateOpening(collider, hitPoint, requireOpenGate: false, chord);
+        }
+
+        /// <summary>
+        /// Docking collars, airlock assemblies and door leaves: things the buddy passes
+        /// through. Unlike the gate-frame rule, this holds for the floor probe too.
+        /// </summary>
+        private static bool IsPassableInterface(Collider collider)
+        {
             // Docking collars ring the hatch opening and sit right next to the
             // waypoints there; without this every route probe around a hatch fails.
             if (collider.GetComponentInParent<Docker>() != null) return true;
@@ -846,11 +857,7 @@ namespace YourBuddy
             if (collider.GetComponentInParent<Airlock>() != null) return true;
 
             // Door leaves are traversable: HandleDoors opens them on the way through.
-            if (collider.GetComponentInParent<Gate>() != null) return true;
-
-            // Frame proxies around a gate. Judged per hit point, so a wall that merely
-            // Parents a gate keeps blocking everywhere except at its doorway.
-            return HitIsGateOpening(collider, hitPoint, requireOpenGate: false, chord);
+            return collider.GetComponentInParent<Gate>() != null;
         }
 
         /// <summary>
@@ -1060,7 +1067,9 @@ namespace YourBuddy
                     anySolid = FloorHits[i].collider;
                     hasAnySolid = true;
                 }
-                if (IsEdgeProbeIgnorable(FloorHits[i].collider, ContactPoint(FloorHits[i], floorOrigin))) continue;
+                // Not the gate-frame rule: it would drop a deck and keep one below it.
+                // docs/invariants.md#floors-ignore-the-gate-frame-rule
+                if (IsPassableInterface(FloorHits[i].collider)) continue;
 
                 if (!hasFloor || FloorHits[i].point.y > floorY)
                 {
@@ -1071,9 +1080,8 @@ namespace YourBuddy
             }
             if (hasFloor) return true;
 
-            // Nothing survived the edge filter but something solid is down there:
-            // the normal case in a doorway, where the gate-frame rule deletes the floor
-            // slab. docs/invariants.md#doorway-floor-survives-the-filter
+            // Nothing survived the filter but something solid is down there: an airlock
+            // or collar floor. docs/invariants.md#doorway-floor-survives-the-filter
             if (hasAnySolid)
             {
                 floorY = anySolidY;

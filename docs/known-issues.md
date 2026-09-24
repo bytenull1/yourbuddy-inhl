@@ -26,33 +26,22 @@ remaining probe cost. `FloorUnderBuddy` alone asks ~2 times per frame from the s
   Quantisation must be far below the deck spacing, and the memo must not outlive the frame
   ([never-cache-node-world-positions](invariants.md#never-cache-node-world-positions)).
 
-### The gate-frame rule can hide stair treads from the floor probe
-
-Next to a doorway, the rule can ignore a stair tread, so an **ungrounded** `FloorUnderBuddy` reports
-the surface below it. Seen on the `OxygenStation` stairs beside `Door02`.
-
-- **Worked around** for stair legs, which read the feet instead
-  ([off-the-flight-is-off-the-plan](invariants.md#off-the-flight-is-off-the-plan)).
-- **Still exposed:** other ungrounded floor reads near doorways - `sameLevel` in
-  `AdvancePastReachedWaypoints`, Follow's level checks, `NodeFloorY`. No symptom seen.
-- **Possible fix:** don't apply the rule to downward floor rays, or only near the gate's own
-  threshold height. Test doorways and both stations' stairs.
-
 ### Two definitions of a waypoint's deck
 
 `AdvancePastReachedWaypoints` computes `sameLevel` from a fresh probe (`NavProbe.FloorHeight(wp)`),
 while the stair-leg code reads the plan's measured deck (`NavPath.WaypointFloorY`). On a flight they
 can disagree.
 
-- **Impact today:** none seen; the off-the-flight gate stops the over-advance either way.
+- **Impact today:** none seen; the advance never leaves a waypoint for a flight the feet are off
+  ([waypoint-advance-is-dual](invariants.md#waypoint-advance-is-dual)).
 - **Fix:** use `WaypointFloorY` everywhere. It touches every waypoint advance in Follow, Wander and
   Flee, so test all three on both stations' stairs.
 
 ### The goal floor in `FindPath` is still probed
 
 `start.y` is trusted ([the-start-point-is-already-a-floor](invariants.md#the-start-point-is-already-a-floor)),
-but the goal's floor is probed. A player standing in a stairwell doorway could get a floor two
-storeys down. Fix: pass the goal floor in (`FloorUnderPlayer`). This changes the `FindPath`
+but the goal's floor is probed. An ungrounded player (mid-jump, on stair treads) can read the
+surface below. Fix: pass the goal floor in (`FloorUnderPlayer`). This changes the `FindPath`
 signature - see [architecture.md §7](architecture.md#7-change-impact---what-else-to-update).
 
 ### The airlock-chamber test may match the room next to the airlock

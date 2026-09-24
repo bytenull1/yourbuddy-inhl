@@ -88,11 +88,11 @@ deck" and the buddy stepped off the stairs to reach it.
 `CharacterController.isGrounded`. The floor probe is used only while airborne. The player gets
 the same rule in `FloorUnderPlayer`.
 
-**Why.** In a doorway the gate-frame rule removes the floor under the opening, and the probe
-then answers with whatever is below - at the `OxygenStation` stair head, the landing two
-storeys down. The buddy stepped off the top of the stairs, climbed back, and repeated. A
-grounded controller is physics reporting what the body stands on, so it is not a
-[second probe basis](#one-probe-basis).
+**Why.** The floor probe can answer with a surface below the one the body is on - at the
+`OxygenStation` stair head it once answered the landing two storeys down
+([floors-ignore-the-gate-frame-rule](#floors-ignore-the-gate-frame-rule)). The buddy stepped off
+the top of the stairs, climbed back, and repeated. A grounded controller is physics reporting
+what the body stands on, so it is not a [second probe basis](#one-probe-basis).
 
 **Enforced in.** `BuddyBehaviour.FloorUnderBuddy`, `BuddyBehaviour.FloorUnderPlayer`.
 The goal floor in `FindPath` is still probed - see [known-issues.md](known-issues.md).
@@ -155,11 +155,10 @@ An unprobeable floor is not a ledge.
 
 **Why.** Detouring around the station bot at the top of the `OxygenStation` stairs took the
 buddy over the railing, two decks down. 0.7 m allows stair treads and the 0.63 m platform, and
-rejects a 1.25 m deck. The bot itself is exempt from steering by component (`AssistanceBot`),
-never by name.
+rejects a 1.25 m deck.
 
 **Enforced in.** `BuddyBehaviour.StepsOffALedge` (from `SteerAroundObstacles`,
-`UpdateStuckDetection`); bot exemption in `IsIgnorableCollider`.
+`UpdateStuckDetection`, `TryBackAway`).
 
 ### one-probe-basis
 
@@ -214,8 +213,9 @@ size-based passage tests - all three were tried ([known-issues.md](known-issues.
 
 **Rule.** For `WalkLos` and `ThinLos`, a hit is forgiven by the carve-out only when the **whole
 line under test** crosses the gate's plane inside the opening. A line whose ends lie on the same
-side never passes through, so its hit point alone decides. `TryFloor` (vertical casts) and the
-whiskers (probes that stop in the doorway) keep the point-only test.
+side never passes through, so its hit point alone decides. The whiskers (probes that stop in the
+doorway) keep the point-only test; `TryFloor` does not use the carve-out at all
+([floors-ignore-the-gate-frame-rule](#floors-ignore-the-gate-frame-rule)).
 
 **Why.** The carve-out is wider than the hole it stands for - a station doorway is 1.25 m across
 and the slot is 1.70 m - and the wall blocks beside it are 1.25 m deep. The jamb face therefore
@@ -227,13 +227,27 @@ opening. Only the line's own crossing tells doorway from jamb.
 
 **Enforced in.** `NavProbe.ChordCrossesOpening`, `HitIsGateOpening`, `WalkLos`, `ThinLos`.
 
+### floors-ignore-the-gate-frame-rule
+
+**Rule.** The floor probe (`TryFloor`) never applies the gate-frame carve-out. It skips only bodies
+and passable interfaces: docking collars, airlocks and door leaves.
+
+**Why.** The carve-out is 5 m tall and reaches 1 m either side of the wall. On a downward ray it
+dropped the deck under a doorway and kept a floor lower down. Beside the `OxygenStation` top-deck
+door (`Door02`) it dropped the 6.25 deck and kept the landing at 3.75, exactly 2.5 m below. The
+entry probes re-floor their start point, so from the top deck they judged the stairwell below:
+nodes on the buddy's own deck failed as "los", and `#406` on the landing below passed across the
+railing.
+
+**Enforced in.** `NavProbe.TryFloor`, `IsPassableInterface`.
+
 ### doorway-floor-survives-the-filter
 
-**Rule.** When the edge filter rejects every hit, the floor probe falls back to the highest solid
+**Rule.** When the filter rejects every hit, the floor probe falls back to the highest solid
 non-body hit.
 
-**Why.** The gate-frame rule removes the floor slab under an opening so sight lines pass through.
-Without the fallback, every point in a doorway reports "no floor".
+**Why.** Airlock and docking-collar floors are filtered as passable interfaces. Without the
+fallback, a point on one reports "no floor".
 
 **Enforced in.** `NavProbe.TryFloorHeight`.
 
@@ -477,12 +491,14 @@ tail made a kept index skip ahead, steering at the goal from the foot of the fli
 **Rule.** Advance on `(distXZ < WaypointReachedXZ && sameLevel) || dist3D < WaypointReached3D`, with
 `sameLevel` measured [floor to floor](#floor-to-floor), or when the buddy is already on the stair
 leg leaving the waypoint. Never advance past a waypoint whose *outgoing* leg is a flight the
-buddy's floor is off.
+buddy's feet are off.
 
 **Why.** A pure 3D test needs the buddy on the landing before it may target it (oscillation at the
-stair foot). XZ without `sameLevel` eats waypoints overhead. The deck-blind 3D branch could
-consume a stair node from above and hand over a leg the buddy was off - the `ShipyardStation`
-flight only ever failed going down for this reason.
+stair foot). XZ without `sameLevel` eats waypoints overhead. Going down, the deck-blind 3D branch
+reaches a stair node's marker (~1 m above its deck) while the feet are still on the flight above.
+[off-the-flight-is-off-the-plan](#off-the-flight-is-off-the-plan) catches that advance, but only as
+a recovery: Wander drops the plan, steps back and re-picks, so the buddy paused at every
+`ShipyardStation` landing on the way down.
 
 **Enforced in.** `BuddyBehaviour.AdvancePastReachedWaypoints`.
 
@@ -512,7 +528,9 @@ the stairs:
 - the horizontal whiskers hit the underside of the flight above and read it as a wall;
 - aiming at the far end cut the corner into the railing end;
 - the sidestep ran along the landing, into the wall;
-- auto-jump hopped the 0.86 m railing as if it were low furniture.
+- auto-jump hopped the 0.86 m railing as if it were low furniture. Heading along the leg does not
+  prevent it: a wrong off-level entry is a leg across a railing, and the buddy hopped the fence to
+  `#406` from the top deck ([floors-ignore-the-gate-frame-rule](#floors-ignore-the-gate-frame-rule)).
 
 The advance half stops a mid-flight replan from sending the buddy back up to the flight head.
 

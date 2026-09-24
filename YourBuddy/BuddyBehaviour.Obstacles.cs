@@ -109,9 +109,6 @@ namespace YourBuddy
         private bool IsIgnorableCollider(Collider collider)
         {
             if (collider == null) return true;
-            // The station bot is not a wall to steering (the graph still sees it):
-            // docs/invariants.md#a-detour-may-not-step-off-a-ledge
-            if (collider.GetComponentInParent<AssistanceBot>() != null) return true;
             // Capsule casts report colliders the cast starts inside (distance 0), and the
             // whisker probes originate inside the buddy's own ItemBlocker capsule - ignore
             // everything parented under the buddy itself.

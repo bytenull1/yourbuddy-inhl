@@ -56,7 +56,7 @@ beside it unseen ([a-doorway-is-crossed-not-grazed](invariants.md#a-doorway-is-c
 | Caller | Entry point | Notes |
 |---|---|---|
 | `WalkLos`, `ThinLos` | `IsEdgeProbeIgnorable` + chord | `requireOpenGate: false` - doors open at walk time |
-| `TryFloor` | `IsBodyCollider`, then `IsEdgeProbeIgnorable` | the full filter picks the preferred floor; the highest solid hit is the fallback ([doorway-floor-survives-the-filter](invariants.md#doorway-floor-survives-the-filter)) |
+| `TryFloor` | `IsBodyCollider`, then `IsPassableInterface` | no gate-frame rule ([floors-ignore-the-gate-frame-rule](invariants.md#floors-ignore-the-gate-frame-rule)); the highest solid hit is the fallback ([doorway-floor-survives-the-filter](invariants.md#doorway-floor-survives-the-filter)) |
 | `TryAnyLayerFloor` | `IsBodyCollider` | bodies only |
 | `CanSee` | `IsBodyCollider`, then `IsDoorGeometryNearOpenGate` | shut gates checked before the cast |
 | whiskers | `IsDoorGeometryNearOpenGate` | `requireOpenGate: true`; without it the buddy circles open doorways |
@@ -92,7 +92,8 @@ something or stops at nothing:
 `TryFloorHeight` casts down from `p + 2 m` over 6 m and takes the **highest** acceptable surface at
 or below `p`:
 
-- a body is never floor;
+- a body is never floor, and neither is a collar, airlock or door leaf. The gate-frame rule is not
+  applied ([floors-ignore-the-gate-frame-rule](invariants.md#floors-ignore-the-gate-frame-rule));
 - if the filter rejects everything, the highest solid non-body hit is used
   ([doorway-floor-survives-the-filter](invariants.md#doorway-floor-survives-the-filter));
 - if nothing was hit, it casts once more across every layer
@@ -162,6 +163,9 @@ the gate's own frame:
 | local x - across | `openingHalfWidth` | measured; 0.85 m for a stock door |
 | local y - vertical | `GateOpeningHalfHeight` | 2.5 m |
 | local z - through the wall | `GateOpeningHalfDepth` | 1.0 m |
+
+Sight lines and whiskers use it; floor rays never do
+([floors-ignore-the-gate-frame-rule](invariants.md#floors-ignore-the-gate-frame-rule)).
 
 Only gates with `gateAnchors` **and** a leaf to slide count. `ElectricityPanelGate` (anchors: two
 empty placeholders and itself) carves nothing. Never test leaf *size*.

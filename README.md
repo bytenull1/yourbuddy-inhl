@@ -256,7 +256,7 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 - [x] Simplify NodeEditor. Automatic connections and connections like Block and Priority should be removed, as they are inefficient, outdated workarounds, or unused functionality.
 - [x] Improve footstep sounds. They can be heard from too far away, and they don’t change based on the floor under the NPC. Need to determine which index corresponds to a specific floor in the serialized `footstepEvents` array.
 - [x] Experiment with longer distance tasks. If stability is low, add intermediate logistics points to the planning.
-- [ ] Remove redundant stairs checks. Not sure all of them are needed.
+- [x] Remove redundant stairs checks. Not sure all of them are needed.
 - [ ] Check optimization and analyze performance. In particular, consider changing how rooms adjacent to NPC are loaded. View hot paths (calculations every frame, tick, high allocations).
 
 **Priority 2 - Major features**
