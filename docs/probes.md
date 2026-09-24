@@ -254,7 +254,8 @@ was not enough in the docking corridor. `WarnIfTruncated` logs a full buffer
 ## Caches
 
 - **Gate list:** 5 s TTL, plus `InvalidateGates()` on scene load and dock change (these change the
-  *set* of gates).
+  *set* of gates). A timed rescan waits for the frame's sweep budget; a forced one does not
+  ([scene-sweeps-are-budgeted](invariants.md#scene-sweeps-are-budgeted)).
 - **Gate openings:** measured once, kept until `InvalidateGates()`. Stored relative to the gate,
   never as world bounds - the world moves around the ship.
 - **`FrameGates`:** each gate's world placement, for **one frame** only. It moves native property
@@ -262,3 +263,9 @@ was not enough in the docking corridor. `WarnIfTruncated` logs a full buffer
   self cost. One frame is the longest a world position may be held
   ([never-cache-node-world-positions](invariants.md#never-cache-node-world-positions)). Sound only
   because every caller runs from `Update`, never from the fixed step.
+- **Collider kinds:** whether a collider is a body (`IsBodyCollider`) or a passable interface
+  (`IsPassableInterface`), per instance, for one frame. Both walk the hierarchy, and one plan asks
+  about the same deck and walls hundreds of times.
+- **Floor answers:** `TryFloor`'s result per exact position, for one frame. A plan re-floors its
+  start for every entry candidate. Keys are exact, never quantised: a rounded key could hand a point
+  the floor of its neighbour across a stair edge. Skipped in the fixed step, where a physics step would separate the probe from `Update`.

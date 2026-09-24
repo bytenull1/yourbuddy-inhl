@@ -111,6 +111,7 @@ namespace YourBuddy
             private static readonly FieldInfo? RotationReference = Field<Transform>(typeof(EntryDetector), "rotationReference", "buddy room tracking");
             private static readonly FieldInfo? ReverseSide = Field<bool>(typeof(EntryDetector), "reverseSide", "buddy room tracking");
             private static readonly FieldInfo? Door = Field<Gate>(typeof(EntryDetector), "door", "room content loading around doors");
+            private static readonly FieldInfo? Optimize = Field<bool>(typeof(EntryDetector), "optimize", "switching off rooms the buddy left");
             // The detector's remembered player, which the game sets but never clears.
             // docs/invariants.md#buddy-closes-must-not-move-the-player
             private static readonly FieldInfo? CurrentPlayer = Field<Player>(typeof(EntryDetector), "player", "keeping the buddy's door closes from moving the player between rooms");
@@ -120,6 +121,10 @@ namespace YourBuddy
             internal static Transform? GetRotationReference(EntryDetector? detector) => Get<Transform>(RotationReference, detector);
             internal static bool GetReverseSide(EntryDetector? detector) => detector != null && ReverseSide != null && (bool)ReverseSide.GetValue(detector);
             internal static Gate? GetDoor(EntryDetector? detector) => Get<Gate>(Door, detector);
+            /// <summary>
+            /// Whether the game switches the far room off once the door shuts; false when unreadable.
+            /// </summary>
+            internal static bool GetOptimize(EntryDetector? detector) => detector != null && Optimize != null && (bool)Optimize.GetValue(detector);
             internal static Player? GetCurrentPlayer(EntryDetector? detector) => Get<Player>(CurrentPlayer, detector);
 
             internal static bool SetCurrentPlayer(EntryDetector? detector, Player? player)

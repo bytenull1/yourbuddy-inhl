@@ -508,18 +508,18 @@ namespace YourBuddy
             Vector3 here = Here;
             float floorY = Body.FloorUnderBuddy().y;
 
-            foreach (SellStation station in Object.FindObjectsOfType<SellStation>())
+            foreach (SellStation station in SceneScan.ThisFrame<SellStation>())
             {
                 SellStationParts? parts = SellStationParts.Read(station);
                 if (parts is { Usable: true }) SellStations.Add(parts);
             }
             CollectContainerContents(here, SellSearchRadius + SnackContainerMargin);
-            foreach (ItemDetector detector in Object.FindObjectsOfType<ItemDetector>())
+            foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>())
             {
                 if (SellStationOf(detector) == null) PutAwayItems.UnionWith(detector.Items);
             }
 
-            foreach (Grabbable item in Object.FindObjectsOfType<Grabbable>())
+            foreach (Grabbable item in SceneScan.ThisFrame<Grabbable>())
             {
                 if (item.Signature != TrashBoxSignature || !item.CanSell || PutAwayItems.Contains(item) || TakeBlocker(item) != null) continue;
 

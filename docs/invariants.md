@@ -675,6 +675,36 @@ unchanged.
 
 **Enforced in.** `BuddyBehaviour.TryUnlockPasswordGate`.
 
+### the-buddy-loads-rooms-by-the-door-rule
+
+**Rule.** The buddy switches a room's content on only as the game does for the player: the room it
+is in, the room behind a doorway while that door is open, both rooms of a door it opens, and an
+errand's target room. It never loads the room behind a shut door it only walks past. It switches
+rooms off only as the game does when the player fully leaves one: once a door it shut has finished
+closing, away from the player, **both** rooms that doorway joins go off, whoever switched them on.
+A room stays on while the buddy or the player is in it, while the player is outside, while it holds a
+sell station ([a-sell-station-room-stays-loaded](#a-sell-station-room-stays-loaded)), or while
+another open door looks into it. The buddy's room is its tracked room. `EntryDetector`'s side test may only
+overrule that for the two rooms of its own doorway. Never across a doorway the game keeps loaded
+(`optimize` off).
+
+**Why.**
+- It used to load both rooms at every doorway within 3.5 m, open or shut, and switch none of them
+  off. A walk down a corridor left every side room loaded. The game kept running them and saved them
+  as loaded (`Room.Data.enabled`), so every load brought them back.
+- The game's own unload on that close never runs, because a buddy close away from the player is
+  hidden from `EntryDetector`
+  ([buddy-closes-must-not-move-the-player](#buddy-closes-must-not-move-the-player)).
+- "Only rooms the buddy loaded" is no test: a room restored from a save is nobody's.
+- "Only the room it left, by the side test" failed twice:
+  - A late close was judged from a third room. The YardCryo door's plane puts most of YardHallway on
+    YardCryo's side, so it switched off YardLibrary.
+  - A room kept for a door still closing was never looked at again.
+
+**Enforced in.** `BuddyBehaviour.UpdateRoomTracking`, `LoadRoom`, `ReleaseRoomsAt` /
+`ReleaseRoom` / `ReasonToKeepLoaded`, `LoadRoomsAroundGate`, `SetForcedRoom`,
+`IErrandBody.LoadRoomOf`; `Patches.EntryDetector_DoorCheckForEnter_Postfix`.
+
 ---
 
 ## Fear and orders
@@ -956,6 +986,19 @@ under the gate trips its `AntiCrasher` and the sale silently fails.
 
 **Enforced in.** `SellErrand.PressButton` (and `TryStart`), `SellTask.StandAllowed`.
 
+### a-sell-station-room-stays-loaded
+
+**Rule.** While a buddy exists and `SellTrash` is on, a room whose content holds a `SellStation` is
+never switched off, by the buddy or by the game. The buddy also switches one back on if it finds it
+off (a save restores it that way).
+
+**Why.** `FindObjectsOfType` skips a switched-off station, so the sell run found "no sell station
+within 80m" of four boxes. The game switches YardHallway off at its doorways, on docking
+(`Docker.Dock`) and on leaving by the Shipyard airlock (`ShipyardStation.DisableHallway`).
+
+**Enforced in.** `Patches.SellRooms.Room_SetContentEnabled_Prefix`, `SellPens.HoldsSellStation`,
+`BuddyBehaviour.ReasonToKeepLoaded`, `UpdateRoomTracking` (`sellRooms`).
+
 ### a-selling-run-keeps-its-boxes
 
 **Rule.** The search radius and the vessel filter choose a run's boxes; they never end it. A queued
@@ -1007,3 +1050,17 @@ largest allocation after the HUD. `SpaceShip.rooms` is a fixed array, so its ref
 
 **Enforced in.** `BuddyNodeGraph.ShipRoom` (`RoomsByName`), `RefreshSpaceObjects` /
 `FindOwnerObject` (`SpaceObjectNames`).
+
+### scene-sweeps-are-budgeted
+
+**Rule.** A cache that re-runs `FindObjectsOfType` on a timer asks `SceneScan.MayRescan` first. A
+sweep made for one decision reads `SceneScan.ThisFrame`. Only a first fill or a forced rescan
+(`InvalidateGates`, a destroyed entry) skips the budget.
+
+**Why.** Each sweep costs milliseconds. Expired 5 s caches could all rescan inside one `FindPath`
+call, and an errand's `Count` and `TryStart` swept the scene twice in one frame. Both landed on the
+mod's slowest frames.
+
+**Enforced in.** `SceneScan`; `NavProbe.EnsureGates`, `BuddyNodeGraph.RefreshSpaceObjects`,
+`RefreshDetectors` / `RefreshAirlocks` / `RefreshEnvironments`, `PinPanelFor`,
+`TrackFootstepDoors`, `SellPens.EnsurePens`; the errand collectors.

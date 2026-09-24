@@ -44,7 +44,7 @@ namespace YourBuddy
         void IErrandBody.LoadRoomOf(Transform what)
         {
             Room? room = what.GetComponentInParent<Room>(true);
-            if (room != null && what.IsChildOf(room.ContentParent)) EnableRoom(room);
+            if (room != null && what.IsChildOf(room.ContentParent)) LoadRoom(room, "an errand needs it");
         }
 
         void IErrandBody.FacePoint(Vector3 point) => FacePoint(point);

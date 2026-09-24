@@ -13,19 +13,6 @@ Limitations accepted by design are listed in each topic doc, not here.
 
 ## Open issues
 
-### The floor probe repeats work within a frame
-
-*Performance, not a bug.* `NavProbe.TryFloor` runs ~7 times per frame and is the mod's largest
-remaining probe cost. `FloorUnderBuddy` alone asks ~2 times per frame from the same position.
-
-- **Possible fix:** a one-frame memo on quantised position, like `NavProbe.FrameGates`
-  ([probes.md](probes.md#caches)).
-- **Check first:** trace whether the calls really ask about the *same* point. If not, a memo only
-  adds stale-value risk.
-- **Risk:** floor heights drive every level test ([floor-to-floor](invariants.md#floor-to-floor)).
-  Quantisation must be far below the deck spacing, and the memo must not outlive the frame
-  ([never-cache-node-world-positions](invariants.md#never-cache-node-world-positions)).
-
 ### Two definitions of a waypoint's deck
 
 `AdvancePastReachedWaypoints` computes `sameLevel` from a fresh probe (`NavProbe.FloorHeight(wp)`),

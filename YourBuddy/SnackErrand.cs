@@ -183,7 +183,7 @@ namespace YourBuddy
             float floorY = Body.FloorUnderBuddy().y;
             float margin = SnackSearchRadius + SnackContainerMargin;
 
-            foreach (Door door in Object.FindObjectsOfType<Door>())
+            foreach (Door door in SceneScan.ThisFrame<Door>())
             {
                 Transform? container = ContainerOf(door, out InstantItemDetector? contents);
                 // A closet has two doors; the first found brings both.
@@ -214,7 +214,7 @@ namespace YourBuddy
             }
             CheckedContainers.Clear();
 
-            foreach (Food food in Object.FindObjectsOfType<Food>())
+            foreach (Food food in SceneScan.ThisFrame<Food>())
             {
                 if (ContainedFood.Contains(food) || !Edible(food)) continue;
 

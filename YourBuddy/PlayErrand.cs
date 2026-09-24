@@ -366,10 +366,10 @@ namespace YourBuddy
             float floorY = Body.FloorUnderBuddy().y;
 
             CollectContainerContents(here, PlaySearchRadius + SnackContainerMargin);
-            foreach (ItemDetector detector in Object.FindObjectsOfType<ItemDetector>()) PutAwayItems.UnionWith(detector.Items);
+            foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>()) PutAwayItems.UnionWith(detector.Items);
             CollectMachineZones();
 
-            foreach (Grabbable item in Object.FindObjectsOfType<Grabbable>())
+            foreach (Grabbable item in SceneScan.ThisFrame<Grabbable>())
             {
                 if (PutAwayItems.Contains(item) || TakeBlocker(item) != null || !IsPlaything(item)) continue;
 
@@ -394,8 +394,8 @@ namespace YourBuddy
         private static void CollectMachineZones()
         {
             PlayMachineZones.Clear();
-            foreach (ItemDetector detector in Object.FindObjectsOfType<ItemDetector>()) AddMachineZone(detector.gameObject);
-            foreach (ItemDestroyer slot in Object.FindObjectsOfType<ItemDestroyer>()) AddMachineZone(slot.gameObject);
+            foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>()) AddMachineZone(detector.gameObject);
+            foreach (ItemDestroyer slot in SceneScan.ThisFrame<ItemDestroyer>()) AddMachineZone(slot.gameObject);
         }
 
         private static void AddMachineZone(GameObject zone)

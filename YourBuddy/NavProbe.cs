@@ -196,6 +196,8 @@ namespace YourBuddy
         /// </summary>
         private static readonly Dictionary<int, Bounds> GateLocalBounds = [];
         private static float _gatesRefreshAt;
+        // Set until the first scan and by InvalidateGates: that rescan may not wait for the budget.
+        private static bool _gatesForced = true;
         /// <summary>
         /// The gate set as the probes need it, placed for one frame. A gate root moves with
         /// the world while the ship flies, so this never outlives the frame that built it:
@@ -211,12 +213,39 @@ namespace YourBuddy
         private static readonly RaycastHit[] FloorHits = new RaycastHit[64];
         private static float _truncationWarnedAt = -999f;
 
+        // One frame of per-collider filter answers and per-point floors: a plan asks about the same
+        // deck, walls and start point hundreds of times. Exact keys, cleared each frame. docs/probes.md#caches
+        private static readonly Dictionary<int, byte> ColliderKinds = [];
+        private static readonly Dictionary<Vector3, FloorAnswer> FloorAnswers = [];
+        private static int _memoFrame = -1;
+        private const byte BodyAnswered = 1;
+        private const byte BodyYes = 2;
+        private const byte PassableAnswered = 4;
+        private const byte PassableYes = 8;
+
+        private readonly struct FloorAnswer(bool found, float floorY, Collider? collider)
+        {
+            public readonly bool Found = found;
+            public readonly float FloorY = floorY;
+            public readonly Collider? Collider = collider;
+        }
+
+        private static void EnsureMemoFrame()
+        {
+            if (_memoFrame == Time.frameCount) return;
+
+            _memoFrame = Time.frameCount;
+            ColliderKinds.Clear();
+            FloorAnswers.Clear();
+        }
+
         private static void EnsureGates()
         {
-            if (Time.time < _gatesRefreshAt) return;
+            if (Time.time < _gatesRefreshAt || !SceneScan.MayRescan(_gatesForced)) return;
             // Stamped before the measuring loop: anything below that probed would
             // otherwise re-enter this method forever.
             _gatesRefreshAt = Time.time + 5f;
+            _gatesForced = false;
             _frameGatesAt = -1;
             CachedGates.Clear();
             GateLocalBounds.Clear();
@@ -581,6 +610,7 @@ namespace YourBuddy
         public static void InvalidateGates()
         {
             _gatesRefreshAt = 0f;
+            _gatesForced = true;
             GateOpenings.Clear();
             _inventoryPending = true;
         }
@@ -588,7 +618,8 @@ namespace YourBuddy
         // Gate-frame audit state: deduped per collider x gate pair, not globally. A
         // single shared throttle made the audit a lottery that floor probes always won,
         // and the one collider that mattered never appeared in a capture at all.
-        private static readonly Dictionary<string, float> AuditLoggedAt = [];
+        // Keyed by instance, so a throttled hit reads no names (unity-name-reads-allocate).
+        private static readonly Dictionary<(int Collider, int Gate, bool Graze), float> AuditLoggedAt = [];
         private const float AuditPairCooldown = 10f;
         private const int AuditMaxPairs = 64;
 
@@ -598,17 +629,10 @@ namespace YourBuddy
         /// </summary>
         private static void AuditGateFrameIgnore(Collider collider, Gate gate, float across, float allowed)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value < 2) return;
+            if (YourBuddyPlugin.ConfigDebugLevel.Value < 2 || !AuditDue(collider, gate, false)) return;
 
-            string name = collider.gameObject.name;
-            string key = name + "|" + gate.gameObject.name;
-            if (AuditLoggedAt.TryGetValue(key, out float last) && Time.time - last < AuditPairCooldown) return;
-            // Bounded, and self-healing: the next pass re-reports whatever is still live.
-            if (AuditLoggedAt.Count >= AuditMaxPairs) AuditLoggedAt.Clear();
-
-            AuditLoggedAt[key] = Time.time;
             YourBuddyPlugin.Log.LogInfo(
-                "[probe] Gate-frame rule ignoring a hit on '" + name + "' " +
+                "[probe] Gate-frame rule ignoring a hit on '" + collider.gameObject.name + "' " +
                 across.ToString("0.00") + "m across gate '" + gate.gameObject.name +
                 "' (opening " + allowed.ToString("0.00") + "m) - if that point is wall " +
                 "rather than doorway, this gate's opening is too wide.");
@@ -622,19 +646,27 @@ namespace YourBuddy
         /// </summary>
         private static void AuditGateFrameGraze(Collider collider, Gate gate, float across, float allowed)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value < 2) return;
+            if (YourBuddyPlugin.ConfigDebugLevel.Value < 2 || !AuditDue(collider, gate, true)) return;
 
-            string name = collider.gameObject.name;
-            string key = "graze|" + name + "|" + gate.gameObject.name;
-            if (AuditLoggedAt.TryGetValue(key, out float last) && Time.time - last < AuditPairCooldown) return;
-            if (AuditLoggedAt.Count >= AuditMaxPairs) AuditLoggedAt.Clear();
-
-            AuditLoggedAt[key] = Time.time;
             YourBuddyPlugin.Log.LogInfo(
-                "[probe] Gate-frame rule keeping a hit on '" + name + "' " +
+                "[probe] Gate-frame rule keeping a hit on '" + collider.gameObject.name + "' " +
                 across.ToString("0.00") + "m across gate '" + gate.gameObject.name +
                 "' (opening " + allowed.ToString("0.00") + "m): the line only grazes " +
                 "the jamb and crosses the wall elsewhere.");
+        }
+
+        /// <summary>
+        /// True, and stamped, when this collider x gate pair has not been reported within AuditPairCooldown.
+        /// </summary>
+        private static bool AuditDue(Collider collider, Gate gate, bool graze)
+        {
+            (int, int, bool) key = (collider.GetInstanceID(), gate.GetInstanceID(), graze);
+            if (AuditLoggedAt.TryGetValue(key, out float last) && Time.time - last < AuditPairCooldown) return false;
+            // Bounded, and self-healing: the next pass re-reports whatever is still live.
+            if (AuditLoggedAt.Count >= AuditMaxPairs) AuditLoggedAt.Clear();
+
+            AuditLoggedAt[key] = Time.time;
+            return true;
         }
 
         /// <summary>
@@ -848,6 +880,18 @@ namespace YourBuddy
         /// </summary>
         private static bool IsPassableInterface(Collider collider)
         {
+            EnsureMemoFrame();
+            int id = collider.GetInstanceID();
+            ColliderKinds.TryGetValue(id, out byte kind);
+            if ((kind & PassableAnswered) != 0) return (kind & PassableYes) != 0;
+
+            bool passable = HasPassableAncestor(collider);
+            ColliderKinds[id] = (byte)(kind | PassableAnswered | (passable ? PassableYes : 0));
+            return passable;
+        }
+
+        private static bool HasPassableAncestor(Collider collider)
+        {
             // Docking collars ring the hatch opening and sit right next to the
             // waypoints there; without this every route probe around a hatch fails.
             if (collider.GetComponentInParent<Docker>() != null) return true;
@@ -868,7 +912,18 @@ namespace YourBuddy
         {
             if (collider == null) return true;
 
-            Transform t = collider.transform;
+            EnsureMemoFrame();
+            int id = collider.GetInstanceID();
+            ColliderKinds.TryGetValue(id, out byte kind);
+            if ((kind & BodyAnswered) != 0) return (kind & BodyYes) != 0;
+
+            bool body = BelongsToABody(collider.transform);
+            ColliderKinds[id] = (byte)(kind | BodyAnswered | (body ? BodyYes : 0));
+            return body;
+        }
+
+        private static bool BelongsToABody(Transform t)
+        {
             BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
             if (buddy != null && t.IsChildOf(buddy.transform)) return true;
 
@@ -1040,6 +1095,23 @@ namespace YourBuddy
         }
 
         private static bool TryFloor(Vector3 p, out float floorY, [NotNullWhen(true)] out Collider? floorCollider)
+        {
+            // Not in the fixed step: a physics step between it and Update would outdate the answer.
+            if (Time.inFixedTimeStep) return ProbeFloor(p, out floorY, out floorCollider);
+
+            EnsureMemoFrame();
+            if (FloorAnswers.TryGetValue(p, out FloorAnswer memo))
+            {
+                floorY = memo.FloorY;
+                floorCollider = memo.Collider!; // stored with Found, and non-null whenever Found is
+                return memo.Found;
+            }
+            bool found = ProbeFloor(p, out floorY, out floorCollider);
+            FloorAnswers[p] = new FloorAnswer(found, floorY, floorCollider);
+            return found;
+        }
+
+        private static bool ProbeFloor(Vector3 p, out float floorY, [NotNullWhen(true)] out Collider? floorCollider)
         {
             floorY = p.y;
             // Every `return true` assigns it first; flow analysis cannot tie that to hasFloor.

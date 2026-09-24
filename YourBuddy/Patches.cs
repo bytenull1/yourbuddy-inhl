@@ -472,11 +472,7 @@ namespace YourBuddy
                 if (player == null || player.Controller == null) return;
 
                 // The player really is at this doorway: let the game do its normal thing.
-                if ((player.Controller.CachedTransform.position - gate.transform.position).sqrMagnitude <=
-                    PlayerAtDoorwayRadius * PlayerAtDoorwayRadius)
-                {
-                    return;
-                }
+                if (PlayerAtDoorway(player, gate)) return;
 
                 if (GameInternals.EntryDetectorAccess.SetCurrentPlayer(__instance, null)) __state = player;
             }
@@ -486,7 +482,22 @@ namespace YourBuddy
             public static void EntryDetector_DoorCheckForEnter_Postfix(EntryDetector __instance, Player? __state)
             {
                 if (__state != null) GameInternals.EntryDetectorAccess.SetCurrentPlayer(__instance, __state);
+
+                Gate? gate = GameInternals.EntryDetectorAccess.GetDoor(__instance);
+                if (gate == null || !BuddyManager.GateWasClosedByBuddy(gate)) return;
+
+                // At the doorway the game has just switched rooms for the player. Anywhere else it switched
+                // nothing, so the buddy puts back what it loaded: docs/invariants.md#the-buddy-loads-rooms-by-the-door-rule
+                Player? player = GameInternals.EntryDetectorAccess.GetCurrentPlayer(__instance);
+                if (player != null && player.Controller != null && PlayerAtDoorway(player, gate)) return;
+
+                BuddyBehaviour? buddy = BuddyManager.CurrentBuddy;
+                if (buddy != null) buddy.ReleaseRoomsAt(__instance);
             }
+
+            private static bool PlayerAtDoorway(Player player, Gate gate) =>
+                (player.Controller.CachedTransform.position - gate.transform.position).sqrMagnitude <=
+                PlayerAtDoorwayRadius * PlayerAtDoorwayRadius;
 
             /// <summary>
             /// A gate's AntiCrasher just undid a close, and nothing in the game will ever
@@ -798,6 +809,33 @@ namespace YourBuddy
 
                 if (value) buddy.UnparkFromShip();
                 else buddy.ParkWithShip();
+            }
+        }
+
+        [HarmonyPatch, Description("keeping sell station rooms loaded")]
+        internal static class SellRooms
+        {
+            private static readonly HashSet<int> Logged = [];
+
+            /// <summary>
+            /// No one switches off a room holding a sell station while a buddy may sell: the game's own
+            /// doorway, dock and airlock unloads included. docs/invariants.md#a-sell-station-room-stays-loaded
+            /// </summary>
+            [HarmonyPatch(typeof(Room), nameof(Room.SetContentEnabled))]
+            [HarmonyPrefix]
+            public static bool Room_SetContentEnabled_Prefix(Room __instance, bool state)
+            {
+                if (state || BuddyManager.CurrentBuddy == null || !YourBuddyPlugin.ConfigSellTrash.Value ||
+                    !SellPens.HoldsSellStation(__instance))
+                {
+                    return true;
+                }
+                if (Logged.Add(__instance.GetInstanceID()))
+                {
+                    YourBuddyPlugin.Log.LogInfo("[ai] Keeping room '" + __instance.gameObject.name +
+                                                "' loaded: it holds a sell station (logged once per room)");
+                }
+                return false;
             }
         }
 

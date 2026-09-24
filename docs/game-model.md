@@ -40,6 +40,13 @@ events to `player.SetCurrentRoom(innerRoom | outerRoom)`, choosing the side by t
 across the ship. Harmless in vanilla; not once the buddy closes doors -
 [buddy-closes-must-not-move-the-player](invariants.md#buddy-closes-must-not-move-the-player).
 
+### Which rooms are loaded is saved
+
+`Room` is a `SaveObject`: `SetContentEnabled` writes `Data.enabled`, and a load restores each room's
+content exactly as saved (`Room.ApplyData`). So a room left on stays on across every load until a
+doorway switches it off. Only station rooms have `EntryDetector`s; none of the ship's inner doors
+has one. `Docker.Dock` resets a station to its entry room, but not on the load path.
+
 ### Docking does not run the room transition
 
 `Docker.Dock` opens the airlock with `ship.Airlock.Open()` (`Docker.cs:71`), which skips

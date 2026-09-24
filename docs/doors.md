@@ -34,6 +34,52 @@ close-behind. Airlock and docking gates it never opens; it waits for the player.
 Opening a gate also enables the room content on both sides, so the buddy never walks into an
 unloaded room.
 
+### Which rooms the buddy loads
+
+The game switches rooms on and off as the player passes doorways: both sides while the door is
+open, only the player's side once it shuts. The buddy follows the same door rule ([the-buddy-loads-rooms-by-the-door-rule](invariants.md#the-buddy-loads-rooms-by-the-door-rule)):
+
+| Room | Loaded when |
+|---|---|
+| the room the buddy is in | always; kept on if the game switches it off |
+| the room behind the nearest doorway (within 3.5 m) | only while that door is open |
+| both rooms of a door | the buddy opens it |
+| an errand's box or sell station room | the errand needs it |
+| a room holding a sell station | always, while `SellTrash` is on ([a-sell-station-room-stays-loaded](invariants.md#a-sell-station-room-stays-loaded)) |
+
+It switches rooms off when a door it shut finishes its close (`Gate.OnClosed`, which drives
+`EntryDetector.DoorCheckForEnter`), away from the player; at the doorway the game switches the rooms
+around the player itself. Both rooms of that doorway are checked, whoever switched them on: a save
+restores every room as it was saved ([game-model.md](game-model.md#which-rooms-are-loaded-is-saved)).
+Checking both matters when the buddy walks through two rooms in a row. The first door can finish
+closing only after the buddy has left the second room, and the room between is re-checked once its
+last door shuts. A room stays on when:
+
+- the buddy is in it: its tracked room, or the side of this doorway it has just come in by;
+- the player's room is it;
+- the player is outside on a spacewalk (`SpaceStation.OnStationExit` shows every room then);
+- its content holds a `SellStation` ([a-sell-station-room-stays-loaded](invariants.md#a-sell-station-room-stays-loaded));
+- any other doorway into it has an open door, or no door;
+- that doorway is one the game keeps loaded on both sides (`optimize` off, as at the docking airlock).
+
+The side test (`TryInnerSide`) only counts while the tracked room is one of this doorway's two rooms.
+It is a plane: most of YardHallway lies on YardCryo's side of the YardCryo door.
+
+A room it leaves with the door open stays on until someone shuts that door, as for the player. Ship
+rooms are never switched off this way: they have no doorway sensors. A room the buddy never walks out
+of keeps the state the save gave it.
+
+Each switch-on and switch-off is logged at level 1, with how many rooms around the doorways are on;
+switch-ons at most once per room per 5 s. Every station door is named `Door02`, so lines name the
+room across instead. Level 2 adds why a room stayed on:
+
+```
+[ai] Loaded room 'YardCryo' (opening the door to 'YardLibrary') - 7 rooms loaded
+[ai] Unloaded room 'YardCryo' (door to 'YardLibrary' shut) - 6 rooms loaded
+[ai] Keeping room 'YardLibrary' loaded: its door to 'YardCryo' is open
+[ai] Keeping room 'YardHallway' loaded: you are in it
+```
+
 ### Password doors
 
 The player gives a code through the [dialog](dialog.md) or `buddy_password`. Codes live in

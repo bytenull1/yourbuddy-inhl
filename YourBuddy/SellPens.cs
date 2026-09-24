@@ -27,6 +27,13 @@ namespace YourBuddy
         }
 
         private static readonly List<Pen> Pens = [];
+
+        /// <summary>
+        /// Whether a room's content holds a sell station. Such a room is never switched off while a buddy
+        /// exists: docs/invariants.md#a-sell-station-room-stays-loaded
+        /// </summary>
+        public static bool HoldsSellStation(Room room) =>
+            room.ContentParent.GetComponentInChildren<SellStation>(true) != null;
         private static float _pensAt = -1f;
 
         /// <summary>
@@ -54,7 +61,7 @@ namespace YourBuddy
         /// </summary>
         private static void EnsurePens()
         {
-            if (_pensAt > 0f && Time.time < _pensAt) return;
+            if ((_pensAt > 0f && Time.time < _pensAt) || !SceneScan.MayRescan(_pensAt <= 0f)) return;
 
             _pensAt = Time.time + SellPenRefresh;
             Pens.Clear();

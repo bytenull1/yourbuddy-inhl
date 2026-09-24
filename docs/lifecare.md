@@ -69,7 +69,8 @@ Fixes:
 
 - `Patches.EntryDetector_DoorCheckForEnter_Prefix` / `_Postfix` hide the detector's remembered player
   during the call - only for a gate the buddy just closed, and only when the player is beyond
-  `PlayerAtDoorwayRadius`. Item re-parenting still runs.
+  `PlayerAtDoorwayRadius`. Item re-parenting still runs. The room switch-off the game skips there is
+  done by the buddy ([doors.md](doors.md#which-rooms-the-buddy-loads)).
 - `Patches.LifecareDisplay_UpdatePlayerIcon_Prefix` restores the icon
   ([player-icon-fix-is-one-directional](invariants.md#player-icon-fix-is-one-directional)).
 

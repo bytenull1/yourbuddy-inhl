@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Text;
 using Space;
 using UnityEngine;
 
@@ -547,6 +548,8 @@ namespace YourBuddy
         private const float StatusTextInterval = 0.2f;
         private string? statusText = null;
         private float statusTextAt = 0f;
+        // One builder for every rebuild: appending to a string copied the whole panel per line.
+        private static readonly StringBuilder HudText = new();
 
         /// <summary>
         /// The HUD panel text, rebuilt five times a second rather than per GUI event.
@@ -558,35 +561,37 @@ namespace YourBuddy
 
             statusTextAt = Time.time + StatusTextInterval;
             bool parked = !gameObject.activeInHierarchy;
-            string text = "Mode: " + (parked ? "parked" : Asleep ? "asleep" : mode.ToString()) +
-                          (DescribeReachTask() is { } task ? " (" + task + ")" : "") +
-                          (IsDead ? " [DEAD]" : "");
+            StringBuilder text = HudText.Clear();
+            text.Append("Mode: ").Append(parked ? "parked" : Asleep ? "asleep" : mode.ToString());
+            if (DescribeReachTask() is { } task) text.Append(" (").Append(task).Append(')');
+            if (IsDead) text.Append(" [DEAD]");
             // "none" is the resting state, not news: the Mind line already says it is deciding.
-            if (orderedMode.HasValue) text += "\nOrders: " + DescribeOrders();
+            if (orderedMode.HasValue) text.Append("\nOrders: ").Append(DescribeOrders());
 
-            text += "\nPos: " + transform.position.ToString("0.00") +
-                    (CurrentOwner != null ? ", on " + CurrentOwner + (parked ? " (unloaded)" : "") : "");
-            text += "\n" + DescribeSurroundings();
+            text.Append("\nPos: ").Append(transform.position.ToString("0.00"));
+            if (CurrentOwner != null) text.Append(", on ").Append(CurrentOwner).Append(parked ? " (unloaded)" : "");
+            text.Append('\n').Append(DescribeSurroundings());
             // The timers are deadlines on Time.time: printed for a dead buddy they count down with nothing behind them.
             if (IsDead)
             {
-                text += "\nFear, mind, air, snack: nothing runs while dead";
+                text.Append("\nFear, mind, air, snack: nothing runs while dead");
             }
             else
             {
-                text += "\nFear: " + DescribeFear();
-                if (DescribeHudMind() is { } mind) text += "\n" + mind;
-                text += "\nAir: " + lifeSupport.Describe() + "\nSnack: " + snacks.Describe() +
-                        "\nTidy: " + tidying.Describe() + "\nSell: " + selling.Describe() + "\nPlay: " + play.Describe();
+                text.Append("\nFear: ").Append(DescribeFear());
+                if (DescribeHudMind() is { } mind) text.Append('\n').Append(mind);
+                text.Append("\nAir: ").Append(lifeSupport.Describe()).Append("\nSnack: ").Append(snacks.Describe())
+                    .Append("\nTidy: ").Append(tidying.Describe()).Append("\nSell: ").Append(selling.Describe())
+                    .Append("\nPlay: ").Append(play.Describe());
             }
             if (hasMoveTarget)
             {
-                text += "\nTarget: " + currentMoveTarget.ToString("0.0") + " (" +
-                        Vector3.Distance(transform.position, currentMoveTarget).ToString("0.0") + "m)";
+                text.Append("\nTarget: ").Append(currentMoveTarget.ToString("0.0")).Append(" (")
+                    .Append(Vector3.Distance(transform.position, currentMoveTarget).ToString("0.0")).Append("m)");
             }
 
-            statusText = text;
-            return text;
+            statusText = text.ToString();
+            return statusText;
         }
 
         private void OnDestroy()

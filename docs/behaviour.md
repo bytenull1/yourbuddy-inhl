@@ -124,8 +124,10 @@ Collectors sweep every `Grabbable` in the scene, so:
 3. **Cache** - results stand for `UrgeOpportunityTtl`.
 
 Collectors share static buffers (`PutAwayItems`, `CheckedContainers`, `ContainedItems`), so only one
-runs at a time and its summary is taken before the next. The winner's `StartX` collects again - one
-extra sweep per decision, so no task body had to change.
+runs at a time and its summary is taken before the next. The winner's `StartX` collects again, so no
+task body had to change. It filters the same frame's scene arrays (`SceneScan.ThisFrame`), so the
+scene is swept once per decision
+([scene-sweeps-are-budgeted](invariants.md#scene-sweeps-are-budgeted)).
 
 ### Bouts
 

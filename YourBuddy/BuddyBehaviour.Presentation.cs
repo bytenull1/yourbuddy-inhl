@@ -65,6 +65,8 @@ namespace YourBuddy
         private LineRenderer probeLine = null!;
         private LineRenderer markerLine = null!;
         private LineRenderer jumpLine = null!;
+        // Every line's points, refilled per line: the visuals run every frame.
+        private static readonly List<Vector3> DebugPoints = [];
 
         /// <summary>
         /// Copies footstep event references from the player's CameraAnimator using reflection.
@@ -214,7 +216,8 @@ namespace YourBuddy
         /// </summary>
         private void TrackFootstepDoors()
         {
-            if (Time.time >= footstepDetectorsAt + FootstepDetectorsTtl)
+            if (Time.time >= footstepDetectorsAt + FootstepDetectorsTtl &&
+                SceneScan.MayRescan(float.IsNegativeInfinity(footstepDetectorsAt)))
             {
                 footstepDetectors = FindObjectsOfType<FootstepDetector>();
                 footstepDetectorsAt = Time.time;
@@ -452,11 +455,13 @@ namespace YourBuddy
             if (debugRoot == null || !debugRoot.gameObject.activeInHierarchy) return;
 
             // Path: buddy -> current target -> upcoming NodeGraph path corners.
-            List<Vector3> pathPositions = [GroundPos(0.15f)];
-            if (hasMoveTarget) pathPositions.Add(currentMoveTarget + Vector3.up * 0.15f);
+            List<Vector3> points = DebugPoints;
+            points.Clear();
+            points.Add(GroundPos(0.15f));
+            if (hasMoveTarget) points.Add(currentMoveTarget + Vector3.up * 0.15f);
 
-            if (navPlan != null) for (int i = navPathIndex; i < navPlan.Value.Count && i < navPathIndex + 10; i++) pathPositions.Add(navPlan.Value[i] + Vector3.up * 0.15f);
-            SetLinePositions(pathLine, pathPositions);
+            if (navPlan != null) for (int i = navPathIndex; i < navPlan.Value.Count && i < navPathIndex + 10; i++) points.Add(navPlan.Value[i] + Vector3.up * 0.15f);
+            SetLinePositions(pathLine, points);
 
             // Obstacle probe.
             Vector3 probeOrigin = GroundPos(0.5f);
@@ -464,62 +469,44 @@ namespace YourBuddy
             if (probeDir.sqrMagnitude < 0.001f) probeDir = transform.forward;
 
             bool blocked = BodyBlocked(probeDir.normalized, 0.9f);
-            SetLinePositions(probeLine,
-            [
-                probeOrigin,
-                probeOrigin + probeDir.normalized * 0.9f
-            ]);
+            points.Clear();
+            points.Add(probeOrigin);
+            points.Add(probeOrigin + probeDir.normalized * 0.9f);
+            SetLinePositions(probeLine, points);
             Color probeColor = blocked ? new Color(1f, 0.25f, 0.25f) : new Color(0.3f, 1f, 0.4f);
             probeLine.startColor = probeColor;
             probeLine.endColor = probeColor;
 
             // Target marker (diamond around the move target).
+            points.Clear();
             if (hasMoveTarget)
             {
                 Vector3 t = currentMoveTarget + Vector3.up * 0.1f;
-                SetLinePositions(markerLine,
-                [
-                    t + Vector3.right * 0.2f,
-                    t + Vector3.forward * 0.2f,
-                    t + Vector3.left * 0.2f,
-                    t + Vector3.back * 0.2f,
-                    t + Vector3.right * 0.2f
-                ]);
+                points.Add(t + Vector3.right * 0.2f);
+                points.Add(t + Vector3.forward * 0.2f);
+                points.Add(t + Vector3.left * 0.2f);
+                points.Add(t + Vector3.back * 0.2f);
+                points.Add(t + Vector3.right * 0.2f);
             }
-            else
-            {
-                SetLinePositions(markerLine, []);
-            }
+            SetLinePositions(markerLine, points);
 
 
             // Shin-level jump probe.
-            if (hasMoveTarget && cc != null && cc.isGrounded)
+            points.Clear();
+            Vector3 jumpDir = currentMoveTarget - transform.position;
+            jumpDir.y = 0f;
+            if (hasMoveTarget && cc != null && cc.isGrounded && jumpDir.sqrMagnitude > 0.001f)
             {
-                Vector3 jumpDir = currentMoveTarget - transform.position;
-                jumpDir.y = 0f;
-                if (jumpDir.sqrMagnitude > 0.001f)
-                {
-                    jumpDir.Normalize();
-                    Vector3 shinOrigin = GroundPos(0.25f);
-                    bool jumpBlocked = Physics.Raycast(shinOrigin, jumpDir, 0.7f, ProbeLayers, QueryTriggerInteraction.Ignore);
-                    SetLinePositions(jumpLine,
-                    [
-                        shinOrigin,
-                        shinOrigin + jumpDir * 0.7f
-                    ]);
-                    Color jumpColor = jumpBlocked ? new Color(1f, 0.45f, 0f) : new Color(1f, 0.85f, 0.6f);
-                    jumpLine.startColor = jumpColor;
-                    jumpLine.endColor = jumpColor;
-                }
-                else
-                {
-                    SetLinePositions(jumpLine, []);
-                }
+                jumpDir.Normalize();
+                Vector3 shinOrigin = GroundPos(0.25f);
+                bool jumpBlocked = Physics.Raycast(shinOrigin, jumpDir, 0.7f, ProbeLayers, QueryTriggerInteraction.Ignore);
+                points.Add(shinOrigin);
+                points.Add(shinOrigin + jumpDir * 0.7f);
+                Color jumpColor = jumpBlocked ? new Color(1f, 0.45f, 0f) : new Color(1f, 0.85f, 0.6f);
+                jumpLine.startColor = jumpColor;
+                jumpLine.endColor = jumpColor;
             }
-            else
-            {
-                SetLinePositions(jumpLine, []);
-            }
+            SetLinePositions(jumpLine, points);
         }
 
         private static void SetLinePositions(LineRenderer line, List<Vector3> positions)

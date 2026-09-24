@@ -240,7 +240,7 @@ namespace YourBuddy
             float floorY = Body.FloorUnderBuddy().y;
             float margin = TidySearchRadius + SnackContainerMargin;
 
-            foreach (Door door in Object.FindObjectsOfType<Door>())
+            foreach (Door door in SceneScan.ThisFrame<Door>())
             {
                 Transform? root = ContainerOf(door, out InstantItemDetector? contents);
                 // A closet has two doors; the first found brings both.
@@ -269,9 +269,9 @@ namespace YourBuddy
             }
             CheckedContainers.Clear();
             // Loaded into a sell station, furnace or airlock: the player put it there. docs/items.md §3
-            foreach (ItemDetector detector in Object.FindObjectsOfType<ItemDetector>()) ContainedItems.UnionWith(detector.Items);
+            foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>()) ContainedItems.UnionWith(detector.Items);
 
-            foreach (Grabbable item in Object.FindObjectsOfType<Grabbable>())
+            foreach (Grabbable item in SceneScan.ThisFrame<Grabbable>())
             {
                 if (ContainedItems.Contains(item) || TakeBlocker(item) != null || !IsTrash(item)) continue;
 
@@ -300,7 +300,7 @@ namespace YourBuddy
             bestSlot = null;
             float bestSq = TidyBinRadius * TidyBinRadius;
             TidyBins.Clear();
-            TidyBins.AddRange(Object.FindObjectsOfType<TrashCan>());
+            TidyBins.AddRange(SceneScan.ThisFrame<TrashCan>());
             foreach (TrashCan bin in TidyBins)
             {
                 float distSq = (bin.transform.position - from).sqrMagnitude;

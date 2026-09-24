@@ -26,11 +26,11 @@ and trim before sharing.
 
 | Tag | Source | Typically logs |
 |---|---|---|
-| `[ai]` | `BuddyBehaviour.*` | replans, doors, stuck recovery, step-offs, blockers |
+| `[ai]` | `BuddyBehaviour.*` | replans, doors, rooms loaded, stuck recovery, step-offs, blockers |
 | `[fear]` | `BuddyBehaviour.Fear.cs` | fear state, stress trace, holding back, retreats |
 | `[mind]` | `Autonomy.cs`, `Mind.cs` | decisions, orders revoked or expired, why the decider stood down |
 | `[nav]` | `BuddyNodeGraph` | seeding, route chains, path failures |
-| `[probe]` | `NavProbe` | probe mask, gate inventory, gate-frame audits, full buffers |
+| `[probe]` | `NavProbe`, `SceneScan` | probe mask, gate inventory, gate-frame audits, full buffers, scene rescans |
 | `[mgr]` | `BuddyManager` | spawn/save, lifecare scans |
 | `[editor]` | `BuddyNodeEditor` | node and link placement |
 | `[internals]` | `GameInternals` | missing game members at load, then one summary line |

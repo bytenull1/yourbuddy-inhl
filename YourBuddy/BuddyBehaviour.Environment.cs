@@ -55,6 +55,19 @@ namespace YourBuddy
         private List<Environment>? cachedEnvironments = null;
         private float environmentsRefreshAt = 0f;
 
+        // One load line per room this often, whatever keeps switching it on.
+        private const float RoomLoadLogCooldown = 5f;
+        /// <summary>
+        /// How near a doorway the buddy must be for room tracking to consult it.
+        /// </summary>
+        private const float DoorwaySideRadius = 3.5f;
+        private readonly Dictionary<int, float> roomLoadLoggedAt = [];
+        private static readonly HashSet<Room> LoadedRoomSet = [];
+        /// <summary>
+        /// Rooms with a sell station, found when the doorways are rescanned. docs/invariants.md#a-sell-station-room-stays-loaded
+        /// </summary>
+        private readonly List<Room> sellRooms = [];
+
         private static readonly WaitForSeconds CatchReleaseDelay = new(1.5f);
 
         // ------------------------------------------------------------------
@@ -66,11 +79,17 @@ namespace YourBuddy
             RefreshDetectors();
             if (cachedDetectors == null) return;
 
+            // A save can restore one switched off.
+            if (YourBuddyPlugin.ConfigSellTrash.Value)
+            {
+                foreach (Room room in sellRooms) LoadRoom(room, "it holds a sell station");
+            }
+
             EntryDetector? best = null;
             // Until a room has ever been resolved (spawn, save restore), the nearest detector
-            // at any range; after that, within 3.5 m. docs/lifecare.md
+            // at any range; after that, within DoorwaySideRadius. docs/lifecare.md
             bool bootstrap = currentRoomRef == null;
-            float bestDistanceSquared = bootstrap ? float.MaxValue : 3.5f * 3.5f;
+            float bestDistanceSquared = bootstrap ? float.MaxValue : DoorwaySideRadius * DoorwaySideRadius;
             Vector3 pos = transform.position;
 
             foreach (EntryDetector detector in cachedDetectors)
@@ -91,24 +110,19 @@ namespace YourBuddy
                 }
             }
 
-            if (best == null) return;
-
-            Transform? rotationRef = GameInternals.EntryDetectorAccess.GetRotationReference(best);
-            bool reverseSide = GameInternals.EntryDetectorAccess.GetReverseSide(best);
-            if (rotationRef == null) return;
-
-            // Same side test EntryDetector.TriggerCheckForEnter uses for the player.
-            Vector3 local = rotationRef.InverseTransformPoint(pos);
-            bool innerSide = reverseSide ? (local.z < 0f) : (local.z > 0f);
+            if (best == null || !TryInnerSide(best, pos, out bool innerSide)) return;
 
             Room? innerRoom = GameInternals.EntryDetectorAccess.GetInnerRoom(best);
             Room? outerRoom = GameInternals.EntryDetectorAccess.GetOuterRoom(best);
             if (innerRoom == null && outerRoom == null) return;
 
-            EnableRoom(innerRoom);
-            EnableRoom(outerRoom);
-
+            // The far side only while its door is open, as EntryDetector does for the player:
+            // docs/invariants.md#the-buddy-loads-rooms-by-the-door-rule
             Room? target = innerSide ? innerRoom : outerRoom;
+            LoadRoom(target, "the buddy is in it");
+            Gate? door = GameInternals.EntryDetectorAccess.GetDoor(best);
+            if (door == null || door.Opened) LoadRoom(innerSide ? outerRoom : innerRoom, "door open to", target);
+
             if (target != null)
             {
                 if (target != currentRoomRef)
@@ -123,6 +137,21 @@ namespace YourBuddy
             }
         }
 
+
+        /// <summary>
+        /// Which side of a doorway a point is on, by the test EntryDetector.TriggerCheckForEnter uses for the
+        /// player. False when the detector cannot be read.
+        /// </summary>
+        private static bool TryInnerSide(EntryDetector detector, Vector3 pos, out bool inner)
+        {
+            inner = false;
+            Transform? rotationRef = GameInternals.EntryDetectorAccess.GetRotationReference(detector);
+            if (rotationRef == null) return false;
+
+            float z = rotationRef.InverseTransformPoint(pos).z;
+            inner = GameInternals.EntryDetectorAccess.GetReverseSide(detector) ? z < 0f : z > 0f;
+            return true;
+        }
 
         /// <summary>
         /// Records a spot known to be inside, in the frame the buddy is riding.
@@ -197,14 +226,17 @@ namespace YourBuddy
             if (forcedRoom != null)
             {
                 forcedRoom.OnContentStateChanged.AddListener(OnForcedRoomContentChanged);
-                if (!forcedRoom.ContentEnabled) EnableRoom(forcedRoom);
+                LoadRoom(forcedRoom, "the buddy is in it");
             }
         }
 
         private void OnForcedRoomContentChanged(bool contentEnabled)
         {
             // A parked buddy holds nothing loaded: docs/invariants.md#an-unloaded-ship-parks-the-buddy
-            if (!contentEnabled && !IsDead && isActiveAndEnabled && forcedRoom != null) EnableRoom(forcedRoom);
+            if (!contentEnabled && !IsDead && isActiveAndEnabled && forcedRoom != null)
+            {
+                LoadRoom(forcedRoom, "switched off by the game, the buddy is in it");
+            }
         }
 
         /// <summary>
@@ -268,16 +300,147 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Enables room content like the game does when the player enters a room.
+        /// Enables room content like the game does when the player enters a room. The buddy never
+        /// switches one off. docs/invariants.md#the-buddy-loads-rooms-by-the-door-rule
         /// </summary>
-        private static void EnableRoom(Room? room)
+        private void LoadRoom(Room? room, string why, Room? across = null)
         {
             if (room == null || !room.gameObject.activeInHierarchy) return;
 
             CustomRoom? customRoom = room as CustomRoom;
             if (customRoom != null && !customRoom.EnabledStructure) return;
 
-            if (!room.ContentEnabled) room.SetContentEnabled(true);
+            if (room.ContentEnabled) return;
+
+            room.SetContentEnabled(true);
+            LogRoomLoaded(room, why, across);
+        }
+
+        /// <summary>
+        /// A door the buddy shut has finished closing, away from the player: both rooms it joins go back off
+        /// unless someone is in one or can see into it, as EntryDetector does once the player has fully left
+        /// a room. Both, whoever switched them on: the buddy may be rooms away by now, and a room kept for
+        /// another open door is looked at again when that door shuts. docs/invariants.md#the-buddy-loads-rooms-by-the-door-rule
+        /// </summary>
+        internal void ReleaseRoomsAt(EntryDetector detector)
+        {
+            if (IsDead || !isActiveAndEnabled) return;
+
+            // The game keeps both sides of this doorway loaded for the player too.
+            if (!GameInternals.EntryDetectorAccess.GetOptimize(detector)) return;
+
+            Room? inner = GameInternals.EntryDetectorAccess.GetInnerRoom(detector);
+            Room? outer = GameInternals.EntryDetectorAccess.GetOuterRoom(detector);
+            // Just after this crossing the tracked room can still be the one behind. The side test is a plane,
+            // sound only for the two rooms that share it: from a third room it can name either side.
+            Room? buddySide = null;
+            if ((currentRoomRef == inner || currentRoomRef == outer) &&
+                TryInnerSide(detector, transform.position, out bool innerSide))
+            {
+                buddySide = innerSide ? inner : outer;
+            }
+            ReleaseRoom(inner, outer, buddySide);
+            ReleaseRoom(outer, inner, buddySide);
+        }
+
+        private void ReleaseRoom(Room? room, Room? across, Room? buddySide)
+        {
+            if (room == null || !room.ContentEnabled) return;
+
+            string? keep = room == buddySide ? "the buddy has just come in" : ReasonToKeepLoaded(room);
+            if (keep != null)
+            {
+                if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2)
+                {
+                    YourBuddyPlugin.Log.LogInfo("[ai] Keeping room '" + room.gameObject.name + "' loaded: " + keep);
+                }
+                return;
+            }
+
+            room.SetContentEnabled(false);
+            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
+            {
+                YourBuddyPlugin.Log.LogInfo("[ai] Unloaded room '" + room.gameObject.name + "' (door to '" +
+                                            (across != null ? across.gameObject.name : "?") + "' shut) - " +
+                                            CountLoadedRooms() + " rooms loaded");
+            }
+        }
+
+        /// <summary>
+        /// Why a room must stay on: the buddy or the player is in it, the player is outside (a station shows
+        /// every room then), it holds a sell station, or an open door looks into it.
+        /// </summary>
+        private string? ReasonToKeepLoaded(Room room)
+        {
+            // The forced room's listener would switch it straight back on.
+            if (room == forcedRoom || room == currentRoomRef) return "the buddy is still tracked in it";
+
+            GameManager gm = GameManager.Instance;
+            Player? pilot = gm != null && gm.PlayerShip != null ? gm.PlayerShip.Pilot : null;
+            if (pilot != null && pilot.CurrentRoom == room) return "you are in it";
+            // SpaceStation.OnStationExit switches every room on for the view from outside.
+            if (pilot != null && IsPlayerInSpace(pilot)) return "you are outside";
+            // docs/invariants.md#a-sell-station-room-stays-loaded
+            if (SellPens.HoldsSellStation(room)) return "it holds a sell station";
+
+            // Station rooms list no doors of their own, so the doorways are asked.
+            RefreshDetectors();
+            // RefreshDetectors always leaves the cache set.
+            foreach (EntryDetector detector in cachedDetectors!)
+            {
+                if (detector == null) continue;
+
+                Room? inner = GameInternals.EntryDetectorAccess.GetInnerRoom(detector);
+                Room? outer = GameInternals.EntryDetectorAccess.GetOuterRoom(detector);
+                if (inner != room && outer != room) continue;
+
+                // Named by the room across: every station door is called 'Door02'.
+                Room? across = inner == room ? outer : inner;
+                string acrossName = across != null ? across.gameObject.name : "?";
+                Gate? door = GameInternals.EntryDetectorAccess.GetDoor(detector);
+                if (door == null) return "its doorway to '" + acrossName + "' has no door";
+                if (door.Opened) return "its door to '" + acrossName + "' is open";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Which room the buddy switched on and why, with how many are on around the doorways: the
+        /// only measure of what it adds to the game's own loading. Deduped per room.
+        /// </summary>
+        private void LogRoomLoaded(Room room, string why, Room? across)
+        {
+            if (YourBuddyPlugin.ConfigDebugLevel.Value < 1) return;
+
+            int id = room.GetInstanceID();
+            if (roomLoadLoggedAt.TryGetValue(id, out float last) && Time.time - last < RoomLoadLogCooldown) return;
+
+            roomLoadLoggedAt[id] = Time.time;
+            YourBuddyPlugin.Log.LogInfo("[ai] Loaded room '" + room.gameObject.name + "' (" + why +
+                                        (across != null ? " '" + across.gameObject.name + "'" : "") + ") - " +
+                                        CountLoadedRooms() + " rooms loaded");
+        }
+
+        /// <summary>
+        /// Rooms with their content on, among those the active doorways join.
+        /// </summary>
+        private int CountLoadedRooms()
+        {
+            LoadedRoomSet.Clear();
+            if (cachedDetectors == null) return 0;
+
+            foreach (EntryDetector detector in cachedDetectors)
+            {
+                if (detector == null) continue;
+
+                Room? inner = GameInternals.EntryDetectorAccess.GetInnerRoom(detector);
+                Room? outer = GameInternals.EntryDetectorAccess.GetOuterRoom(detector);
+                if (inner != null && inner.ContentEnabled) LoadedRoomSet.Add(inner);
+                if (outer != null && outer.ContentEnabled) LoadedRoomSet.Add(outer);
+            }
+            int count = LoadedRoomSet.Count;
+            LoadedRoomSet.Clear();
+            return count;
         }
 
 
@@ -791,14 +954,28 @@ namespace YourBuddy
         private void RefreshDetectors()
         {
             if (cachedDetectors != null && Time.time < detectorsRefreshAt) return;
+            if (!SceneScan.MayRescan(cachedDetectors == null)) return;
 
             cachedDetectors = [.. FindObjectsOfType<EntryDetector>()];
             detectorsRefreshAt = Time.time + 5f;
+
+            sellRooms.Clear();
+            foreach (EntryDetector detector in cachedDetectors)
+            {
+                AddSellRoom(GameInternals.EntryDetectorAccess.GetInnerRoom(detector));
+                AddSellRoom(GameInternals.EntryDetectorAccess.GetOuterRoom(detector));
+            }
+        }
+
+        private void AddSellRoom(Room? room)
+        {
+            if (room != null && !sellRooms.Contains(room) && SellPens.HoldsSellStation(room)) sellRooms.Add(room);
         }
 
         private void RefreshAirlocks()
         {
             if (cachedAirlocks != null && Time.time < airlocksRefreshAt) return;
+            if (!SceneScan.MayRescan(cachedAirlocks == null)) return;
 
             cachedAirlocks = [.. FindObjectsOfType<Airlock>()];
             airlocksRefreshAt = Time.time + 5f;
@@ -807,6 +984,7 @@ namespace YourBuddy
         private void RefreshEnvironments()
         {
             if (cachedEnvironments != null && Time.time < environmentsRefreshAt) return;
+            if (!SceneScan.MayRescan(cachedEnvironments == null)) return;
 
             cachedEnvironments = [.. FindObjectsOfType<Environment>()];
             environmentsRefreshAt = Time.time + 5f;

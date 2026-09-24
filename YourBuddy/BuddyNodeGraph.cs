@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Text;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -1132,7 +1133,8 @@ namespace YourBuddy
         private static void RefreshSpaceObjects()
         {
             // A destroyed entry means a new scene, which the TTL alone would hide for 5 s.
-            if (_spaceObjectsValid && Time.time < _spaceObjectsRefreshAt && !HasDestroyedSpaceObject()) return;
+            bool forced = !_spaceObjectsValid || HasDestroyedSpaceObject();
+            if ((!forced && Time.time < _spaceObjectsRefreshAt) || !SceneScan.MayRescan(forced)) return;
 
             SpaceObjects.Clear();
             SpaceObjectNames.Clear();
@@ -1676,6 +1678,25 @@ namespace YourBuddy
         // it is worth planning at all.
         private const float ApproachMinGain = 1.5f;
 
+        // FindPathCore's working sets, cleared per call: a plan used to allocate ~50 KB in the frame it
+        // was made. Main thread only, and FindPath never calls itself (_inFindPath).
+        private static readonly Dictionary<int, Vector3> PathWorld = [];
+        private static readonly Dictionary<int, float> PathFloors = [];
+        private static readonly HashSet<int> PathExcluded = [];
+        private static readonly List<int> PathStartIds = [];
+        private static readonly List<KeyValuePair<int, float>> PathCandidates = [];
+        private static readonly List<int> PathOpen = [];
+        private static readonly HashSet<int> PathClosed = [];
+        private static readonly Dictionary<int, int> PathCameFrom = [];
+        private static readonly Dictionary<int, float> PathG = [];
+        private static readonly Dictionary<int, float> PathF = [];
+        private static readonly List<int> PathChain = [];
+        // Level-2 traces, built in one pass instead of a string per seed.
+        private static readonly StringBuilder SeedTrace = new();
+        private static readonly StringBuilder RejectTrace = new();
+        private static bool _inFindPath;
+        private static bool _reentryWarned;
+
         /// <summary>
         /// "How near is this node to the goal", for the finish and the approach.
         /// Elevation-aware (VerticalCostFactor) and deck-to-deck, because raw Ys here
@@ -1803,18 +1824,33 @@ namespace YourBuddy
         public static NavPath? FindPath(Vector3 start, Vector3 end, Vector3? cameFromPos = null,
             Vector3? avoidEntry = null)
         {
-            NavPath? plan = FindPathCore(start, end, cameFromPos, avoidEntry);
-            if (plan != null || !avoidEntry.HasValue) return plan;
-
-            // No route around the barred waypoint: go through it rather than have no plan.
-            // docs/invariants.md#a-barred-waypoint-is-a-preference-not-a-wall
-            plan = FindPathCore(start, end, cameFromPos, null);
-            if (plan != null && YourBuddyPlugin.ConfigDebugLevel.Value >= 2)
+            // The working sets are shared; a nested search would clear the outer one's.
+            if (_inFindPath)
             {
-                YourBuddyPlugin.Log.LogInfo(
-                    $"[nav] FindPath: no route avoids {avoidEntry.Value:0.0} - going through it instead");
+                if (!_reentryWarned) YourBuddyPlugin.Log.LogError("[nav] FindPath called from inside FindPath - no plan");
+                _reentryWarned = true;
+                return null;
             }
-            return plan;
+            _inFindPath = true;
+            try
+            {
+                NavPath? plan = FindPathCore(start, end, cameFromPos, avoidEntry);
+                if (plan != null || !avoidEntry.HasValue) return plan;
+
+                // No route around the barred waypoint: go through it rather than have no plan.
+                // docs/invariants.md#a-barred-waypoint-is-a-preference-not-a-wall
+                plan = FindPathCore(start, end, cameFromPos, null);
+                if (plan != null && YourBuddyPlugin.ConfigDebugLevel.Value >= 2)
+                {
+                    YourBuddyPlugin.Log.LogInfo(
+                        $"[nav] FindPath: no route avoids {avoidEntry.Value:0.0} - going through it instead");
+                }
+                return plan;
+            }
+            finally
+            {
+                _inFindPath = false;
+            }
         }
 
         private static NavPath? FindPathCore(Vector3 start, Vector3 end, Vector3? cameFromPos,
@@ -1833,8 +1869,10 @@ namespace YourBuddy
             // (docs/invariants.md#never-cache-node-world-positions), plus the deck each
             // node stands on - every height test below is made between floors.
             OwnerSnapshot owners = new();
-            Dictionary<int, Vector3> world = new(_edges.Count);
-            Dictionary<int, float> floors = new(_edges.Count);
+            Dictionary<int, Vector3> world = PathWorld;
+            Dictionary<int, float> floors = PathFloors;
+            world.Clear();
+            floors.Clear();
             foreach (int id in _edges.Keys)
             {
                 Node? n = NodeById(id);
@@ -1876,13 +1914,20 @@ namespace YourBuddy
                 {
                     if ((world[id] - avoidEntry.Value).sqrMagnitude < AvoidEntryRadius * AvoidEntryRadius)
                     {
-                        (excluded ??= []).Add(id);
+                        if (excluded == null)
+                        {
+                            excluded = PathExcluded;
+                            excluded.Clear();
+                        }
+                        excluded.Add(id);
                     }
                 }
             }
 
-            List<int> startIds = [];
-            List<KeyValuePair<int, float>> candidates = [];
+            List<int> startIds = PathStartIds;
+            List<KeyValuePair<int, float>> candidates = PathCandidates;
+            startIds.Clear();
+            candidates.Clear();
             foreach (int id in world.Keys)
             {
                 if (excluded != null && excluded.Contains(id)) continue;
@@ -1891,10 +1936,10 @@ namespace YourBuddy
                 if (d <= MaxSeedDist) candidates.Add(new KeyValuePair<int, float>(id, d));
             }
             candidates.Sort((x, y) => x.Value.CompareTo(y.Value));
-            string seedTrace = "";
+            StringBuilder seedTrace = SeedTrace.Clear();
             // Why the nearest candidates were turned down. Without it a seed list that
             // skips the node at the buddy's feet is undiagnosable.
-            string rejectTrace = "";
+            StringBuilder rejectTrace = RejectTrace.Clear();
             int rejectsShown = 0;
             foreach (KeyValuePair<int, float> candidate in candidates)
             {
@@ -1916,15 +1961,15 @@ namespace YourBuddy
                     if (debug && rejectsShown < 5)
                     {
                         rejectsShown++;
-                        rejectTrace += $" #{candidate.Key}({candidate.Value:0.0}m," +
-                                       $"{candidateFloorY - startFloorY:+0.0;-0.0;0.0}y,{reject})";
+                        rejectTrace.Append($" #{candidate.Key}({candidate.Value:0.0}m,")
+                            .Append($"{candidateFloorY - startFloorY:+0.0;-0.0;0.0}y,{reject})");
                     }
                     continue;
                 }
                 startIds.Add(candidate.Key);
                 if (debug)
                 {
-                    seedTrace += $" #{candidate.Key}({candidate.Value:0.0}m, {candidateFloorY - startFloorY:+0.0;-0.0;0.0}y)";
+                    seedTrace.Append($" #{candidate.Key}({candidate.Value:0.0}m, {candidateFloorY - startFloorY:+0.0;-0.0;0.0}y)");
                 }
             }
             if (debug)
@@ -1978,11 +2023,16 @@ namespace YourBuddy
             if (startIds.Count == 0) return null;
 
             // A* over the cached adjacency lists.
-            List<int> openSet = [];
-            HashSet<int> closedSet = [];
-            Dictionary<int, int> cameFrom = [];
-            Dictionary<int, float> gScore = [];
-            Dictionary<int, float> fScore = [];
+            List<int> openSet = PathOpen;
+            HashSet<int> closedSet = PathClosed;
+            Dictionary<int, int> cameFrom = PathCameFrom;
+            Dictionary<int, float> gScore = PathG;
+            Dictionary<int, float> fScore = PathF;
+            openSet.Clear();
+            closedSet.Clear();
+            cameFrom.Clear();
+            gScore.Clear();
+            fScore.Clear();
 
             foreach (int sn in startIds)
             {
@@ -2092,7 +2142,8 @@ namespace YourBuddy
             }
 
             // Reconstruct path as a node-id chain so we can look up edge kinds.
-            List<int> nodeChain = [];
+            List<int> nodeChain = PathChain;
+            nodeChain.Clear();
             int cur = goalId;
             nodeChain.Add(cur);
             while (cameFrom.TryGetValue(cur, out int prev))
@@ -2106,11 +2157,11 @@ namespace YourBuddy
             {
                 // The whole chain, not just the destination: a one-hop chain means A*
                 // never traversed an edge. docs/navigation.md
-                string chain = "";
+                StringBuilder chain = SeedTrace.Clear();
                 foreach (int id in nodeChain)
                 {
-                    chain += (chain.Length > 0 ? " -> " : "") + "#" + id +
-                             (NodeById(id)?.Type == NodeType.Stair ? "(stair)" : "");
+                    chain.Append(chain.Length > 0 ? " -> " : "").Append('#').Append(id)
+                        .Append(NodeById(id)?.Type == NodeType.Stair ? "(stair)" : "");
                 }
                 YourBuddyPlugin.Log.LogInfo(
                     finishesAtGoal
@@ -2125,9 +2176,10 @@ namespace YourBuddy
 
             // Build waypoints and the parallel forced[] and deck arrays.
             // forced[i] = true when the edge arriving at waypoint i is a graph link.
-            List<Vector3> waypoints = [];
-            List<bool> forced = [];
-            List<float> decks = [];
+            // Fresh lists: the caller keeps the plan.
+            List<Vector3> waypoints = new(nodeChain.Count + 2);
+            List<bool> forced = new(nodeChain.Count + 2);
+            List<float> decks = new(nodeChain.Count + 2);
 
             // Insert the actual start if it is not at the first node.
             if ((start - world[nodeChain[0]]).sqrMagnitude > 0.25f)

@@ -209,7 +209,7 @@ namespace YourBuddy
         /// </summary>
         private DoorPinCode PinPanelFor(Gate gate)
         {
-            if (Time.time >= passwordGatesRefreshAt)
+            if (Time.time >= passwordGatesRefreshAt && SceneScan.MayRescan(passwordGatesRefreshAt <= 0f))
             {
                 passwordGates.Clear();
                 foreach (DoorPinCode pin in FindObjectsOfType<DoorPinCode>(true))
@@ -664,8 +664,8 @@ namespace YourBuddy
 
                 Room? innerRoom = GameInternals.EntryDetectorAccess.GetInnerRoom(detector);
                 Room? outerRoom = GameInternals.EntryDetectorAccess.GetOuterRoom(detector);
-                EnableRoom(innerRoom);
-                EnableRoom(outerRoom);
+                LoadRoom(innerRoom, "opening the door to", outerRoom);
+                LoadRoom(outerRoom, "opening the door to", innerRoom);
             }
         }
 

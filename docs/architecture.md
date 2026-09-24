@@ -19,7 +19,7 @@ Other classes reach the buddy through a few `internal` members, never its fields
 | `BuddyBehaviour.Navigation.cs` | `UpdateFollow` / `UpdateWander` / `UpdateRoute`, plan commitment, `AdvancePastReachedWaypoints`, `TryStepOff`, `StartRoute`, `SetMode` | `BuddyNodeGraph`, `NavProbe` | [navigation](navigation.md) |
 | `BuddyBehaviour.Obstacles.cs` | body probes, whisker steering, auto-jump, `ApplyMovement`, stuck and oscillation recovery, `EmergencyUnstick`, blocker diagnostics | `NavProbe` | [navigation](navigation.md) |
 | `BuddyBehaviour.Doors.cs` | `GateIsPassable` / `GateBlocksRouting`, `HandleDoors`, close-behind, `DoorwayBlocker`, `StepOutOfDoorway`, room loading, door codes, `SegmentBlockedByDoor` | `NavProbe`, `GameInternals`, `BuddyManager` | [doors](doors.md) |
-| `BuddyBehaviour.Environment.cs` | room tracking, floor plane, environment and space protection, atmosphere damage, the Breathless catch, `IsAboardPlayerShip`, `ParkWithShip`, `Die` | `GameInternals`, `BuddyManager` | [game-model](game-model.md) |
+| `BuddyBehaviour.Environment.cs` | room tracking, loading and release (`LoadRoom`, `ReleaseRoomsAt`), floor plane, environment and space protection, atmosphere damage, the Breathless catch, `IsAboardPlayerShip`, `ParkWithShip`, `Die` | `GameInternals`, `BuddyManager` | [game-model](game-model.md) |
 | `BuddyBehaviour.Fear.cs` | seeing the Breathless, stress, `FearState`, `HoldBackFromMonster`, the `Flee` mode | `NavProbe`, `BuddyNodeGraph`, `GameInternals` | [fear](fear.md) |
 | `BuddyBehaviour.Autonomy.cs` | orders (`ApplyOrder`, `ApplyRouteOrder`, `RevokeOrder`), persistence, expiry, stand-down, bouts | `BuddyNodeGraph` | [behaviour](behaviour.md) |
 | `BuddyBehaviour.Mind.cs` | the utility decider: scores urges, draws one, starts its errand | `Errand`, `LifeSupport` | [behaviour](behaviour.md#3-the-decider) |
@@ -42,6 +42,7 @@ Other classes reach the buddy through a few `internal` members, never its fields
 | `BuddyNodeGraph.cs` | node storage and ownership, `TryVesselOf`, JSON persistence, edge cache, node floor cache, A\* (`FindPath`), `CanReachEntry` | `NavProbe`, `GameInternals` | [navigation](navigation.md) |
 | `BuddyNodeEditor.cs` | F8 editor overlay, node and link placement | `BuddyNodeGraph` | [reference](reference.md) |
 | `NavProbe.cs` | **every physics probe**: floors, line of sight, `CanSee`, collider filter, gate cache | `BuddyManager` (buddy transform) | [probes](probes.md) |
+| `SceneScan.cs` | the scene-sweep budget: one timed `FindObjectsOfType` rescan per frame, and each frame's arrays for the errand collectors | - | [invariants](invariants.md#scene-sweeps-are-budgeted) |
 | `GameInternals.cs` | **every** reflection accessor into game types | - | [game-model](game-model.md) |
 | `BuddyDialog.cs` | the talk window: interaction hook, sight check, input handover, layout | `DialogSkin`, `BuddyDialogCommands` | [dialog](dialog.md) |
 | `DialogSkin.cs` | how the window is drawn | - | [dialog](dialog.md) |
@@ -153,10 +154,17 @@ Details: [navigation.md](navigation.md).
 | Space objects | `BuddyNodeGraph.SpaceObjects` | 5 s TTL, or at once when one is destroyed |
 | Detectors / airlocks / environments | `BuddyBehaviour` | 5 s TTL each |
 | Password gates → panels | `BuddyBehaviour.passwordGates` | rebuilt every 5 s |
+| Footstep doorways | `BuddyBehaviour.footstepDetectors` | 5 s TTL |
+| Sell station pens | `SellPens.Pens` | 10 s TTL |
 | Buddy-closed gates | `BuddyManager.BuddyClosedGates` | 6 s window |
+| Collider kinds, floor answers | `NavProbe.ColliderKinds` / `FloorAnswers` | every frame ([probes.md](probes.md#caches)) |
+| Scene arrays for the collectors | `SceneScan.ThisFrame` | every frame |
 
 TTL caches heal themselves; don't add invalidation hooks. Gates and edges need explicit invalidation
 because a dock or scene change alters the *set* of objects.
+
+A timed rescan asks `SceneScan.MayRescan` first, so at most one runs per frame; the others keep their
+list a frame longer ([scene-sweeps-are-budgeted](invariants.md#scene-sweeps-are-budgeted)).
 
 Owner transforms and docked state are **not** cached: `OwnerSnapshot` resolves them per graph query
 ([never-cache-node-world-positions](invariants.md#never-cache-node-world-positions)).

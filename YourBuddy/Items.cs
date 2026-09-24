@@ -157,7 +157,7 @@ namespace YourBuddy
         public static void CollectContainerContents(Vector3 here, float radius)
         {
             CheckedContainers.Clear();
-            foreach (Door door in Object.FindObjectsOfType<Door>())
+            foreach (Door door in SceneScan.ThisFrame<Door>())
             {
                 Transform? root = ContainerOf(door, out InstantItemDetector? contents);
                 if (root == null || !CheckedContainers.Add(root) || FlatDistanceSq(root.position, here) > radius * radius) continue;
