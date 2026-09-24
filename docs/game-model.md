@@ -202,6 +202,11 @@ equipped. In `level1` exactly one detector sets it: the cryo room's exit `Door02
 (`TutorialSequence.firstDoor`). It is not `Locked` - it just has nobody to open it until the player
 suits up - [the-buddy-opens-only-what-the-player-could](invariants.md#the-buddy-opens-only-what-the-player-could).
 
+**A doorway's detector can be switched off.** The Oxygen Station's four connector rooms
+(`OxygenConnectorRB`, `LB`, `RF`, `LF`) are `RoomSealer.targetRooms`. Their eight `Door02`s have
+their `PlayerDetector` object inactive in the scene, and nothing activates it. Only the seal panel
+(`RoomSealer.SwitchLock` → `Room.DoorsOpened`) opens or shuts them. They are never `Locked`.
+
 **There is no auto-close in code.** No timer, occupancy count or `OnTriggerEnter`. Auto-close is
 wired in the **scene** as UnityEvents, which is why `InvokeOpen`, `InvokeClose` and `FailClose` have
 no C# callers. The driver is most likely a `PlayerDetector.onPlayerExit` edge.

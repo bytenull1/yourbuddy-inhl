@@ -11,7 +11,7 @@ namespace YourBuddy
     {
         private float waitingGateSince = 0f;
         private float lastDoorRayTime = 0f;
-        private float suitDoorLogAt = 0f;
+        private float closedToPlayerLogAt = 0f;
         /// <summary>
         /// Fallback radius around a gate's transform searched for bodies before issuing
         /// a close, used only when the gate's own AntiCrasher volumes are unreachable.
@@ -98,7 +98,7 @@ namespace YourBuddy
                             // path search already routes around it.
                             if (!GateIsPassable(gate))
                             {
-                                LogSuitDoorRefusal(gate);
+                                LogClosedToPlayerRefusal(gate);
                                 return desired;
                             }
 
@@ -131,7 +131,7 @@ namespace YourBuddy
 
             if (gate.Opened) return true;
 
-            if (gate.Locked || OpensOnlyForASuit(gate)) return false;
+            if (gate.Locked || WhyClosedToPlayer(gate) != null) return false;
             // Airlocks cycle themselves; opening one risks venting.
             if (IsAirlockGate(gate)) return false;
             // docs/invariants.md#keep-electricitypanelgate-excluded
@@ -148,7 +148,7 @@ namespace YourBuddy
 
         /// <summary>
         /// Should the path search route around this gate? Only one that will still be
-        /// shut when the buddy arrives: locked, or a pin door it has no code for.
+        /// shut when the buddy arrives: locked, closed to the player, or a pin door it has no code for.
         /// docs/invariants.md#opening-is-not-passing
         /// </summary>
         private bool GateBlocksRouting(Gate gate)
@@ -157,11 +157,12 @@ namespace YourBuddy
 
             if (gate.Opened) return false;
 
-            if (gate.Locked || OpensOnlyForASuit(gate)) return true;
+            if (gate.Locked) return true;
             // An airlock or docking gate is the only way between ship and station and
             // the player opens it. Refusing to open one is not a reason to refuse to
             // walk through it. docs/invariants.md#opening-is-not-passing
             if (IsAirlockGate(gate)) return false;
+            if (WhyClosedToPlayer(gate) != null) return true;
 
             DoorPinCode panel = PinPanelFor(gate);
             if (panel == null) return false;
@@ -171,35 +172,50 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A gate every doorway detector of which requires a suit, while the player wears none.
-        /// The player cannot open it, so neither may the buddy:
+        /// Why the player could not walk this gate open, or null when they could. A gate its doorway
+        /// detectors drive opens only through one that is switched on, and needs a suit if that one does.
         /// docs/invariants.md#the-buddy-opens-only-what-the-player-could
         /// </summary>
-        private bool OpensOnlyForASuit(Gate gate)
+        private string? WhyClosedToPlayer(Gate gate)
+        {
+            RefreshDetectors();
+            if (!detectorsByGate.TryGetValue(gate, out List<EntryDetector>? detectors)) return null;
+
+            bool driven = false;
+            bool suitOnly = false;
+            foreach (EntryDetector detector in detectors)
+            {
+                if (detector == null) continue;
+
+                driven = true;
+                if (!detector.gameObject.activeInHierarchy) continue;
+                if (GameInternals.PlayerDetectorAccess.GetHelmetRequired(detector) != true || !PlayerLacksSuit()) return null;
+
+                suitOnly = true;
+            }
+            if (!driven) return null;
+
+            return suitOnly
+                ? "it opens only for someone in a suit, and you have none"
+                : "its doorway sensor is switched off, so you cannot walk it open either";
+        }
+
+        private static bool PlayerLacksSuit()
         {
             GameManager gm = GameManager.Instance;
             Space.Player? player = gm != null && gm.PlayerShip != null ? gm.PlayerShip.Pilot : null;
-            if (player == null || player.EquipmentSystem == null || player.EquipmentSystem.SuitEquipped) return false;
-
-            RefreshDetectors();
-            bool driven = false;
-            // RefreshDetectors always leaves the cache set.
-            foreach (EntryDetector detector in cachedDetectors!)
-            {
-                if (detector == null || GameInternals.EntryDetectorAccess.GetDoor(detector) != gate) continue;
-                if (GameInternals.PlayerDetectorAccess.GetHelmetRequired(detector) != true) return false;
-
-                driven = true;
-            }
-            return driven;
+            return player != null && player.EquipmentSystem != null && !player.EquipmentSystem.SuitEquipped;
         }
 
-        private void LogSuitDoorRefusal(Gate gate)
+        private void LogClosedToPlayerRefusal(Gate gate)
         {
-            if (Time.time < suitDoorLogAt || !OpensOnlyForASuit(gate)) return;
+            if (Time.time < closedToPlayerLogAt) return;
 
-            suitDoorLogAt = Time.time + 5f;
-            YourBuddyPlugin.Log.LogInfo("[ai] Not opening '" + gate.gameObject.name + "' - it opens only for someone in a suit, and you have none");
+            string? why = WhyClosedToPlayer(gate);
+            if (why == null) return;
+
+            closedToPlayerLogAt = Time.time + 5f;
+            YourBuddyPlugin.Log.LogInfo("[ai] Not opening '" + gate.gameObject.name + "' - " + why);
         }
 
         /// <summary>

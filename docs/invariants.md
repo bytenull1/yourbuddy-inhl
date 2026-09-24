@@ -420,8 +420,8 @@ deliberately weak; on a stair leg the exact test is
 
 **Rule.** "May the buddy **open** this gate?" (`GateIsPassable`) and "should routing go **around**
 it?" (`GateBlocksRouting`) are different questions. Only a gate that will still be shut when the
-buddy arrives - locked, a suit door while the player has no suit, a pin door without the code -
-blocks routing.
+buddy arrives - locked, a door the player could not walk open, a pin door without the code - blocks
+routing.
 
 **Why.** As one predicate, the buddy's refusal to open airlock and docking gates made the ship
 unreachable from a station. The player opens those. `ElectricityPanelGate` never blocks routing.
@@ -654,15 +654,19 @@ not a radius around the gate.
 
 ### the-buddy-opens-only-what-the-player-could
 
-**Rule.** A gate whose every doorway detector has `helmetRequired` is treated as locked while the
-player wears no suit: not opened, routed around.
+**Rule.** A gate that doorway detectors drive opens only through one of them that is switched on,
+and whose `helmetRequired` the player meets. Otherwise it is treated as locked: not opened, routed
+around. A gate no detector drives is not judged by this rule.
 
-**Why.** The tutorial's first door opens only for a suited player. The buddy opened it, and a player
-who followed was locked out of the room with the suits. Judged by the game's flag, not the door
-name.
+**Why.** The player opens a door only by walking into its detector. The tutorial's first door needs
+a suit; the buddy opened it, and a player who followed was locked out of the room with the suits.
+The Oxygen Station's sealed rooms have their detectors switched off, and only the seal panel opens
+them; the buddy opened them anyway. Both are judged by the game's state, not door names. Airlock
+and docking gates are checked first, so they stay routable.
 
-**Enforced in.** `BuddyBehaviour.OpensOnlyForASuit`, read by `GateIsPassable` and
-`GateBlocksRouting`; `GameInternals.PlayerDetectorAccess`.
+**Enforced in.** `BuddyBehaviour.WhyClosedToPlayer`, read by `GateIsPassable` and
+`GateBlocksRouting`; `RefreshDetectors` (`detectorsByGate`, switched-off detectors included);
+`GameInternals.PlayerDetectorAccess`.
 
 ### the-buddy-only-knows-codes-it-was-told
 

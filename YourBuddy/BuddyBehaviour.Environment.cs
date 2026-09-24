@@ -956,8 +956,21 @@ namespace YourBuddy
             if (cachedDetectors != null && Time.time < detectorsRefreshAt) return;
             if (!SceneScan.MayRescan(cachedDetectors == null)) return;
 
-            cachedDetectors = [.. FindObjectsOfType<EntryDetector>()];
+            // Switched-off detectors too: a sealed room's doors have one. docs/invariants.md#the-buddy-opens-only-what-the-player-could
+            cachedDetectors = [];
             detectorsRefreshAt = Time.time + 5f;
+
+            detectorsByGate.Clear();
+            foreach (EntryDetector detector in FindObjectsOfType<EntryDetector>(true))
+            {
+                if (detector.gameObject.activeInHierarchy) cachedDetectors.Add(detector);
+
+                Gate? door = GameInternals.EntryDetectorAccess.GetDoor(detector);
+                if (door == null) continue;
+
+                if (!detectorsByGate.TryGetValue(door, out List<EntryDetector>? list)) detectorsByGate[door] = list = [];
+                list.Add(detector);
+            }
 
             sellRooms.Clear();
             foreach (EntryDetector detector in cachedDetectors)

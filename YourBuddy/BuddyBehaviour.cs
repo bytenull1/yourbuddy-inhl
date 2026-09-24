@@ -232,6 +232,8 @@ namespace YourBuddy
 
         // Scene caches
         private List<EntryDetector>? cachedDetectors = null;
+        // The detectors that drive each gate, switched off or not.
+        private readonly Dictionary<Gate, List<EntryDetector>> detectorsByGate = [];
         private List<Airlock>? cachedAirlocks = null;
 
         // Pre-allocated physics buffers: the whisker/diagnostic probes run every frame,

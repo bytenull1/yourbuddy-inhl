@@ -15,13 +15,19 @@ comes from it.
 |---|---|---|
 | already open | yes | no |
 | `Gate.Locked` | no | **yes** |
-| every detector needs a suit and the player has none ([the-buddy-opens-only-what-the-player-could](invariants.md#the-buddy-opens-only-what-the-player-could)) | no | **yes** |
+| driven by detectors, but none is switched on, or every one needs a suit the player lacks ([the-buddy-opens-only-what-the-player-could](invariants.md#the-buddy-opens-only-what-the-player-could)) | no | **yes** |
 | airlock door, docking hatch | no - venting risk | **no** - the player opens these |
 | `ElectricityPanelGate` | no ([keep-electricitypanelgate-excluded](invariants.md#keep-electricitypanelgate-excluded)) | no - a wall panel |
 | pin-code door | only with a known code | **yes**, unless the code is known |
 | anything else | yes | no |
 
-`HandleDoors` uses the left column; path search uses the right.
+`HandleDoors` uses the left column; path search uses the right. At a door closed to the player it
+logs why, at most every 5 s:
+
+```
+[ai] Not opening 'Door02' - its doorway sensor is switched off, so you cannot walk it open either
+[ai] Not opening 'Door02' - it opens only for someone in a suit, and you have none
+```
 
 ---
 
