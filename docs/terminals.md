@@ -1,6 +1,6 @@
 # Life-support terminals
 
-`LifeSupport.cs`; the walk into reach is `BuddyBehaviour.Reach.cs`, shared with
+`LifeSupport.cs`; the walk into reach is NPC.Core's `NpcAgent.Reach.cs`, shared with
 [snacks](snacks.md) and [items](items.md). Config: `Terminals` (General, default on).
 Test command: `buddy_terminal <oxygen|climate>`.
 
@@ -34,7 +34,7 @@ From the decider, as the `Terminal` urge ([behaviour.md §3](behaviour.md#3-the-
    above 32 °C as felt in a PilotSuit (room + 1 °C). Oxygen is checked first;
 3. the unit must pass `TerminalBlocker` - present, room built, not broken, powered, not running,
    switch found and **off** ([a-terminal-is-only-switched-on](invariants.md#a-terminal-is-only-switched-on));
-4. `TryFindReachNode` picks the nearest active node within 8 m of the switch that has a clear walk
+4. the agent's `FindReachNode` picks the nearest active node within 8 m of the switch that has a clear walk
    (`WalkLos`) to a stand point 0.8 / 1.1 / 1.4 m in front of it, from which the switch is visible
    (`CanSee`);
 5. the buddy walks a **Route** to that node, then straight to the stand point and the switch, until
@@ -43,12 +43,8 @@ From the decider, as the `Terminal` urge ([behaviour.md §3](behaviour.md#3-the-
    it logs whether the unit is running.
 
 If the Route ends more than 1.2 m from the node (stuck recovery can skip waypoints), it plans again,
-at most twice.
-
-**Why the route ends at a node.** Planning straight to a point by the machine gave an *approach*
-plan ending in the next room, and the final straight walk went through the wall. The task does not
-replan, so its last stretch must be probed before it is chosen; everything before it comes from the
-graph.
+at most twice. Why the route ends at a node, and the rest of the walk into reach:
+[NPC.Core's agent.md §6](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/agent.md#6-walking-into-reach).
 
 **Retries.** A flip, or an 8 s approach that never gets in reach: 60 s per unit. A failed plan: 5 s
 (often transient, e.g. perched on furniture).

@@ -1,4 +1,8 @@
 using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
+using NPC.Core.World;
 using UnityEngine;
 using static YourBuddy.Items;
 
@@ -104,7 +108,7 @@ namespace YourBuddy
         /// docs/invariants.md#a-hidden-buddy-is-saved-outside-its-hiding-spot
         /// </summary>
         internal Vector3? HiddenSavePoint =>
-            hideState == HideState.Hidden ? hideStand - Vector3.up * originToFeet : null;
+            hideState == HideState.Hidden ? hideStand - Vector3.up * agent.OriginToFeet : null;
 
         /// <summary>
         /// Whether the buddy is inside this spot now: the game's Interact asks before mounting you.
@@ -153,7 +157,7 @@ namespace YourBuddy
                 HideTask task = new(spot, DoorFacePoint(doors), hideSkips);
                 if (plans++ >= HideMaxPlans) break;
 
-                failure = PlanReach(task, out BuddyNodeGraph.NavPath plan);
+                failure = agent.PlanReach(task, out NavPath plan);
                 if (failure != null)
                 {
                     hideSkips.Skip(spot.transform, HideSkipSeconds);
@@ -204,7 +208,7 @@ namespace YourBuddy
             EquipmentHolder? holder = spot.GetComponentInChildren<EquipmentHolder>(true);
             if (holder != null && holder.Item != null) return "a suit is hanging in it";
 
-            if (!OnMyVessel(spot.transform)) return "it is not on the deck I am riding";
+            if (!agent.OnMyVessel(spot.transform)) return "it is not on the deck I am riding";
 
             CustomRoom room = spot.GetComponentInParent<CustomRoom>(true);
             if (room != null && !room.EnabledStructure) return "its room is not built";
@@ -225,7 +229,7 @@ namespace YourBuddy
             return null;
         }
 
-        private static float PlanLength(BuddyNodeGraph.NavPath plan)
+        private static float PlanLength(NavPath plan)
         {
             float length = 0f;
             for (int i = 1; i < plan.Count; i++) length += Vector3.Distance(plan[i - 1], plan[i]);
@@ -236,14 +240,13 @@ namespace YourBuddy
         /// <summary>
         /// Takes the plan over from whatever was walking it: hiding owns the buddy until it is out again.
         /// </summary>
-        private void BeginHide(HideTask task, BuddyNodeGraph.NavPath plan, bool fromFear)
+        private void BeginHide(HideTask task, NavPath plan, bool fromFear)
         {
             DropReachTask();
             // An errand this pre-empted owned the Route mode, and nothing walks it now.
             if (mode == BuddyMode.Route && !GotoUnderway) mode = ModeAfterTask;
 
-            navPlan = plan;
-            navPathIndex = 0;
+            agent.CommitPlan(plan, false);
             hideSpot = task.Spot;
             hideStand = task.StandPoint;
             hideNode = task.Node;
@@ -290,7 +293,7 @@ namespace YourBuddy
                     StepOutOfHidingSpot();
                     break;
             }
-            hasMoveTarget = false;
+            agent.ClearMoveTarget();
             return Vector3.zero;
         }
 
@@ -311,32 +314,28 @@ namespace YourBuddy
                 return Vector3.zero;
             }
 
-            if (navPlan != null && navPathIndex < navPlan.Value.Count)
+            if (agent.HasPlanLeft)
             {
-                AdvancePastReachedWaypoints();
-                if (navPathIndex < navPlan.Value.Count)
+                agent.AdvancePlan();
+                if (agent.HasPlanLeft)
                 {
-                    wantMove = true;
-                    currentMoveTarget = navPlan.Value[navPathIndex];
-                    hasMoveTarget = true;
-                    return HeadingAlongPlan() * (MoveSpeed * (hideFromFear ? FleeSpeedFactor : 1f));
+                    return agent.HeadAlongPlan(agent.MoveSpeed * (hideFromFear ? FleeSpeedFactor : 1f), out wantMove);
                 }
-                DropPlan();
+                agent.DropPlan();
             }
             // The straight stretch starts at the node: a plan that ran out short of it (stuck recovery
             // skips waypoints) is planned again, or the walk cuts through a wall.
             Vector3 toNode = hideNode - transform.position;
             toNode.y = 0f;
-            if (toNode.sqrMagnitude > ReachNodeArrival * ReachNodeArrival)
+            if (toNode.sqrMagnitude > NpcAgent.ReachNodeArrival * NpcAgent.ReachNodeArrival)
             {
-                BuddyNodeGraph.NavPath? again = BuddyNodeGraph.FindPath(FloorUnderBuddy(), hideNode);
+                NavPath? again = NavGraph.FindPath(agent.FloorUnderNpc(), hideNode);
                 if (again is not { Count: > 0 })
                 {
                     AbandonHide($"the walk ended {toNode.magnitude:0.0}m short of its node and cannot be planned again");
                     return Vector3.zero;
                 }
-                navPlan = again;
-                navPathIndex = 0;
+                agent.CommitPlan(again.Value, false);
                 return Vector3.zero;
             }
 
@@ -352,15 +351,14 @@ namespace YourBuddy
 
             Vector3 toStand = hideStand - transform.position;
             toStand.y = 0f;
-            Vector3 target = toStand.sqrMagnitude > ReachStandArrival * ReachStandArrival ? hideStand : hideFace;
+            Vector3 target = toStand.sqrMagnitude > NpcAgent.ReachStandArrival * NpcAgent.ReachStandArrival ? hideStand : hideFace;
             Vector3 step = target - transform.position;
             step.y = 0f;
             if (step.sqrMagnitude < 0.0001f) return Vector3.zero;
 
             wantMove = true;
-            currentMoveTarget = target;
-            hasMoveTarget = true;
-            return step.normalized * (MoveSpeed * (hideFromFear ? FleeSpeedFactor : 1f));
+            agent.SetMoveTarget(target);
+            return step.normalized * (agent.MoveSpeed * (hideFromFear ? FleeSpeedFactor : 1f));
         }
 
         /// <summary>
@@ -375,12 +373,11 @@ namespace YourBuddy
                 AbandonHide("you got in first");
                 return;
             }
-            hideStand = FloorUnderBuddy();
-            TeleportTo(MountOriginFor(spot));
+            hideStand = agent.FloorUnderNpc();
+            agent.TeleportTo(MountOriginFor(spot), true);
             // It cannot be walked out of; the doors and the floor are not its own any more.
             cc.enabled = false;
-            hasMoveTarget = false;
-            verticalVelocity = 0f;
+            agent.ClearMoveTarget();
             Vector3 @out = hideStand - transform.position;
             @out.y = 0f;
             if (@out.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(@out.normalized);
@@ -403,9 +400,9 @@ namespace YourBuddy
         /// </summary>
         private Vector3 MountOriginFor(HidingSpot spot)
         {
-            CharacterController? playerCc = playerCharacterController;
-            float playerOriginToFeet = playerCc != null ? playerCc.center.y - playerCc.height * 0.5f : originToFeet;
-            return spot.MountPos + Vector3.up * (playerOriginToFeet - originToFeet);
+            CharacterController? playerCc = NpcPlayer.Controller;
+            float playerOriginToFeet = playerCc != null ? playerCc.center.y - playerCc.height * 0.5f : agent.OriginToFeet;
+            return spot.MountPos + Vector3.up * (playerOriginToFeet - agent.OriginToFeet);
         }
 
         /// <summary>
@@ -518,8 +515,7 @@ namespace YourBuddy
         {
             if (!cc.enabled) cc.enabled = true;
 
-            TeleportTo(hideStand - Vector3.up * originToFeet);
-            verticalVelocity = 0f;
+            agent.TeleportTo(hideStand - Vector3.up * agent.OriginToFeet, true);
             CloseOpenedDoors(hideOpened, null, hideName);
             hideOpened.Clear();
             // Before EndHide, which may end the flee and log that it has.
@@ -538,8 +534,8 @@ namespace YourBuddy
             hideFromFear = false;
             hideOrdered = false;
             hideStillAfraid = true;
-            hasMoveTarget = false;
-            DropPlan();
+            agent.ClearMoveTarget();
+            agent.DropPlan();
             if (mode == BuddyMode.Flee)
             {
                 if (retry)
@@ -586,7 +582,7 @@ namespace YourBuddy
             bool inside = hideState is HideState.Hidden or HideState.Leaving;
             if (cc != null && !cc.enabled) cc.enabled = true;
 
-            if (inside && !IsDead && cc != null) TeleportTo(hideStand - Vector3.up * originToFeet);
+            if (inside && !IsDead && cc != null) agent.TeleportTo(hideStand - Vector3.up * agent.OriginToFeet, false);
 
             CloseOpenedDoors(hideOpened, null, hideName);
             hideOpened.Clear();
@@ -637,7 +633,7 @@ namespace YourBuddy
 
         private static void TraceHide(string line)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2) YourBuddyPlugin.Log.LogInfo("[fear] Hide: " + line);
+            if (NpcLog.Level >= 2) YourBuddyPlugin.Log.LogInfo("[fear] Hide: " + line);
         }
     }
 }

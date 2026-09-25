@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using FMODUnity;
+using NPC.Core.Navigation;
+using NPC.Core.World;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -173,8 +175,7 @@ namespace YourBuddy
             }
 
             ShipyardStation station = Object.FindObjectOfType<ShipyardStation>();
-            Transform? content = station != null ? GameInternals.SpaceObjectAccess.GetContentParent(station) : null;
-            Transform? origin = content != null ? content : station != null ? station.transform : null;
+            Transform? origin = station != null ? NpcVessels.InteriorOf(station) : null;
             if (origin == null)
             {
                 _armed = false;
@@ -299,8 +300,8 @@ namespace YourBuddy
                 YourBuddyPlugin.Log.LogWarning("[mgr] New game: the buddy could not be spawned. Use 'spawn_buddy'.");
                 return null;
             }
-            // Parented before its first SlowUpdate: docs/invariants.md#the-buddy-rides-its-own-floor
-            BuddyManager.AttachToOwner(buddy, BuddyManager.OwnerOfTransform(frame));
+            // Parented before its first SlowUpdate: npc-core:docs/invariants.md#an-npc-rides-its-own-floor
+            BuddyManager.AttachToOwner(buddy, NpcVessels.OwnerOfTransform(frame));
             return buddy;
         }
 

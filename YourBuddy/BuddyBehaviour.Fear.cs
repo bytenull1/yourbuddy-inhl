@@ -1,4 +1,8 @@
 ﻿using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
+using NPC.Core.World;
 using Space;
 using UnityEngine;
 
@@ -100,7 +104,6 @@ namespace YourBuddy
         /// Added to the bias when the last retreat found nowhere to run to.
         /// </summary>
         private const float HideNoRetreatBias = 0.3f;
-        private float fleeRetreatSince = 0f;
         private float fleeClearanceCheckAt = 0f;
         private float fleeHoldLogAt = 0f;
         /// <summary>
@@ -148,11 +151,11 @@ namespace YourBuddy
         /// </summary>
         private void UpdateFear()
         {
-            if (IsDead || catchInProgress) return;
+            if (IsDead || agent.IsBeingCaught) return;
 
             // ai_disable leaves a monster that does nothing; cowering at it would be reacting
             // to an AI that is switched off. docs/reference.md
-            if (!YourBuddyPlugin.ConfigFear.Value || AiDebug.MonsterDisabled)
+            if (!YourBuddyPlugin.ConfigFear.Value || NpcMonster.MonsterDisabled)
             {
                 // An ordered hide is not fear's to end: buddy_hide skips the fear setting going in,
                 // so the same setting must not pull the buddy straight back out. docs/fear.md §6
@@ -311,7 +314,7 @@ namespace YourBuddy
             if (next == fearStalemate) return;
 
             fearStalemate = next;
-            if (!next || YourBuddyPlugin.ConfigDebugLevel.Value < 1 || Time.time < fearStalemateLogAt) return;
+            if (!next || NpcLog.Level < 1 || Time.time < fearStalemateLogAt) return;
 
             fearStalemateLogAt = Time.time + 10f;
             YourBuddyPlugin.Log.LogInfo(
@@ -344,7 +347,7 @@ namespace YourBuddy
 
             FearState was = fearState;
             fearState = next;
-            if (YourBuddyPlugin.ConfigDebugLevel.Value < 1) return;
+            if (NpcLog.Level < 1) return;
 
             string why = panic ? $"the Breathless is {monsterDist:0.0}m away (panic under {FearPanicDist:0.0}m)"
                 : seen ? $"the Breathless in sight {monsterDist:0.0}m away"
@@ -357,7 +360,7 @@ namespace YourBuddy
         /// </summary>
         private void TraceFear(float rate)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value < 2 || Time.time < fearTraceAt) return;
+            if (NpcLog.Level < 2 || Time.time < fearTraceAt) return;
 
             if (stress <= 0f && !monsterInSight && !monsterBehind) return;
 
@@ -372,11 +375,11 @@ namespace YourBuddy
 
         /// <summary>
         /// From the buddy's eye to the point the monster casts its own sight from, then to
-        /// its origin; either line clear is enough. docs/invariants.md#sight-stops-at-a-shut-door
+        /// its origin; either line clear is enough. npc-core:docs/invariants.md#sight-stops-at-a-shut-door
         /// </summary>
         private bool MonsterInSight(Breathless breathless)
         {
-            Vector3 eye = GroundPos(FearEyeHeight);
+            Vector3 eye = agent.GroundPos(FearEyeHeight);
             Transform body = breathless.transform;
             Transform? point = GameInternals.BreathlessControllerAccess.GetRaycastPoint(breathless.Controller);
             Gate? shut = null;
@@ -410,7 +413,7 @@ namespace YourBuddy
         /// </summary>
         private void LogBehindShutGate(Gate? gate)
         {
-            if (gate == null || YourBuddyPlugin.ConfigDebugLevel.Value < 2 || Time.time < fearGateLogAt) return;
+            if (gate == null || NpcLog.Level < 2 || Time.time < fearGateLogAt) return;
 
             fearGateLogAt = Time.time + 5f;
             YourBuddyPlugin.Log.LogInfo(
@@ -481,7 +484,7 @@ namespace YourBuddy
 
             wantMove = false;
             // docs/logging.md §4: a hold that can last must say so.
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1 && Time.time >= fearHoldLogAt)
+            if (NpcLog.Level >= 1 && Time.time >= fearHoldLogAt)
             {
                 fearHoldLogAt = Time.time + 5f;
                 YourBuddyPlugin.Log.LogInfo(
@@ -511,10 +514,8 @@ namespace YourBuddy
                 YourBuddyPlugin.Log.LogInfo($"[fear] Fleeing the Breathless into {hideName}, then back to {modeBeforeFlee}");
                 return;
             }
-            // A step-off already under way may lead toward the monster, and a Follow wait
-            // would keep the run to the player standing still.
-            followStepOffUntil = 0f;
-            followWaitUntil = 0f;
+            // A step-off already under way may lead toward the monster.
+            agent.CancelStepOff();
             fleeRetreatFailed = false;
             fleePhase = FleePhase.Retreat;
             YourBuddyPlugin.Log.LogInfo(
@@ -532,11 +533,11 @@ namespace YourBuddy
             BuddyMode resume = modeBeforeFlee;
             ClearFleeStuck();
             fearStalemate = false;
-            followStepOffUntil = 0f;
+            agent.CancelStepOff();
             decideAt = 0f;
             if (resume == BuddyMode.Route)
             {
-                BuddyNodeGraph.NavPath? plan = BuddyNodeGraph.FindPath(FloorUnderBuddy(), routeGoal);
+                NavPath? plan = NavGraph.FindPath(agent.FloorUnderNpc(), routeGoal);
                 if (plan is { Count: > 0 })
                 {
                     StartRoute(plan.Value, routeGoal);
@@ -562,8 +563,8 @@ namespace YourBuddy
         {
             wantMove = false;
 
-            // The back-away, and a doorway step-out. docs/invariants.md#step-off-applies-in-every-mode
-            if (TryStepOff(out Vector3 stepOff))
+            // The back-away, and a doorway step-out. npc-core:docs/invariants.md#step-off-applies-in-every-mode
+            if (agent.TryStepOff(out Vector3 stepOff))
             {
                 wantMove = true;
                 return stepOff * FleeSpeedFactor;
@@ -577,7 +578,7 @@ namespace YourBuddy
                     (FleeClearance + FearPanicDist) * (FleeClearance + FearPanicDist))
                 {
                     // Standing here is not a plan either: it counts toward the stalemate.
-                    hasMoveTarget = false;
+                    agent.ClearMoveTarget();
                     MarkFleeStuck();
                     return Vector3.zero;
                 }
@@ -590,33 +591,33 @@ namespace YourBuddy
                 return toPlayer;
             }
 
-            if (fleePhase == FleePhase.Hold || navPlan == null || navPathIndex >= navPlan.Value.Count)
+            if (fleePhase == FleePhase.Hold || !agent.HasPlanLeft)
             {
-                hasMoveTarget = false;
+                agent.ClearMoveTarget();
                 if (Time.time >= fleeRetryAt) TryStartRetreat();
 
                 return Vector3.zero;
             }
 
-            float budget = 6f + Vector3.Distance(transform.position, fleeTarget) * 1.2f;
-            if (Time.time - fleeRetreatSince > budget)
+            agent.AdvancePlan();
+            if (!agent.HasPlanLeft)
             {
-                AbandonRetreat("it is taking too long");
-                return Vector3.zero;
-            }
-
-            AdvancePastReachedWaypoints();
-            if (navPathIndex >= navPlan.Value.Count)
-            {
-                DropPlan();
-                hasMoveTarget = false;
+                agent.DropPlan();
+                agent.ClearMoveTarget();
                 fleePhase = FleePhase.ToPlayer;
                 YourBuddyPlugin.Log.LogInfo($"[fear] Got away to {fleeTarget:0.0} - making for the player");
                 return Vector3.zero;
             }
 
-            // docs/invariants.md#off-the-flight-is-off-the-plan
-            if (HasLeftStairLeg(out _, out _))
+            // npc-core:docs/invariants.md#give-up-per-waypoint
+            if (agent.WaypointOverdue(out float budget))
+            {
+                AbandonRetreat($"waypoint {agent.PlanIndex + 1} not reached in {budget:0}s");
+                return Vector3.zero;
+            }
+
+            // npc-core:docs/invariants.md#off-the-flight-is-off-the-plan
+            if (agent.HasLeftStairLeg(out _, out _))
             {
                 AbandonRetreat("it left the stair leg");
                 return Vector3.zero;
@@ -626,17 +627,15 @@ namespace YourBuddy
             if (Time.time >= fleeClearanceCheckAt)
             {
                 fleeClearanceCheckAt = Time.time + 0.5f;
-                if (!PlanKeepsClear(navPlan.Value, navPathIndex))
+                // HasPlanLeft checked the plan.
+                if (!PlanKeepsClear(agent.Plan!.Value, agent.PlanIndex))
                 {
                     AbandonRetreat("the Breathless is in the way now");
                     return Vector3.zero;
                 }
             }
 
-            wantMove = true;
-            currentMoveTarget = navPlan.Value[navPathIndex];
-            hasMoveTarget = true;
-            return HeadingAlongPlan() * (MoveSpeed * FleeSpeedFactor);
+            return agent.HeadAlongPlan(agent.MoveSpeed * FleeSpeedFactor, out wantMove);
         }
 
         /// <summary>
@@ -645,7 +644,7 @@ namespace YourBuddy
         /// </summary>
         private void TryStartRetreat()
         {
-            DropPlan();
+            agent.DropPlan();
             fleeRetryAt = Time.time + FleeRetryDelay;
             // Hide or run, weighed rather than always the same. docs/fear.md §5
             bool hideFirst = !Hiding && PreferHide();
@@ -678,7 +677,7 @@ namespace YourBuddy
             }
 
             fleePhase = FleePhase.Hold;
-            hasMoveTarget = false;
+            agent.ClearMoveTarget();
             MarkFleeStuck();
             fleeRetryAt = Time.time + FleeHoldRetryDelay;
             if (Time.time < fleeHoldLogAt) return;
@@ -691,14 +690,14 @@ namespace YourBuddy
 
         private void AbandonRetreat(string why)
         {
-            if (navPlan != null)
+            if (agent.Plan != null)
             {
                 YourBuddyPlugin.Log.LogInfo($"[fear] Dropping the retreat to {fleeTarget:0.0}: {why}");
                 fleeFailedTarget = fleeTarget;
                 fleeFailedTargetUntil = Time.time + 8f;
             }
-            DropPlan();
-            hasMoveTarget = false;
+            agent.DropPlan();
+            agent.ClearMoveTarget();
             fleePhase = FleePhase.Retreat;
             fleeRetryAt = Time.time + FleeRetryDelay;
         }
@@ -731,7 +730,7 @@ namespace YourBuddy
             }
             bias = Mathf.Clamp01(bias);
             bool hide = Random.value < bias;
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2)
+            if (NpcLog.Level >= 2)
             {
                 YourBuddyPlugin.Log.LogInfo($"[fear] Choosing to {(hide ? "hide" : "run")} (hide chance {bias:0.00}{why})");
             }
@@ -744,7 +743,7 @@ namespace YourBuddy
         /// </summary>
         private bool TryPlanRetreat()
         {
-            BuddyNodeGraph.CollectActiveNodes(fleeCandidates);
+            NavGraph.CollectActiveNodes(fleeCandidates);
             if (fleeCandidates.Count == 0) return false;
 
             Vector3 here = transform.position;
@@ -752,7 +751,7 @@ namespace YourBuddy
             Player? player = GameManager.Instance != null && GameManager.Instance.PlayerShip != null
                 ? GameManager.Instance.PlayerShip.Pilot
                 : null;
-            bool toPlayer = player != null && player.Controller != null && !IsPlayerInSpace(player);
+            bool toPlayer = player != null && player.Controller != null && !NpcAgent.IsPlayerInSpace(player);
             // toPlayer implies player and its Controller are non-null.
             Vector3 playerPos = toPlayer ? player!.Controller!.CachedTransform.position : Vector3.zero;
 
@@ -770,14 +769,14 @@ namespace YourBuddy
             }
             fleeScored.Sort((a, b) => b.Key.CompareTo(a.Key));
 
-            Vector3 start = FloorUnderBuddy();
+            Vector3 start = agent.FloorUnderNpc();
             int tried = 0;
             int unroutable = 0;
             foreach (KeyValuePair<float, Vector3> candidate in fleeScored)
             {
                 if (tried++ >= FleePickAttempts) break;
 
-                BuddyNodeGraph.NavPath? plan = BuddyNodeGraph.FindPath(start, candidate.Value);
+                NavPath? plan = NavGraph.FindPath(start, candidate.Value);
                 if (plan is not { Count: > 0 })
                 {
                     unroutable++;
@@ -785,10 +784,8 @@ namespace YourBuddy
                 }
                 if (!PlanKeepsClear(plan.Value, 0)) continue;
 
-                navPlan = plan;
-                navPathIndex = 0;
+                agent.CommitPlan(plan.Value, false);
                 fleeTarget = candidate.Value;
-                fleeRetreatSince = Time.time;
                 fleeClearanceCheckAt = Time.time + 0.5f;
                 YourBuddyPlugin.Log.LogInfo(
                     $"[fear] Retreating to {fleeTarget:0.0}: {Vector3.Distance(fleeTarget, lastMonsterPos):0.0}m from the Breathless " +
@@ -798,7 +795,7 @@ namespace YourBuddy
                 return true;
             }
 
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2)
+            if (NpcLog.Level >= 2)
             {
                 YourBuddyPlugin.Log.LogInfo(
                     $"[fear] No retreat plan: {fleeScored.Count} of {fleeCandidates.Count} nodes are {FleeMinGain:0}m+ further " +
@@ -811,7 +808,7 @@ namespace YourBuddy
         /// From where the buddy stands, no leg may take it nearer the monster than the leg
         /// starts, nor within FleeClearance of it once it is outside that.
         /// </summary>
-        private bool PlanKeepsClear(BuddyNodeGraph.NavPath plan, int fromIndex)
+        private bool PlanKeepsClear(NavPath plan, int fromIndex)
         {
             Vector3 a = transform.position;
             for (int i = fromIndex; i < plan.Count; i++)
@@ -827,7 +824,7 @@ namespace YourBuddy
 
         /// <summary>
         /// No plan: step away from the monster along the first clear bearing, through the
-        /// shared step-off. docs/invariants.md#step-off-applies-in-every-mode
+        /// shared step-off. npc-core:docs/invariants.md#step-off-applies-in-every-mode
         /// </summary>
         private bool TryBackAway()
         {
@@ -840,15 +837,14 @@ namespace YourBuddy
 
             away.Normalize();
 
-            for (int i = -1; i < DetourAngles.Length; i++)
+            for (int i = -1; i < NpcAgent.DetourAngles.Count; i++)
             {
-                Vector3 dir = i < 0 ? away : Quaternion.Euler(0f, DetourAngles[i], 0f) * away;
-                // A back-away is a detour too. docs/invariants.md#a-detour-may-not-step-off-a-ledge
-                if (BodyBlocked(dir, 1f) || StepsOffALedge(dir, 1f)) continue;
+                Vector3 dir = i < 0 ? away : Quaternion.Euler(0f, NpcAgent.DetourAngles[i], 0f) * away;
+                // A back-away is a detour too. npc-core:docs/invariants.md#a-detour-may-not-step-off-a-ledge
+                if (agent.BodyBlocked(dir, 1f) || agent.StepsOffALedge(dir, 1f)) continue;
 
-                followStepOffTarget = transform.position + dir * FleeBackAwayDist;
-                followStepOffUntil = Time.time + FleeBackAwayTime;
-                if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2)
+                agent.StepOff(transform.position + dir * FleeBackAwayDist, FleeBackAwayTime);
+                if (NpcLog.Level >= 2)
                 {
                     YourBuddyPlugin.Log.LogInfo($"[fear] No retreat plan - backing away along {dir:0.0}");
                 }

@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
 using Space;
 using UnityEngine;
 using static YourBuddy.Items;
@@ -260,7 +263,7 @@ namespace YourBuddy
                 }
                 if (plans++ >= PlayMaxPlans) break;
 
-                failure = Body.PlanReach(task, out BuddyNodeGraph.NavPath plan);
+                failure = Body.PlanReach(task, out NavPath plan);
                 if (failure != null)
                 {
                     Skips.Skip(item.transform, PlaySkipSeconds);
@@ -330,7 +333,7 @@ namespace YourBuddy
             string? failure = blocker;
             if (fetch != null)
             {
-                failure = Body.PlanReach(fetch, out BuddyNodeGraph.NavPath plan);
+                failure = Body.PlanReach(fetch, out NavPath plan);
                 if (failure == null)
                 {
                     Body.Walk(fetch, plan);
@@ -345,7 +348,7 @@ namespace YourBuddy
         /// <summary>
         /// A null plan is an item already in reach. Only a game played to the end schedules the full interval.
         /// </summary>
-        private void Begin(PlayTask task, BuddyNodeGraph.NavPath? plan)
+        private void Begin(PlayTask task, NavPath? plan)
         {
             Body.Walk(task, plan);
             DueAt = Time.time + PlayRetryDelay;
@@ -428,7 +431,7 @@ namespace YourBuddy
             Vector3 itemTop = ItemTop(item);
             Vector3 itemEye = itemTop + Vector3.up * PlaySightHeight;
             float floorY = Body.FloorUnderBuddy().y;
-            BuddyNodeGraph.CollectActiveNodes(NodeBuffer);
+            NavGraph.CollectActiveNodes(NodeBuffer);
             int count = NodeBuffer.Count;
             if (count == 0) return false;
 
@@ -441,14 +444,14 @@ namespace YourBuddy
                 if (flatSq < minDist * minDist || flatSq > maxDist * maxDist) continue;
 
                 float nodeFloor = NavProbe.FloorHeight(node);
-                if (Mathf.Abs(nodeFloor - floorY) > BuddyBehaviour.FollowSameLevelDeltaY) continue;
+                if (Mathf.Abs(nodeFloor - floorY) > NpcAgent.FollowSameLevelDeltaY) continue;
 
                 float angle = Random.Range(0f, 360f);
                 for (int turn = 0; turn < 4; turn++, angle += 90f)
                 {
                     Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
                     Vector3 clear = new(node.x + dir.x * PlayDropClear, nodeFloor, node.z + dir.z * PlayDropClear);
-                    if (!NavProbe.WalkLos(node, clear, BuddyBehaviour.FollowSameLevelDeltaY)) continue;
+                    if (!NavProbe.WalkLos(node, clear, NpcAgent.FollowSameLevelDeltaY)) continue;
 
                     Vector3 spot = new(node.x + dir.x * PlayDropOut, node.y, node.z + dir.z * PlayDropOut);
                     spot.y = NavProbe.FloorHeight(spot);
@@ -581,7 +584,7 @@ namespace YourBuddy
                 Body.Walk(toSpot, null);
                 return Vector3.zero;
             }
-            BuddyNodeGraph.NavPath? plan = BuddyNodeGraph.FindPath(Body.FloorUnderBuddy(), toSpot.Node);
+            NavPath? plan = NavGraph.FindPath(Body.FloorUnderBuddy(), toSpot.Node);
             if (plan is not { Count: > 0 })
             {
                 YourBuddyPlugin.Log.LogInfo($"[ai] Cannot carry '{task.ItemLabel}' to {task.DropAt:0.0} - there is no path to it");
@@ -712,7 +715,7 @@ namespace YourBuddy
 
         private static void Trace(string line)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Play: " + line);
+            if (NpcLog.Level >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Play: " + line);
         }
     }
 }

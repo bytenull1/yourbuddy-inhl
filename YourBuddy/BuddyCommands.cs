@@ -1,4 +1,7 @@
 using System;
+using NPC.Core;
+using NPC.Core.Navigation;
+using NPC.Core.World;
 using UnityEngine;
 
 namespace YourBuddy
@@ -51,9 +54,9 @@ namespace YourBuddy
         public static string GoToNode(BuddyBehaviour buddy, int nodeIndex)
         {
             if (Dead(buddy) is { } dead) return dead;
-            if (nodeIndex < 0 || nodeIndex >= BuddyNodeGraph.NodeCount)
+            if (nodeIndex < 0 || nodeIndex >= NavGraph.NodeCount)
             {
-                return "Node index out of range (0-" + (BuddyNodeGraph.NodeCount - 1) + ")";
+                return "Node index out of range (0-" + (NavGraph.NodeCount - 1) + ")";
             }
 
             return WalkTo(buddy, [nodeIndex], "node #" + nodeIndex);
@@ -62,7 +65,7 @@ namespace YourBuddy
         /// <summary>
         /// The dialog's goto: a room by name, through the first of its nodes the buddy can reach.
         /// </summary>
-        internal static string GoToRoom(BuddyBehaviour buddy, BuddyRooms.Entry room) =>
+        internal static string GoToRoom(BuddyBehaviour buddy, StationRooms.Entry room) =>
             Dead(buddy) ?? WalkTo(buddy, room.Nodes, room.Name);
 
         private static string WalkTo(BuddyBehaviour buddy, int[] nodes, string label)
@@ -70,8 +73,8 @@ namespace YourBuddy
             // A dead-end node must not strand a whole room, and a failed search is not free.
             for (int i = 0; i < Math.Min(nodes.Length, MaxRoomTries); i++)
             {
-                Vector3 target = BuddyNodeGraph.GetNodeWorld(nodes[i]);
-                BuddyNodeGraph.NavPath? plan = BuddyNodeGraph.FindPath(buddy.FloorUnderBuddy(), target);
+                Vector3 target = NavGraph.GetNodeWorld(nodes[i]);
+                NavPath? plan = NavGraph.FindPath(buddy.Agent.FloorUnderNpc(), target);
                 if (plan is not { Count: > 0 }) continue;
 
                 return buddy.ApplyRouteOrder(plan.Value, target)
@@ -79,7 +82,7 @@ namespace YourBuddy
                     : buddy.Name + " will walk to " + label + OnceSafe;
             }
 
-            return BuddyNodeGraph.LastPathBlockedByDoor
+            return NavGraph.LastPathBlockedByDoor
                 ? "No way to " + label + " that avoids a door I cannot open"
                 : "No path to " + label + " - are nodes connected?";
         }
@@ -111,7 +114,7 @@ namespace YourBuddy
                 {
                     if (buddy == null || buddy.IsDead) continue;
 
-                    using BuddyManager.ActingScope _ = BuddyManager.Acting(buddy);
+                    using NpcRegistry.ActingScope _ = NpcRegistry.Acting(buddy.Agent);
                     buddy.RevokeOrder();
                 }
             }
@@ -162,15 +165,15 @@ namespace YourBuddy
         public static string Terminal(BuddyBehaviour buddy, string which) => Dead(buddy) ?? buddy.StartTerminalNow(which);
 
         /// <summary>
-        /// Teaches every buddy a door code. It is used only on a panel whose own code
-        /// matches, so a wrong code changes nothing. docs/doors.md
+        /// Teaches every NPC a door code. It is used only on a panel whose own code
+        /// matches, so a wrong code changes nothing. npc-core:docs/doors.md#password-doors
         /// </summary>
         public static string GivePassword(string text)
         {
             if (!int.TryParse(text.Trim(), out int code)) return "That is not a door code";
 
-            BuddyBehaviour.LearnPinCode(code);
-            return BuddyBehaviour.AnyKnownDoorMatches()
+            NpcDoors.LearnCode(code);
+            return NpcDoors.AnyKnownDoorMatches()
                 ? "Got it - that opens a door I know about"
                 : "Noted, but no door I know of uses that code";
         }

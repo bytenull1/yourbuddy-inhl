@@ -1,3 +1,6 @@
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
 using UnityEngine;
 
 namespace YourBuddy
@@ -145,7 +148,7 @@ namespace YourBuddy
                 return true;
             }
 
-            string? failure = body.PlanReach(task, out BuddyNodeGraph.NavPath plan);
+            string? failure = body.PlanReach(task, out NavPath plan);
             if (failure != null)
             {
                 report = failure;
@@ -292,7 +295,7 @@ namespace YourBuddy
         /// </summary>
         private void TraceTerminal(TerminalKind kind, string line, int level)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value < level || Time.time < terminalTraceAt[(int)kind]) return;
+            if (NpcLog.Level < level || Time.time < terminalTraceAt[(int)kind]) return;
 
             terminalTraceAt[(int)kind] = Time.time + 30f;
             YourBuddyPlugin.Log.LogInfo("[mind] Not switching on the " + TerminalName(kind) + ": " + line);

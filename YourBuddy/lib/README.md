@@ -12,6 +12,11 @@ From `BepInEx/core/`:
 - `BepInEx.dll`
 - `0Harmony.dll`
 
+From `BepInEx/plugins/`, only when [NPC.Core](https://github.com/bytenull1/npc-core-inhl) is not
+checked out beside this repository (`../npc-core-inhl`, which the project then builds instead):
+
+- `NPC.Core.dll`
+
 From `Isolated Inhale_Data/Managed/`:
 
 - `Assembly-CSharp.dll`

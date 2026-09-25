@@ -7,7 +7,8 @@ and trim before sharing.
 
 ## 1. Levels
 
-`debug_level <0-3>` in the game console:
+`debug_level <0-3>` in the game console, or `[Debug] DebugLevel` in NPC.Core's config: one level for
+every NPC mod ([NPC.Core logging](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/logging.md#1-levels)).
 
 | Level | Adds |
 |---|---|
@@ -26,51 +27,47 @@ and trim before sharing.
 
 | Tag | Source | Typically logs |
 |---|---|---|
-| `[ai]` | `BuddyBehaviour.*` | replans, doors, rooms loaded, stuck recovery, step-offs, blockers |
+| `[ai]` | NPC.Core's `NpcAgent`; `BuddyBehaviour.*` | the agent: replans, doors, rooms loaded, stuck recovery, step-offs, blockers, riding and parking, death; the brain: routes finished or given up |
 | `[fear]` | `BuddyBehaviour.Fear.cs` | fear state, stress trace, holding back, retreats |
 | `[mind]` | `Autonomy.cs`, `Mind.cs` | decisions, orders revoked or expired, why the decider stood down |
-| `[nav]` | `BuddyNodeGraph` | seeding, route chains, path failures |
-| `[probe]` | `NavProbe`, `SceneScan` | probe mask, gate inventory, gate-frame audits, full buffers, scene rescans |
-| `[mgr]` | `BuddyManager` | spawn/save, lifecare scans |
-| `[editor]` | `BuddyNodeEditor` | node and link placement |
+| `[nav]` | NPC.Core `NavGraph` | seeding, route chains, path failures |
+| `[probe]` | NPC.Core `NavProbe`, `SceneScan` | probe mask, gate inventory, gate-frame audits, full buffers, scene rescans |
+| `[mgr]` | `BuddyManager`, `BuddyCryoSpawn` | spawns, restoring buddies from a save, the new-game wake-up |
+| `[editor]` | NPC.Core `NodeEditor` | node and link placement |
 | `[internals]` | `GameInternals` | missing game members at load, then one summary line |
-| `[mod]` | plugin entry | startup, spawns, patch groups applied or failed |
+| `[mod]` | plugin entry | startup, spawns |
+
+NPC.Core logs the moments it owns under its own tags ([its logging](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/logging.md#2-sources-and-tags)):
+`[save]` for loads and sidecars written or deleted, `[lifecare]` for scans, `[talk]` for the window,
+`[world]` for rooms kept loaded. A line about one buddy still carries that buddy's source.
 
 Tags are short because BepInEx already prefixes every line with its source. The plugin's own lines
 come from `YourBuddy Mod`; everything a buddy does comes from that buddy's source, `YourBuddy:<name>`
 (`[Info   :YourBuddy:Buddy 2] [ai] Opening door 'Door02'`), static code such as `FindPath` included.
-`trimlog` names the buddy on each line when a capture holds more than one, and `--buddy "Buddy 2"`
+`trimlog` names the buddy on each line when a capture holds more than one, and `--npc "Buddy 2"`
 keeps one.
 
 ---
 
 ## 3. Capture workflow
 
+NPC.Core's [capture steps](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/logging.md#3-capturing-a-log)
+apply, with its `tools/trimlog.py` (from a sibling checkout: `python ../npc-core-inhl/tools/trimlog.py`).
+It keeps NPC.Core's lines, the buddies' and `YourBuddy Mod`'s.
+
 1. `debug_level 2` in the console.
 2. Reproduce the problem - and nothing else.
-3. Take `BepInEx/LogOutput.log` and trim it:
+3. Trim the log, `--stats` first: a dominant line shape is often the finding by itself.
 
    ```bash
-   python tools/trimlog.py BepInEx/LogOutput.log --stats
-   python tools/trimlog.py BepInEx/LogOutput.log --fold > capture.txt
+   python ../npc-core-inhl/tools/trimlog.py BepInEx/LogOutput.log --stats
+   python ../npc-core-inhl/tools/trimlog.py BepInEx/LogOutput.log --fold > capture.txt
    ```
 
-4. **Add a one-line note where the behaviour changed** ("here it goes back down"). `trimlog` keeps
-   free-text lines, and these notes are often the fastest route to the answer.
+4. **Add a one-line note where the behaviour changed** ("here it goes back down").
 
-Run `--stats` first. It shows what the log is mostly made of, and a dominant line shape is often the
-finding by itself (e.g. dozens of `FindPath: no clear entry seed`).
-
-| Mode | A 35 KB capture becomes |
-|---|---|
-| `--stats` | ~3.6 KB - a histogram of line shapes |
-| `--fold` | ~11 KB - readable, first and last few of each shape |
-| plain | ~30 KB - prefixes stripped, exact duplicates collapsed |
-
-`--fold` keeps the **first and last** of each repeated shape because the drift between them matters:
-a position that never changes across replans is a livelock; one that swings is a ping-pong.
-
-Other flags: `--tag nav,ai` to filter by tag, `--all` to keep other BepInEx sources, `-` for stdin.
+`--fold` keeps the first and last of each repeated shape: a position that never changes across
+replans is a livelock; one that swings is a ping-pong.
 
 ---
 
@@ -93,9 +90,9 @@ Other flags: `--tag nav,ai` to filter by tag, `--all` to keep other BepInEx sour
 
 ## 5. Reading guides
 
-- Routes and replans: [navigation.md §7](navigation.md#7-reading-a-findpath-capture)
-- Doors: [doors.md §7](doors.md#7-what-a-healthy-capture-looks-like)
-- Lifecare: [lifecare.md §3](lifecare.md#reading-a-capture)
+- Routes and replans: [navigation.md §7](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/navigation.md#7-reading-a-findpath-capture)
+- Doors: [NPC.Core's doors.md §9](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/doors.md#9-what-a-healthy-capture-looks-like)
+- Lifecare: [lifecare.md §3](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/lifecare.md#reading-a-capture)
 - Fear: [fear.md §8](fear.md#8-reading-a-capture)
 - Decider: [behaviour.md §6](behaviour.md#6-reading-a-capture)
-- Gate-frame audits: [probes.md](probes.md#the-gate-frame-rule)
+- Gate-frame audits: [probes.md](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/probes.md#the-gate-frame-rule)

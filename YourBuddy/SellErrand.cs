@@ -1,4 +1,8 @@
 using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
+using NPC.Core.World;
 using Space;
 using UnityEngine;
 using static YourBuddy.Items;
@@ -437,7 +441,7 @@ namespace YourBuddy
                 }
                 if (plans++ >= SellMaxPlans) break;
 
-                failure = Body.PlanReach(task, out BuddyNodeGraph.NavPath plan);
+                failure = Body.PlanReach(task, out NavPath plan);
                 if (failure != null)
                 {
                     Skips.Skip(task.Own, SellSkipSeconds);
@@ -510,7 +514,7 @@ namespace YourBuddy
             return total > run.Capacity ? $"{what}, {Mathf.Max(1, run.Capacity)} at a time" : what;
         }
 
-        private void Begin(SellTask task, BuddyNodeGraph.NavPath? plan)
+        private void Begin(SellTask task, NavPath? plan)
         {
             Body.Walk(task, plan);
             DueAt = Time.time + SellCheckInterval;
@@ -1189,7 +1193,7 @@ namespace YourBuddy
                 Last = next.Describe();
                 return true;
             }
-            if (Body.PlanReach(next, out BuddyNodeGraph.NavPath plan) != null) return false;
+            if (Body.PlanReach(next, out NavPath plan) != null) return false;
 
             Body.Walk(next, plan);
             Last = next.Describe();
@@ -1209,7 +1213,7 @@ namespace YourBuddy
 
         private static void Trace(string line)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Sell: " + line);
+            if (NpcLog.Level >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Sell: " + line);
         }
     }
 }

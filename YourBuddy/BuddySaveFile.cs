@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace YourBuddy
 {
     /// <summary>
-    /// Serializable state for the '.buddy' sidecar written next to game saves.
+    /// Serializable state for the '.buddy' sidecar NPC.Core writes next to game saves.
     /// The vanilla game never reads it, so uninstalling the mod is safe. Every buddy
     /// resumes in Follow. docs/architecture.md §5
     /// </summary>
@@ -26,8 +26,8 @@ namespace YourBuddy
         public string? SleepingCapsule { get; init; }
 
         /// <summary>
-        /// Door codes the player told the buddies; every buddy knows all of them.
-        /// docs/invariants.md#door-knowledge-is-shared
+        /// The door codes, which NPC.Core also saves in its own '.npccore'. A sidecar from before NPC.Core
+        /// kept them has only these, so a load still merges them. npc-core:docs/invariants.md#door-knowledge-is-shared
         /// </summary>
         public int[]? KnownPinCodes { get; init; }
         /// <summary>
@@ -96,7 +96,7 @@ namespace YourBuddy
         /// GameObject name, the same key the game itself uses for SaveData.dockedStation
         /// - and its position in that vessel's own space. A ship-local point is a world
         /// point in disguise, so without these a buddy left on a station reloads into
-        /// vacuum. docs/invariants.md#the-buddy-rides-its-own-floor
+        /// vacuum. npc-core:docs/invariants.md#an-npc-rides-its-own-floor
         /// </summary>
         public string? Owner { get; init; }
         public float[]? OwnerLocalPosition { get; init; }

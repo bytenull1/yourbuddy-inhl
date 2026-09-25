@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using NPC.Core;
+using NPC.Core.Navigation;
 
 namespace YourBuddy
 {
@@ -38,7 +40,7 @@ namespace YourBuddy
 
             // Before the rest, so "go to the workshop" is not a wander order ("work"). A goto that
             // names no room falls through, so "stay, do not walk" is still a stay order.
-            if (Has(lower, GotoWords) && BuddyRooms.TryResolve(lower, out BuddyRooms.Entry? room, out List<BuddyRooms.Entry>? several))
+            if (Has(lower, GotoWords) && BuddyRooms.TryResolve(lower, out StationRooms.Entry? room, out List<StationRooms.Entry>? several))
             {
                 return room != null
                     ? ForAll(targets, b => BuddyCommands.GoToRoom(b, room))
@@ -65,7 +67,7 @@ namespace YourBuddy
 
             if (Has(lower, GotoWords)) return BuddyRooms.Prompt();
 
-            // Codes are shared, so a password is told once, whoever hears it. docs/invariants.md#door-knowledge-is-shared
+            // Codes are shared, so a password is told once, whoever hears it. npc-core:docs/invariants.md#door-knowledge-is-shared
             if (Has(lower, "password", "code", "pin", "key"))
             {
                 return TryNumber(lower, out int code)
@@ -115,7 +117,7 @@ namespace YourBuddy
             List<string> replies = [];
             foreach (BuddyBehaviour target in targets)
             {
-                using BuddyManager.ActingScope _ = BuddyManager.Acting(target);
+                using NpcRegistry.ActingScope _ = NpcRegistry.Acting(target.Agent);
                 replies.Add(order(target));
             }
             return string.Join("\n", replies);

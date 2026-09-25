@@ -1,9 +1,9 @@
 # Snacks
 
-`SnackErrand.cs`, walking on `BuddyBehaviour.Reach.cs`. Config (General): `Snacks`
+`SnackErrand.cs`, walking into reach on NPC.Core's `NpcAgent.Reach.cs`. Config (General): `Snacks`
 (default on), `SnackIntervalMinutes` (13 - the player's own satiety drains from a full stomach to the
 game's Hunger threshold in about that long,
-[game-model.md](game-model.md#atmosphere-kills-by-the-players-rule)). Console: `buddy_snack` (one
+[NPC.Core's game-model.md](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/game-model.md#atmosphere-kills-by-the-players-rule)). Console: `buddy_snack` (one
 now), `buddy_mind` (the timer). Dialog: "snack" / "eat" / "food" / "hungry"
 ([dialog.md §3](dialog.md#3-the-orders)).
 

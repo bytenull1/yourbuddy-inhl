@@ -2,7 +2,7 @@
 
 `BuddyBehaviour.Fear.cs`, `BuddyBehaviour.Hide.cs`, `NavProbe.CanSee`. Config (General): `Fear`
 (default on), `HideInClosets`, `FleeHideBias`. The monster's side is in
-[game-model.md §5](game-model.md#5-the-breathless).
+[game-model.md §5](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/game-model.md#5-the-breathless).
 
 ---
 
@@ -17,14 +17,14 @@
 Scared is left below `FearAlertEnter`, not `FearScaredEnter`, so a flee runs until the buddy is
 properly calm. Then the buddy goes back to what it was doing, or to what it was ordered meanwhile.
 
-Runs in `SlowUpdate` phase 2, after `BreathlessCheck`.
+Runs in slow phase 2 (`INpcBrain.SlowPhase`), after the agent's catch check.
 
 ---
 
 ## 2. Seeing the monster
 
 `NavProbe.CanSee` is the only sight test
-([sight-stops-at-a-shut-door](invariants.md#sight-stops-at-a-shut-door)):
+([sight-stops-at-a-shut-door](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#sight-stops-at-a-shut-door)):
 
 1. any gate that is not open, whose volume the line crosses, blocks it and is reported;
 2. a straight raycast on `ProbeLayers` then fails on the first hit that is not a body, the target,
@@ -76,7 +76,7 @@ is Calm ~2 s later. The exit threshold stops the state flickering.
 
 ## 4. Alert - holding back
 
-`HoldBackFromMonster` runs in `Update` before `HandleDoors`. Above Calm, a heading within 60° of the
+`HoldBackFromMonster` is the brain's `Constrain`: the agent runs it before its door handling. Above Calm, a heading within 60° of the
 monster's **last known** position, while within `FearRestraintDist`, becomes `wantMove = false` - no
 doors are opened that way, and stuck watchdogs reset instead of escalating. Logged every 5 s:
 
@@ -96,7 +96,7 @@ A mode of its own, not a Route: `FinishRoute` forces Follow, which would end the
 
 | Phase | Does | Ends |
 |---|---|---|
-| `Retreat` | walks the retreat plan like Wander (dual advance, stair legs) at `FleeSpeedFactor` | arrived → `ToPlayer`; stuck, no progress, off the flight, or the monster now in the way → re-plan |
+| `Retreat` | walks the retreat plan like Wander (dual advance, stair legs) at `FleeSpeedFactor` | arrived → `ToPlayer`; stuck, no progress, a waypoint overdue ([give-up-per-waypoint](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#give-up-per-waypoint)), off the flight, or the monster now in the way → re-plan |
 | `ToPlayer` | `UpdateFollow` at `FleeSpeedFactor`; holds while the player stands within `FleeClearance + FearPanicDist` of the monster | a panic re-plans a retreat |
 | `Hold` | stands and watches; retries every `FleeHoldRetryDelay` | a retreat or back-away becomes possible |
 | `Hide` | walks into a closet or locker and shuts it (§6) | it comes out |
@@ -197,7 +197,7 @@ The nearest qualifying spot wins.
    1.2 s per metre, or if you get in first.
 2. **Entering** - open the doors, wait 1.5 s, teleport to `MountPos` (adjusted for capsule height),
    switch the `CharacterController` **off**, face out, shut the doors.
-3. **Hidden** - `BreathlessCheck` returns early and `UpdateFear` counts the monster as unseen, so
+3. **Hidden** - the agent's catch check skips it (`INpcBrain.Sheltered`) and `UpdateFear` counts the monster as unseen, so
    stress decays.
 
    The doors must first be **seen shut**. `Door.Opened` stays true until the close animation ends

@@ -1,3 +1,5 @@
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
 using Space;
 using UnityEngine;
 
@@ -14,7 +16,7 @@ namespace YourBuddy
         /// </summary>
         string Name { get; }
         Transform Transform { get; }
-        BuddyHands Hands { get; }
+        NpcHands Hands { get; }
         /// <summary>
         /// The leg the current Route is walking to, or null.
         /// </summary>
@@ -35,7 +37,7 @@ namespace YourBuddy
         void StandFacing(Vector3 point);
 
         bool InReach(ReachTask task);
-        string? PlanReach(ReachTask task, out BuddyNodeGraph.NavPath plan);
+        string? PlanReach(ReachTask task, out NavPath plan);
         bool StepIntoReach(ReachTask task, out Vector3 move, out bool wantMove);
         /// <summary>
         /// Whether some node has a clear walk to a stand point for `task`. Fills its Node and StandPoint.
@@ -45,7 +47,7 @@ namespace YourBuddy
         /// Makes `leg` the Route's reason, walking `plan` to it; a null plan is a leg already in reach.
         /// The leg it replaces is not ended: that is how one leg hands over to the next.
         /// </summary>
-        void Walk(ErrandLeg leg, BuddyNodeGraph.NavPath? plan);
+        void Walk(ErrandLeg leg, NavPath? plan);
         /// <summary>
         /// Ends the Route and its leg; the leg's End puts back what it left half done.
         /// </summary>

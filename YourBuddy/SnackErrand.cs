@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
 using Space;
 using UnityEngine;
 using static YourBuddy.Items;
@@ -130,7 +133,7 @@ namespace YourBuddy
                 }
                 if (plans++ >= SnackMaxPlans) break;
 
-                failure = Body.PlanReach(task, out BuddyNodeGraph.NavPath plan);
+                failure = Body.PlanReach(task, out NavPath plan);
                 if (failure != null)
                 {
                     Skips.Skip(task.Own, SnackSkipSeconds);
@@ -160,7 +163,7 @@ namespace YourBuddy
         /// A null plan is food already in reach: the Route has nothing to walk. Only eating schedules the
         /// full interval; until then a failed walk tries again after SnackRetryDelay.
         /// </summary>
-        private void Begin(SnackTask task, BuddyNodeGraph.NavPath? plan)
+        private void Begin(SnackTask task, NavPath? plan)
         {
             Body.Walk(task, plan);
             DueAt = Time.time + SnackRetryDelay;
@@ -374,7 +377,7 @@ namespace YourBuddy
 
         private static void Trace(string line)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Snack: " + line);
+            if (NpcLog.Level >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Snack: " + line);
         }
     }
 }

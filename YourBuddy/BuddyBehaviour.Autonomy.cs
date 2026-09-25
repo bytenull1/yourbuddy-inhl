@@ -1,3 +1,6 @@
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
 using Space;
 using UnityEngine;
 
@@ -57,7 +60,7 @@ namespace YourBuddy
         /// <summary>
         /// A goto order: the plan to walk now, and the goal to plan for again after a flee.
         /// </summary>
-        public bool ApplyRouteOrder(BuddyNodeGraph.NavPath plan, Vector3 goal)
+        public bool ApplyRouteOrder(NavPath plan, Vector3 goal)
         {
             if (IsDead) return false;
 
@@ -197,7 +200,7 @@ namespace YourBuddy
         {
             if (OrderInForce) return "order '" + OrderName(orderedMode.GetValueOrDefault()) + "' in force";
 
-            if (catchInProgress) return "being caught";
+            if (agent.IsBeingCaught) return "being caught";
 
             if (InDialog) return "being talked to";
 
@@ -207,7 +210,7 @@ namespace YourBuddy
 
             if (mode == BuddyMode.Route) return DescribeReachTask() is { } task ? task : "walking a route";
             // Follow already waits inside for a spacewalk; there is nothing to choose.
-            if (IsPlayerInSpace(player)) return "the player is outside";
+            if (NpcAgent.IsPlayerInSpace(player)) return "the player is outside";
 
             return null;
         }
@@ -312,7 +315,7 @@ namespace YourBuddy
 
             if (mode != BuddyMode.Follow) return "It comes back to you at its next look";
 
-            return BuddyNodeGraph.NearestActiveNodeOwner(transform.position, DecideNodeOwnerRadius) != null
+            return NavGraph.NearestActiveNodeOwner(transform.position, DecideNodeOwnerRadius) != null
                 ? "Follow over - wandering off weighs full at its next look, unless an errand outweighs it"
                 : $"Follow over, but no nav node is within {DecideNodeOwnerRadius:0}m to wander on - it keeps following";
         }
@@ -322,7 +325,7 @@ namespace YourBuddy
         /// </summary>
         private void TraceDecider(string line)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value < 2 || Time.time < decideTraceAt) return;
+            if (NpcLog.Level < 2 || Time.time < decideTraceAt) return;
 
             decideTraceAt = Time.time + 15f;
             YourBuddyPlugin.Log.LogInfo("[mind] Decider " + line);
@@ -340,7 +343,7 @@ namespace YourBuddy
 
             if (Asleep || !gameObject.activeInHierarchy) return Name + " is not awake here";
 
-            if (catchInProgress || mode == BuddyMode.Flee) return Name + " is already fleeing the Breathless";
+            if (agent.IsBeingCaught || mode == BuddyMode.Flee) return Name + " is already fleeing the Breathless";
 
             if (!whileAlert && fearState != FearState.Calm) return Name + " is too scared for that";
 

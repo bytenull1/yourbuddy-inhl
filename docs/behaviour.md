@@ -24,7 +24,7 @@ An order ends when it is:
 - **a goto that arrived** (`FinishRoute`), or one a flee interrupted and that can no longer be
   planned (`EndFlee`);
 - **a goto during a ship rebuild** - its goal belongs to the old layout
-  ([the-buddy-rides-its-own-floor](invariants.md#the-buddy-rides-its-own-floor)).
+  ([an-npc-rides-its-own-floor](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#an-npc-rides-its-own-floor)).
 
 Otherwise a goto always runs to completion; revoking one lets it finish first.
 
@@ -127,7 +127,7 @@ Collectors share static buffers (`PutAwayItems`, `CheckedContainers`, `Contained
 runs at a time and its summary is taken before the next. The winner's `StartX` collects again, so no
 task body had to change. It filters the same frame's scene arrays (`SceneScan.ThisFrame`), so the
 scene is swept once per decision
-([scene-sweeps-are-budgeted](invariants.md#scene-sweeps-are-budgeted)).
+([scene-sweeps-are-budgeted](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#scene-sweeps-are-budgeted)).
 
 ### Bouts
 
@@ -150,10 +150,10 @@ only the graph knows where they are.
 ### Range
 
 Search radii are a cheap broad phase. What keeps them safe is an **owner filter**: a candidate must
-be on the vessel the buddy is riding (`OnMyVessel`, `BuddyBehaviour.Carry.cs`). It checks the
-object's ancestry first (`BuddyManager.OwnerOfTransform`) and probes the floor only if needed. A
+be on the vessel the buddy is riding (the agent's `OnMyVessel`). It checks the
+object's ancestry first (`NpcVessels.OwnerOfTransform`) and probes the floor only if needed. A
 non-answer allows the candidate
-([a-missing-floor-is-a-last-resort-not-an-answer](invariants.md#a-missing-floor-is-a-last-resort-not-an-answer)).
+([a-missing-floor-is-a-last-resort-not-an-answer](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#a-missing-floor-is-a-last-resort-not-an-answer)).
 
 Without the filter a 30 m radius reaches across a docking collar and the buddy leaves the ship for a
 wrapper. Change radius and filter together.
@@ -190,28 +190,29 @@ A parked buddy (undocked station, or aboard during a spacewalk) is inactive, so 
 
 ## 4. Every place that reads `mode` outside the dispatch switch
 
+The dispatch switch is `INpcBrain.Steer`. NPC.Core's agent never reads `mode`; it asks the brain
+([its agent.md §3](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/agent.md#3-the-brain)).
 Check a new mode against every row.
 
 | Site | What it does | `Flee` |
 |---|---|---|
-| `Navigation.cs` `UpdateIdleRecovery` | skips `Stay` and `Dead` | not skipped |
-| `Obstacles.cs` `UpdateStuckDetection` | stuck recovery on `Route` / `Wander` | `Retreat` with a plan: re-plan |
-| `Obstacles.cs` `UpdateGoalProgress` | no-progress recovery on `Wander` / `Route` / `Follow` | `Retreat`: re-plan; `ToPlayer`: Follow's branch |
-| `Presentation.cs` `UpdateAnimation` | idle facing: the monster above Calm, else the player in Follow | watches the monster |
-| `Doors.cs` `StepOutOfDoorway` | skipped in `Route` | allowed |
-| `Navigation.cs` `HasRoute()` | `Route` only | - |
+| `INpcBrain.Activity` | the agent's stall recovery: `Follow` → `Pursuit`, `Wander` → `DropPlanAndPause`, `Route` → `SkipWaypoint`, `Stay` / `Dead` → none. Idle watch off in `Stay` / `Dead`; spacing only in `Follow` / `Wander` and not hiding; no doorway step-out in `Route` | `Retreat` → `EndWalk`, `ToPlayer` → `Pursuit`, else none |
+| `INpcBrain.TryIdleFacing` | idle facing: the monster above Calm, else the player in Follow | watches the monster |
+| `INpcBrain.OnWalkAbandoned` | a stalled walk: `AbandonRetreat` in `Flee`, else `FinishRoute` | re-plans the retreat |
+| `INpcBrain.OnShipRebuilt` | a rebuild turns `Route` into `Follow` | same for `modeBeforeFlee` |
+| `IErrandBody.OnRoute` | `Route` only | - |
 | `Fear.cs` `HoldBackFromMonster` | exempts `Flee` in `Retreat` | the retreat was vetted |
 | `Fear.cs` `UpdateFear`, `ResetFear`, `TraceFear`, `DescribeFear` | fear's own mode handling | owner |
 | `Autonomy.cs` `ApplyOrder`, `ApplyRouteOrder` | mid-flee, replace `modeBeforeFlee` | defers |
 | `Autonomy.cs` `StandDownReason`, `GotoUnderway`, `UpdateAutonomy` | stand down on `Flee` / `Route`; branch on `Wander` / `Follow` | stands down |
 | `Mind.cs` `ScoreCompany`, `ActOn` | which of Follow / Wander is weighed | not reached |
-| `Environment.cs` `RideShipRebuild` | a rebuild turns `Route` into `Follow` | same for `modeBeforeFlee` |
-| `StatusText`, `ReportObstacles` | print it | - |
+| `Hide.cs` `BeginHide`, `EndHide` | an errand's `Route` ends; a hide in a flee ends or retries it | owner |
+| `ActivityName`, `StatusText`, `ListLine` | print it | - |
 
 Writers of `mode`: the initialiser, `SetMode` (from `ApplyOrder`, `Decide`, `StartFlee`, `EndFlee`,
-`RideShipRebuild`), `StartRoute`, `FinishRoute`, `Die`. `SetMode` does **not** clear
-`followStepOffUntil`, `wanderIdleUntil`, `unreachableWaypointUntil`, `followWaitUntil` or
-`sidestepUntil`; `StartFlee` clears the step-off and Follow wait itself.
+`OnShipRebuilt`), `StartRoute`, `FinishRoute`, `IErrandBody.Walk`, `BeginHide`, `OnDied`. `SetMode`
+drops the agent's plan but not its step-off, wander pause, barred waypoint or sidestep; `StartFlee`
+and `EndFlee` cancel the step-off themselves (`CancelStepOff`).
 
 ---
 
@@ -248,7 +249,7 @@ reasons and empty searches at level 2 (every 15 s).
 ```
 
 A route ends one of those two ways, never both: a plan whose waypoints were skipped rather than
-reached did not arrive ([a-skipped-waypoint-is-not-an-arrival](invariants.md#a-skipped-waypoint-is-not-an-arrival)).
+reached did not arrive ([a-skipped-waypoint-is-not-an-arrival](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#a-skipped-waypoint-is-not-an-arrival)).
 
 A `Chose` with no `Decided:` after it, then another `Chose`, is an impossible urge being redrawn; the
 level-2 line between says why.
@@ -273,4 +274,4 @@ is dropped while the decider is standing down.
   spot of its current leg or hide ([one-buddy-per-target](invariants.md#one-buddy-per-target)). The
   refusal reads `another buddy is after it`, `... is using it`, `... is selling there` or
   `... is on it`. Two buddies may still pick the same trash can or the same wander node; idle ones
-  then step apart ([buddies-never-block-each-other](invariants.md#buddies-never-block-each-other)).
+  then step apart ([npcs-never-block-each-other](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#npcs-never-block-each-other)).

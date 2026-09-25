@@ -4,5 +4,3 @@
 # LF + specialized diff
 *.cs            text eol=lf diff=csharp
 
-# Written only by tools/bundle_nodegraph.py; collapsed in GitHub pull requests
-YourBuddy/Resources/nodegraph.bundled.json linguist-generated=true

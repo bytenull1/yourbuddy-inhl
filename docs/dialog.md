@@ -1,71 +1,28 @@
 # Dialog - giving the buddy orders
 
-`BuddyDialog.cs` (the window), `DialogSkin.cs` (drawing), `BuddyDialogCommands.cs` (parsing),
-`BuddyRooms.cs` (room names) and `BuddyCommands.cs` (the orders). Config: `Dialog` (General, default
-on). There is no hotkey; the game's Interact binding is the only way in.
+`BuddyConversation.cs` (what the buddy says through NPC.Core's talk window), `BuddyDialogCommands.cs`
+(parsing), `BuddyRooms.cs` (room names) and `BuddyCommands.cs` (the orders). Config: `Dialog` (General,
+default on). There is no hotkey; the game's Interact binding is the only way in.
 
 ---
 
 ## 1. Opening it
 
-Look at the buddy and press **Interact**. `BuddyDialog` listens to
-`GameManager.Instance.InputHandler.OnInteract` and checks:
+Look at the buddy and press **Interact**. The window, which NPC answers, the sight and range checks
+and the input handover are NPC.Core's ([interaction.md](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/interaction.md#1-opening-it)).
+A buddy can be talked to (`BuddyConversation.CanTalk`) while `Dialog` is on and it is neither asleep
+in its capsule nor hidden; NPC.Core adds that it lives and is loaded.
 
-| Gate | Why |
-|---|---|
-| within `TalkRange` (2.4 m) | shorter than the player's reach, so using a keypad is not talking to the buddy |
-| inside a `LookAngle` cone (30°) | measured to the nearest point of the buddy's capsule, not its chest |
-| `!PlayerIsBusy` | the player is not aiming at or holding an `Interactable` - **the game's interaction wins**. Read from `PlayerController.focusedInteractable`; if a game update breaks that field, a ray along the view within reach decides instead, so a lost field never hands terminals' keypresses to the dialog |
-| `!SightBlocked` | one ray on `ProbeLayers`; without it the window opens through walls |
-
-Every buddy's window hears the key. Only one window is open at a time, and of the buddies that pass
-every gate, the one at the smallest view angle answers (ties: the lower number). Its name is the
-title. Opening it makes that buddy the **focus**, so console commands without a target go to it too
-([reference.md §2](reference.md#2-debug-commands)).
-
-While the window is open the buddy stands still and faces the player (`inDialog`). The mod frees the
-cursor and calls `InputHandler.SwitchToUIInput()`, like `AssistanceBot.Talk`, and reverses both on
-close (**Escape** or the close box).
-
-Deliberately **not** used:
-
-- **The game's `DialogMenu`** - it is typed to `AssistanceBot` and reads the bot's data and animator.
-- **A game `Interactable` on the buddy** - it needs a serialized `outlines` object the mod cannot
-  fill, and `ThrowInteractionRaycast` never picks the buddy's `CharacterController`. So selection is
-  an angle test; the ray only checks for walls.
-
-`InputHandler` clears its listeners on teardown and a scene load brings a new one, so the
-subscription is re-checked every frame.
+Opening the window makes that buddy the **focus**, so console commands without a target go to it too
+([reference.md §2](reference.md#2-debug-commands)). While it is open the buddy stands still and faces
+the player (`InDialog`). The title is the buddy's name, and the first line "Standing by.".
 
 ---
 
 ## 2. The panel
 
-Styled after the game's terminal dialogs: a framed near-black panel on the right, a title bar with a
-close box, a message log, and a bottom row of *commands toggle · text field · send*. `DialogSkin`
-builds it from 1×1 fills and the game's own font and sprites, so the mod stays a single DLL.
-
-**Font:** the game's `Pixellari` (the AssistantBot dialog font), found among loaded fonts by name and
-retried every 5 s; Consolas until then. Logged once when found. Title `TitleSize` 32, text `TextSize`
-24 - change `TextSize` to rescale. No synthesized bold/italic: it smears a pixel font.
-
-**Sprites** (loaded from `Resources`, point-filtered):
-
-| Sprite | Used for |
-|---|---|
-| `textures/ui/interfaces/ColorButton` | buttons and the text field frame, nine-sliced |
-| `textures/ui/interfaces/ColorButtonPressed` | a held button |
-| `textures/ui/icons/Arrow2` | send (tinted `AcceptTint`, green) |
-| `textures/ui/icons/Cross` | close |
-| `textures/ui/icons/Chat` | commands toggle |
-
-Sizes are in UI pixels: `DialogSkin.UiScale` = screen height / 540, rounded. A sprite that fails to
-load falls back to a flat frame and a text label. Every rect is rounded to whole pixels to avoid blur.
-
-IMGUI notes: build styles inside `OnGUI` (they read `GUI.skin`), and give generated textures and fonts
-`HideFlags.HideAndDontSave` or they are lost on scene load. This panel has controls, so it runs on
-every event and must **not** be gated on `Repaint`
-([read-only-panels-build-on-repaint](invariants.md#read-only-panels-build-on-repaint)).
+NPC.Core draws it ([interaction.md §2](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/interaction.md#2-the-panel)). The commands page lists
+`BuddyDialogCommands.Names`: Follow, Wander, Stay, Hide, Tidy, Sell, Play, Snack, Goto, Decide, Password.
 
 ---
 
@@ -78,7 +35,7 @@ uses, for the buddy being talked to.
 **Everyone.** "everyone", "everybody", "all of you" or "both of you" anywhere in the text gives the
 order to every living, awake buddy, one reply line each ("everyone follow me"). The group word is
 removed before matching. A password is told once: codes are shared
-([door-knowledge-is-shared](invariants.md#door-knowledge-is-shared)).
+([door-knowledge-is-shared](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#door-knowledge-is-shared)).
 
 Matching order matters - it is a substring test ("trash box" contains "trash"). The one exception
 is a goto that names a room, which is tried right after "decide" ("go to the workshop" contains
@@ -96,7 +53,7 @@ is a goto that names a room, which is tried right after "decide" ("go to the wor
 | play / toy | `buddy_play` | a play session ([items.md §5](items.md#5-idle-play)) |
 | snack / eat / food / hungry | `buddy_snack` | eat or drink something nearby ([snacks.md](snacks.md)) |
 | goto *room* | `buddy_goto <i>` (a node, not a room) | `FindPath` + `ApplyRouteOrder` ([below](#goto-by-room)) |
-| password *nnnn* | `buddy_password <code>` | adds the code to the codes every buddy knows |
+| password *nnnn* | `buddy_password <code>` | adds the code to the codes every NPC knows ([NPC.Core's password doors](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/doors.md#password-doors)) |
 
 **Follow, Wander, Stay, Goto and "decide" are orders.** They are recorded as the order in force
 ([an-order-is-not-a-mode](invariants.md#an-order-is-not-a-mode)). Given during a flee, an order waits
@@ -109,7 +66,7 @@ the exception: it works while Alert, and it interrupts an errand the buddy chose
 only on the next order ([an-ordered-hide-ends-only-on-an-order](invariants.md#an-ordered-hide-ends-only-on-an-order)).
 
 `Stay` holds position, but still steps out of a doorway it blocks
-([step-off-applies-in-every-mode](invariants.md#step-off-applies-in-every-mode)).
+([step-off-applies-in-every-mode](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#step-off-applies-in-every-mode)).
 
 ### Goto by room
 
@@ -120,7 +77,7 @@ prefix are ignored, and so is a partial name that is unique: "goto library", "go
 A partial name that fits several rooms is answered with the candidates, and "goto" alone (the
 **Goto** button too) lists the rooms.
 
-A room has no volume ([game-model.md §2](game-model.md#2-there-are-no-room-volumes)) and a station's
+A room has no volume ([game-model.md §2](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/game-model.md#2-there-are-no-room-volumes)) and a station's
 floors are not under its rooms, so `BuddyRooms` gives each node to the room whose furniture (every
 transform under the `Room`) is nearest to it. The room's nodes are tried nearest its middle first, up
 to four, so one dead-end node does not strand it. A room with no node is not listed. The

@@ -9,6 +9,9 @@ Two checks:
    in the C# comments, must name a file that exists and a heading that exists in it
    (GitHub anchor rules). Code links to invariants by anchor, so a renamed heading
    silently orphans them - see AGENTS.md section 4.
+   Links into NPC.Core - `npc-core:docs/<file>.md#anchor` in code, the repository's GitHub
+   URL in Markdown - are checked against a checkout of it beside this one
+   (../npc-core-inhl), and listed as notes when there is none.
 2. Constants. Each `| \\`Name\\` | value |` row under a "### ... - `File.cs`" heading in
    docs/reference.md must match the literal in the code. Rows the script can't compare
    (a computed value, a name it can't find) are listed with --verbose, not failed.
@@ -23,9 +26,14 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REFERENCE = "docs/reference.md"
+# The C# project folder: this repository's own source, searched recursively.
+SOURCE = next(d for d in ("NPC.Core", "YourBuddy") if os.path.isdir(os.path.join(REPO, d)))
+CORE_URL = "https://github.com/bytenull1/npc-core-inhl/blob/main/"
+CORE_ROOT = REPO if SOURCE == "NPC.Core" else os.path.join(os.path.dirname(REPO), "npc-core-inhl")
 
 MD_LINK = re.compile(r'\[[^\]]*\]\(([^)\s]+)\)')
-CODE_LINK = re.compile(r'\b(docs/[A-Za-z0-9_-]+\.md)(?:#([A-Za-z0-9_-]+))?')
+# Not inside a URL or a path: those are links of their own, or not ours.
+CODE_LINK = re.compile(r'(?<![\w/.:-])(npc-core:)?(docs/[A-Za-z0-9_-]+\.md)(?:#([A-Za-z0-9_-]+))?')
 HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*#*\s*$')
 FENCE = re.compile(r'^\s*(```|~~~)')
 SECTION_FILE = re.compile(r'^###\s.*`([A-Za-z0-9_.]+\.cs)`\s*$')
@@ -70,8 +78,29 @@ def anchors(path, cache={}):
     return cache[path]
 
 
-def check_target(where, base_dir, target, errors):
+def source_files(*patterns):
+    """This repository's C# files, the samples' included, bin/ and obj/ left out."""
+    found = []
+    for pattern in patterns:
+        found += glob.glob(os.path.join(REPO, SOURCE, '**', pattern), recursive=True)
+        found += glob.glob(os.path.join(REPO, 'samples', '**', pattern), recursive=True)
+    skip = (os.sep + 'bin' + os.sep, os.sep + 'obj' + os.sep)
+    return sorted(set(f for f in found if not any(s in f for s in skip)))
+
+
+def check_core_target(where, target, errors, notes):
+    """A link into NPC.Core: resolved against the checkout beside this one, if there is one."""
+    if not os.path.isdir(os.path.join(CORE_ROOT, "docs")):
+        notes.append("%s: %s not checked, no NPC.Core checkout at %s" % (where, target, CORE_ROOT))
+        return
+    check_target(where, CORE_ROOT, target, errors)
+
+
+def check_target(where, base_dir, target, errors, notes=None):
     """One link: file must exist, anchor (if any) must be one of its headings."""
+    if target.startswith(CORE_URL) and notes is not None:
+        check_core_target(where, target[len(CORE_URL):], errors, notes)
+        return
     if re.match(r'^[a-z]+:', target) or target.startswith('//'):
         return
     path_part, _, anchor = target.partition('#')
@@ -92,12 +121,13 @@ def check_target(where, base_dir, target, errors):
 def markdown_files():
     names = glob.glob(os.path.join(REPO, '*.md')) + glob.glob(os.path.join(REPO, 'docs', '*.md'))
     names += glob.glob(os.path.join(REPO, '.github', '**', '*.md'), recursive=True)
-    for sub in ('decompiled', 'assetripper', os.path.join('YourBuddy', 'lib')):
+    names += glob.glob(os.path.join(REPO, 'samples', '*', 'README.md'))
+    for sub in ('decompiled', 'assetripper', os.path.join(SOURCE, 'lib')):
         names += glob.glob(os.path.join(REPO, sub, 'README.md'))
     return sorted(n for n in names if os.path.basename(n) != 'LAST_SESSION.md')
 
 
-def check_links(errors):
+def check_links(errors, notes):
     count = 0
     for path in markdown_files():
         fenced = False
@@ -109,14 +139,17 @@ def check_links(errors):
             line = re.sub(r'`[^`]*`', '', line)
             for m in MD_LINK.finditer(line):
                 count += 1
-                check_target("%s:%d" % (rel(path), number), os.path.dirname(path), m.group(1), errors)
-    for path in sorted(glob.glob(os.path.join(REPO, 'YourBuddy', '*.cs')) +
-                       glob.glob(os.path.join(REPO, 'tools', '*.py'))):
+                check_target("%s:%d" % (rel(path), number), os.path.dirname(path), m.group(1), errors, notes)
+    for path in source_files('*.cs') + sorted(glob.glob(os.path.join(REPO, 'tools', '*.py'))):
         for number, line in enumerate(read(path), 1):
             for m in CODE_LINK.finditer(line):
                 count += 1
-                target = m.group(1) + ('#' + m.group(2) if m.group(2) else '')
-                check_target("%s:%d" % (rel(path), number), REPO, target, errors)
+                where = "%s:%d" % (rel(path), number)
+                target = m.group(2) + ('#' + m.group(3) if m.group(3) else '')
+                if m.group(1) and SOURCE != "NPC.Core":
+                    check_core_target(where, target, errors, notes)
+                else:
+                    check_target(where, REPO, target, errors)
     return count
 
 
@@ -135,9 +168,8 @@ def source_value(name, preferred):
     """(values, file) of a constant - one value, or several for an array - searching the
     named file and its partials first. values is None if it isn't made of plain numbers."""
     stem = os.path.splitext(preferred)[0]
-    first = sorted(glob.glob(os.path.join(REPO, 'YourBuddy', stem + '.cs')) +
-                   glob.glob(os.path.join(REPO, 'YourBuddy', stem + '.*.cs')))
-    rest = sorted(set(glob.glob(os.path.join(REPO, 'YourBuddy', '*.cs'))) - set(first))
+    first = source_files(stem + '.cs', stem + '.*.cs')
+    rest = sorted(set(source_files('*.cs')) - set(first))
     decl = re.compile(DECL % re.escape(name))
     for path in first + rest:
         m = decl.search('\n'.join(read(path)))
@@ -209,7 +241,7 @@ def main():
     args = parser.parse_args()
 
     errors, unchecked = [], []
-    links = check_links(errors)
+    links = check_links(errors, unchecked)
     constants = check_constants(errors, unchecked)
     if args.verbose:
         for message in unchecked:

@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Agents;
 using UnityEngine;
 
 namespace YourBuddy
@@ -57,20 +59,7 @@ namespace YourBuddy
             return flat.sqrMagnitude;
         }
 
-        public static bool ColliderBounds(GameObject root, out Bounds bounds)
-        {
-            bool found = false;
-            bounds = default;
-            foreach (Collider collider in root.GetComponentsInChildren<Collider>())
-            {
-                if (!collider.enabled || collider.isTrigger) continue;
-
-                if (found) bounds.Encapsulate(collider.bounds);
-                else bounds = collider.bounds;
-                found = true;
-            }
-            return found;
-        }
+        public static bool ColliderBounds(GameObject root, out Bounds bounds) => NpcHands.ColliderBounds(root, out bounds);
 
         public static Vector3 ItemTop(Grabbable item)
         {

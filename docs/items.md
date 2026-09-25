@@ -1,8 +1,8 @@
 # Items - carrying, tidying, selling, idle play
 
-`BuddyHands.cs` (holding one item), `TidyErrand.cs` (trash into a trash can), `SellErrand.cs` (trash
-boxes to a sell station), `PlayErrand.cs` (idle play), all walking on `BuddyBehaviour.Reach.cs`, with
-the shared item rules in `Items.cs`.
+`TidyErrand.cs` (trash into a trash can), `SellErrand.cs` (trash boxes to a sell station), `PlayErrand.cs`
+(idle play), with the shared item rules in `Items.cs`. Holding an item and the walk into reach are
+NPC.Core's agent: `NpcHands` and `NpcAgent.Reach.cs` ([its agent.md §6-7](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/agent.md#6-walking-into-reach)).
 Config (General): `Tidying`, `TidyIntervalMinutes` (5), `SellTrash`, `ItemPlay`, `ItemPlayAnything`
 (off), `ItemPlayIntervalMinutes` (5). Console: `buddy_tidy`, `buddy_sell`, `buddy_play`, `buddy_mind`.
 
@@ -47,26 +47,13 @@ destroyed. A `Trash_Box` sells for 459 on Normal.
 
 ## 2. Carrying
 
-One item at a time (`held`). Picking up is `Crate.ParentItems` **without parenting to the buddy**: the
-item stays under a room's content, and `LateUpdate` moves it to the hold point (`HoldHeight` 0.95 m
-above the **feet**, `HoldForward` 0.45 m ahead) at walking pace plus 1.5 m/s. Not parented, it never
-disappears with a deactivated buddy, and its save record never names the buddy.
+The buddy holds one item at a time in the agent's hands (`NpcHands`): never parented to it, re-owned
+to the room it is in, put down before a save
+([NPC.Core's agent.md §7](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/agent.md#7-hands)).
 
-**Reaching out.** `BuddyHands.ReachTo(point)` moves the held item to a point with its colliders **on**, so it
-touches triggers like the player's held item does. `null` brings it back and turns them off.
-
-**Putting down** restores colliders, `restrictGrab`, interpolation, wakes physics and calls
-`SavePosition`. Item and buddy ignore each other for 1 s. While held, the player cannot grab it.
-
-**Which room it belongs to.** Each frame the held item is re-owned to the buddy's current room
-([a-carried-item-belongs-to-the-room-its-carrier-is-in](invariants.md#a-carried-item-belongs-to-the-room-its-carrier-is-in)),
-because the game's own re-parenting skips `restrictGrab` items. An item already inactive was destroyed
-(trash can, sale) and is left alone.
-
-**Every ending puts the item down** in front of the buddy (`[ai] Put down '…' - why`): task end,
-flee, order, rebuild, death, parking, despawn, and saving
-([a-carried-item-is-put-down-before-a-save](invariants.md#a-carried-item-is-put-down-before-a-save)).
-An item deactivated by something else is forgotten (`is gone from my hands`).
+**Every ending puts the item down** in front of the buddy (`[ai] Put down '…' - why`): the agent's on
+death, parking, despawn and saving, and the errand leg's own `End` on task end, flee, order and ship
+rebuild.
 
 No arm animation yet.
 
@@ -198,11 +185,11 @@ far side could "see" the button through the cage, but `StandAllowed` and `WalkLo
 genuinely walkable points outside the zone.
 
 **Fences.** No task stands inside a sell station's fences, except that station's own sell legs
-([a-fenced-sell-station-is-not-somewhere-to-stand](invariants.md#a-fenced-sell-station-is-not-somewhere-to-stand)).
+([a-fenced-sell-station-is-not-somewhere-to-stand](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#a-fenced-sell-station-is-not-somewhere-to-stand)).
 The pen is the `Fence*` colliders plus the item zone plus `SellStationClearance`, re-measured every
 `SellPenRefresh` (fences load with their room). Follow and Wander don't use reach tasks, so a buddy
 inside a pen that can't get closer to a target outside it for 3 s is teleported clear by
-`EmergencyUnstick` (`[ai] Penned in a sell station's fences … - climbing out`), never into another
+the agent's `EmergencyUnstick` (`[ai] Penned in a sell station's fences … - climbing out`), never into another
 pen. The fence colliders are never touched.
 
 A flee or order ends the run: a box in hand is put down, loaded boxes stay. `buddy_sell` and the

@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Navigation;
 using UnityEngine;
 using static YourBuddy.Items;
 
@@ -190,7 +193,7 @@ namespace YourBuddy
                 }
                 if (plans++ >= TidyMaxPlans) break;
 
-                failure = Body.PlanReach(task, out BuddyNodeGraph.NavPath plan);
+                failure = Body.PlanReach(task, out NavPath plan);
                 if (failure != null)
                 {
                     Skips.Skip(task.Own, TidySkipSeconds);
@@ -219,7 +222,7 @@ namespace YourBuddy
         /// <summary>
         /// A null plan is a target already in reach. Only trash that went in schedules the full interval.
         /// </summary>
-        private void Begin(TidyTask task, BuddyNodeGraph.NavPath? plan)
+        private void Begin(TidyTask task, NavPath? plan)
         {
             Body.Walk(task, plan);
             DueAt = Time.time + TidyRetryDelay;
@@ -441,7 +444,7 @@ namespace YourBuddy
                 Body.Walk(toBin, null);
                 return Vector3.zero;
             }
-            failure = Body.PlanReach(toBin, out BuddyNodeGraph.NavPath plan);
+            failure = Body.PlanReach(toBin, out NavPath plan);
             if (failure != null)
             {
                 Skips.Skip(task.Bin.transform, TidySkipSeconds);
@@ -495,7 +498,7 @@ namespace YourBuddy
 
         private static void Trace(string line)
         {
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Tidy: " + line);
+            if (NpcLog.Level >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Tidy: " + line);
         }
     }
 }

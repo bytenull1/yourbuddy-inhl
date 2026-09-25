@@ -1,21 +1,24 @@
 ﻿using System;
-using System.ComponentModel;
-using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
-using HarmonyLib;
+using NPC.Core;
+using NPC.Core.Agents;
+using NPC.Core.Interaction;
+using NPC.Core.Saves;
+using NPC.Core.World;
 using Space;
 using UnityEngine;
 
 namespace YourBuddy
 {
     /// <summary>
-    /// YourBuddy - BepInEx 5 plugin adding a follower NPC to Isolated Inhale: node-graph
-    /// navigation, doors, mortality, space protection and a save sidecar.
+    /// YourBuddy - BepInEx 5 plugin adding a follower NPC to Isolated Inhale, built on NPC.Core
+    /// (navigation, doors, mortality, space protection) with a save sidecar of its own.
     /// See README.md and docs/architecture.md.
     /// </summary>
-    [BepInPlugin("com.bytenull1.yourbuddy", "YourBuddy Mod", "1.0.7")]
+    [BepInPlugin("com.bytenull1.yourbuddy", "YourBuddy Mod", "1.0.8")]
+    [BepInDependency(NpcCorePlugin.Guid, NpcCorePlugin.Version)]
     [BepInProcess("Isolated Inhale.exe")]
     public sealed class YourBuddyPlugin : BaseUnityPlugin
     {
@@ -26,28 +29,8 @@ namespace YourBuddy
         /// Awake shares one stand-in source. docs/logging.md#4-rules-for-adding-logs
         /// </summary>
         public static ManualLogSource Log =>
-            BuddyManager.ActingLog ??
+            NpcRegistry.ActingLog ??
             (Instance != null ? Instance.Logger : (_fallbackLog ??= BepInEx.Logging.Logger.CreateLogSource("YourBuddyMod")));
-        private static BuddyNodeEditor _nodeEditor;
-        public static BuddyNodeEditor NodeEditor
-        {
-            get
-            {
-                if (_nodeEditor == null)
-                {
-                    GameObject? go = GameObject.Find("YourBuddyNodeEditor");
-                    if (go == null)
-                    {
-                        go = new GameObject("YourBuddyNodeEditor");
-                        DontDestroyOnLoad(go);
-                    }
-                    BuddyNodeEditor editor = go.GetComponent<BuddyNodeEditor>();
-                    _nodeEditor = editor != null ? editor : go.AddComponent<BuddyNodeEditor>();
-                }
-                return _nodeEditor;
-            }
-            private set => _nodeEditor = value;
-        }
 
         // Config entries (live in BepInEx\config\com.bytenull1.yourbuddy.cfg)
         public static ConfigEntry<bool> ConfigSaveSupport;
@@ -57,7 +40,6 @@ namespace YourBuddy
         public static ConfigEntry<bool> ConfigPreventSpace;
         public static ConfigEntry<bool> ConfigAutoDoors;
         public static ConfigEntry<bool> ConfigDebugVisuals;
-        public static ConfigEntry<int> ConfigDebugLevel;
         public static ConfigEntry<bool> ConfigShowHud;
         public static ConfigEntry<bool> ConfigDialog;
         public static ConfigEntry<bool> ConfigFear;
@@ -77,15 +59,6 @@ namespace YourBuddy
         public static ConfigEntry<float> ConfigOrderExpirySeconds;
         // ReSharper disable once MemberCanBePrivate.Global
         public static ConfigEntry<float> ConfigMoveSpeed;
-        public static ConfigEntry<bool> ConfigBundledGraph;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorToggleKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorPlaceKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorDeleteKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorLinksKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorForceLinkKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorClearLinksKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorTypeKey;
-        public static ConfigEntry<KeyboardShortcut> ConfigEditorSaveKey;
 
         private void Awake()
         {
@@ -109,11 +82,6 @@ namespace YourBuddy
                 "and teleport it back inside if it somehow ends up in open space.");
             ConfigAutoDoors = Config.Bind("General", "AutoDoors", true,
                 "Allow the buddy to open room doors (Gate type) in front of it. Cabinet doors and airlocks are never touched.");
-            ConfigDebugLevel = Config.Bind("General", "DebugLevel", 1,
-                "Amount of debug logging: 0 = quiet (warnings only), 1 = normal (stuck diagnostics, door logs), " +
-                "2 = thinking (path planning details, the gate inventory and the gate-frame audit), " +
-                "3 = obstacle (per-tick obstacle reports). " +
-                "Can also be changed at runtime with 'debug_level'.");
             ConfigDebugVisuals = Config.Bind("General", "DebugVisuals", false,
                 "Draw the buddy's target, planned path and obstacle probes in the world. Can also be toggled with 'buddy_debug'.");
             ConfigShowHud = Config.Bind("General", "ShowHud", false,
@@ -179,78 +147,22 @@ namespace YourBuddy
                 "How long an order holds when OrderPersistence is Expires. Ignored otherwise.");
             ConfigMoveSpeed = Config.Bind("General", "MoveSpeed", 3.5f,
                 "Default buddy movement speed in m/s.");
-            ConfigBundledGraph = Config.Bind("Navigation", "BundledGraph", true,
-                "Use the ready-made nav graph shipped with the mod for stations and the ship. " +
-                "Your own nodes always win: the moment you edit anything on a ship or station, " +
-                "that one becomes yours and mod updates stop changing it. " +
-                "'buddy_node bundled' shows which is which, 'buddy_node unfork <owner>' hands one back.");
-            ConfigEditorToggleKey = Config.Bind("NodeEditor", "EditorToggleKey", new KeyboardShortcut(KeyCode.F8),
-                "Toggles the node editor overlay. Can also be toggled with the 'node_editor' console command.");
-            ConfigEditorPlaceKey = Config.Bind("NodeEditor", "EditorPlaceKey", new KeyboardShortcut(KeyCode.Insert),
-                "Places a node at the player's position (Numpad0 works as an always-on alternative).");
-            ConfigEditorDeleteKey = Config.Bind("NodeEditor", "EditorDeleteKey", new KeyboardShortcut(KeyCode.Delete),
-                "Removes the node nearest to the player.");
-            ConfigEditorLinksKey = Config.Bind("NodeEditor", "EditorLinksKey", new KeyboardShortcut(KeyCode.L),
-                "Toggles rendering of node connections. Previously C, which fights the game's crouch key.");
-            ConfigEditorForceLinkKey = Config.Bind("NodeEditor", "EditorForceLinkKey", new KeyboardShortcut(KeyCode.K),
-                "Press once to mark the selected node, then again at another node to link them - the connection " +
-                "always works and skips the hull probe (use for ramps/stair flights the probe rejects). Press again " +
-                "on an already-linked pair to remove the link.");
-            ConfigEditorClearLinksKey = Config.Bind("NodeEditor", "EditorClearLinksKey", new KeyboardShortcut(KeyCode.U),
-                "Removes every link of the selected node at once.");
-            ConfigEditorTypeKey = Config.Bind("NodeEditor", "EditorTypeKey", new KeyboardShortcut(KeyCode.T),
-                "Cycles the selected node's type between Ground and Stair. A Stair node may be entered up to 2m " +
-                "off-level, from right at its foot or head.");
-            ConfigEditorSaveKey = Config.Bind("NodeEditor", "EditorSaveKey", new KeyboardShortcut(KeyCode.F6),
-                "Saves the node graph. Never bind this to F5: that key is the game's own QuickSave.");
 
             Logger.LogInfo("[mod] Initializing...");
-            ApplyPatches();
-
             GameInternals.ResolveAll();
 
-            // Door knowledge is the same for every buddy, so the graph asks it once:
-            // docs/invariants.md#door-knowledge-is-shared
-            BuddyNodeGraph.SegmentBlockedByDoor = BuddyBehaviour.SegmentBlockedByDoor;
+            // The game's moments and shared services come from NPC.Core, patched once for every NPC mod.
+            NpcEvents.Tick += BuddyManager.Tick;
+            NpcEvents.GameStarting += BuddyCryoSpawn.OnGameStarting;
+            NpcEvents.SaveLoaded += BuddyManager.ArmPendingSpawn;
+            NpcSaves.RegisterSidecar(BuddyBehaviour.ModName, BuddyManager.SidecarExtension, BuddyManager.SidecarContents);
+            SellRoomsKeeper.Register();
+
+            BuddyConsole.Register();
 
             GameObject managerGo = new("YourBuddyManager");
             DontDestroyOnLoad(managerGo);
             managerGo.AddComponent<BuddyManager>();
-
-
-            // Node editor (toggleable via console command or F8)
-            GameObject editorGo = new("YourBuddyNodeEditor");
-            DontDestroyOnLoad(editorGo);
-            NodeEditor = editorGo.AddComponent<BuddyNodeEditor>();
-        }
-
-        /// <summary>
-        /// Applies each patch group on its own, so a game update that removes one target
-        /// disables that one feature, named in the log, instead of every patch after it.
-        /// </summary>
-        private void ApplyPatches()
-        {
-            Harmony harmony = new("com.bytenull1.yourbuddy");
-            int applied = 0, total = 0;
-            foreach (Type group in typeof(Patches).GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Public))
-            {
-                if (!group.IsDefined(typeof(HarmonyPatch), false)) continue;
-
-                total++;
-                try
-                {
-                    harmony.CreateClassProcessor(group).Patch();
-                    applied++;
-                }
-                catch (Exception ex)
-                {
-                    string feature = group.GetCustomAttribute<DescriptionAttribute>()?.Description ?? group.Name;
-                    Logger.LogError($"[mod] Patch group '{group.Name}' failed - {feature} disabled: {ex}");
-                }
-            }
-
-            if (applied == total) Logger.LogInfo($"[mod] All {total} patch groups applied.");
-            else Logger.LogWarning($"[mod] {applied} of {total} patch groups applied - see errors above.");
         }
 
         /// <summary>
@@ -314,7 +226,7 @@ namespace YourBuddy
                 MonoBehaviour mb = monoBehaviours[i];
                 if (mb == null) continue;
 
-                if (mb is BuddyBehaviour or BuddyDialog) continue;
+                if (mb is BuddyBehaviour) continue;
 
                 string? ns = mb.GetType().Namespace;
                 if (ns != null && ns.StartsWith("Unity", StringComparison.Ordinal)) continue;
@@ -374,27 +286,7 @@ namespace YourBuddy
             }
             blocker.isTrigger = false;
 
-            if (realPlayer != null)
-            {
-                if (realPlayer.TryGetComponent(out CharacterController playerCc))
-                {
-                    // Player and buddy can walk through each other; thrown items still bounce off.
-                    if (buddyCc != null) Physics.IgnoreCollision(playerCc, buddyCc);
-
-                    Physics.IgnoreCollision(playerCc, blocker);
-                }
-
-                // The player's head/foot triggers must also ignore the buddy, otherwise the
-                // head trigger counts the blocker as a "ceiling" and force-crouches the player
-                // whenever they stand next to the buddy.
-                if (realPlayer.TryGetComponent(out PlayerController realPC))
-                {
-                    IgnorePlayerTrigger(GameInternals.PlayerControllerAccess.GetHeadTrigger(realPC), buddyCc, blocker);
-                    IgnorePlayerTrigger(GameInternals.PlayerControllerAccess.GetFootTrigger(realPC), buddyCc, blocker);
-                }
-            }
-            // The buddy's controller must never collide with its own blocker.
-            if (buddyCc != null) Physics.IgnoreCollision(buddyCc, blocker);
+            // The player, other NPCs and its own controller pass through it: NPC.Core's rule.
 
             // Deliberately much narrower than the player's capsule, so the buddy fits
             // through any doorway without precision aiming. The visible model is
@@ -439,30 +331,30 @@ namespace YourBuddy
                 }
             }
 
-            // Add AI and Activate. Registered first, so OnEnable finds the other buddies to pass through.
+            // Add the brain and NPC.Core's walking agent, and activate. Registered first, so OnEnable finds
+            // the other NPCs to pass through.
             int buddyNumber = BuddyManager.FreeNumber(wantedNumber);
             string buddyName = BuddyManager.NameFor(buddyNumber);
             npcGo.name = "YourBuddy " + buddyName;
             BuddyBehaviour buddy = npcGo.AddComponent<BuddyBehaviour>();
-            buddy.Init(ragdollObject, ragdollRigidbody, animatedModel, blocker,
-                realPlayer != null ? realPlayer.GetComponent<CharacterController>() : null, ConfigMoveSpeed.Value,
-                buddyNumber, buddyName);
-            npcGo.AddComponent<BuddyDialog>();
+            NpcBody body = new()
+            {
+                Ragdoll = ragdollObject,
+                RagdollBody = ragdollRigidbody,
+                AnimatedModel = animatedModel,
+                ItemBlocker = blocker,
+                FootstepEvents = NpcPlayer.FootstepEvents()
+            };
+            NpcAgent agent = NpcAgent.Attach(npcGo, new NpcIdentity(BuddyBehaviour.ModName, buddyName, buddyNumber), body,
+                BuddyAgentSettings.Instance, buddy);
+            buddy.Init(agent);
             BuddyManager.Register(buddy);
+            NpcInteraction.Register(new BuddyConversation(buddy));
 
             npcGo.SetActive(true);
-            using BuddyManager.ActingScope _ = BuddyManager.Acting(buddy);
+            using NpcRegistry.ActingScope _ = NpcRegistry.Acting(agent);
             Log.LogInfo($"[mod] {buddyName} successfully spawned at {position}");
             return buddy;
-        }
-
-        private static void IgnorePlayerTrigger(HeadTrigger? trigger, CharacterController? buddyCc, Collider? blocker)
-        {
-            if (trigger == null) return;
-            if (!trigger.TryGetComponent(out Collider triggerCollider)) return;
-
-            if (buddyCc != null) Physics.IgnoreCollision(triggerCollider, buddyCc);
-            if (blocker != null) Physics.IgnoreCollision(triggerCollider, blocker);
         }
 
         /// <summary>

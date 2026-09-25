@@ -2,11 +2,12 @@
 name: yourbuddy
 description: >-
   Router into the YourBuddy knowledge base. Use whenever working on this BepInEx plugin's
-  follower NPC: navigation, node graph, A* pathfinding, steering, doors, the lifecare terminal,
-  life-support terminals, snacks, carrying, tidying, selling, idle play, fear and hiding, orders
-  and the decider, or its Harmony patches. Triggers on BuddyNodeGraph.cs, BuddyBehaviour*.cs,
-  BuddyCommands.cs, NavProbe.cs, BuddyManager.cs, GameInternals.cs, Patches.cs,
-  BuddyNodeEditor.cs, nodegraph.json, and any debug capture from the mod.
+  follower NPC: its modes, life-support terminals, snacks, tidying, selling, idle play, fear and
+  hiding, orders and the decider, or its body and spawning. Triggers on BuddyBehaviour*.cs,
+  BuddyCommands.cs, BuddyConsole.cs, BuddyManager.cs, GameInternals.cs, and any debug capture from
+  the mod. Navigation, the walking agent (steering, doors, rooms, vessels, air, death, carrying),
+  shared door knowledge, saves, the lifecare terminal and the talk window are NPC.Core's
+  (../npc-core-inhl).
 ---
 
 # YourBuddy - start here

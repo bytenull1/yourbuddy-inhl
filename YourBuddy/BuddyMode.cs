@@ -7,7 +7,7 @@ namespace YourBuddy
         Route,
         /// <summary>
         /// Holds position until told otherwise. Still steps out of a doorway it blocks:
-        /// docs/invariants.md#step-off-applies-in-every-mode
+        /// npc-core:docs/invariants.md#step-off-applies-in-every-mode
         /// </summary>
         Stay,
         /// <summary>

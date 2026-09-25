@@ -2,6 +2,7 @@ name: checks
 
 # The plugin itself is not built here: it compiles against the game's own assemblies,
 # which can't be redistributed (YourBuddy/lib/README.md). Build Debug and Release locally.
+# NPC.Core is checked out beside it, so links into its docs are checked too.
 
 on:
   push:
@@ -10,23 +11,18 @@ on:
     branches: [main]
 
 jobs:
-  docs-and-graph:
+  docs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          path: yourbuddy-inhl
+      - uses: actions/checkout@v5
+        with:
+          repository: bytenull1/npc-core-inhl
+          path: npc-core-inhl
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
       - name: Doc links and reference constants
-        run: python tools/doccheck.py --verbose
-      - name: Bundled nav graph
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          if git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            python tools/bundle_nodegraph.py --check --base "$BASE"
-          else
-            python tools/bundle_nodegraph.py --check
-          fi
+        run: python yourbuddy-inhl/tools/doccheck.py --verbose

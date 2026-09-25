@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using NPC.Core;
+using NPC.Core.Navigation;
 using Space;
 using UnityEngine;
 
@@ -113,7 +115,7 @@ namespace YourBuddy
                 Weighed pick = urgeScores[index];
                 urgeScores.RemoveAt(index);
                 string beaten = Runners();
-                if (YourBuddyPlugin.ConfigDebugLevel.Value >= 1)
+                if (NpcLog.Level >= 1)
                 {
                     YourBuddyPlugin.Log.LogInfo($"[mind] Chose {UrgeName(pick.Urge)} ({pick.Score:0.00}) - {pick.Why}" +
                                                 (beaten.Length > 0 ? " - over " + beaten : ""));
@@ -165,7 +167,7 @@ namespace YourBuddy
                 case Urge.Play:
                     return TryErrand(play, "Thought of playing with something, but ");
                 case Urge.Wander:
-                    string? owner = BuddyNodeGraph.NearestActiveNodeOwner(transform.position, DecideNodeOwnerRadius);
+                    string? owner = NavGraph.NearestActiveNodeOwner(transform.position, DecideNodeOwnerRadius);
                     if (owner == null) return false;
 
                     Decide(BuddyMode.Wander, $"followed you {Time.time - boutSince:0}s", owner);
@@ -188,7 +190,7 @@ namespace YourBuddy
             if (errand.TryStart(out string report)) return true;
 
             errand.DueAt = Time.time + errand.RetryDelay;
-            if (YourBuddyPlugin.ConfigDebugLevel.Value >= 2)
+            if (NpcLog.Level >= 2)
             {
                 YourBuddyPlugin.Log.LogInfo($"[mind] {lead}{report} - trying again in {errand.RetryDelay:0}s");
             }
@@ -281,8 +283,8 @@ namespace YourBuddy
             {
                 Vector3 toPlayer = playerTransform.position - transform.position;
                 toPlayer.y = 0f;
-                // Floor to floor: docs/invariants.md#follow-arrival-is-level-aware
-                bool sameLevel = Mathf.Abs(FloorUnderPlayer(playerTransform) - FloorUnderBuddy().y) <= FollowSameLevelDeltaY;
+                // Floor to floor: npc-core:docs/invariants.md#follow-arrival-is-level-aware
+                bool sameLevel = OnPlayersDeck(playerTransform);
                 float wandered = Time.time - boutSince;
                 Add(Urge.Follow, 0.3f, sameLevel ? Mathf.Clamp01(0.5f + toPlayer.magnitude / 40f) : 1f, 1f,
                     BoutReadiness(wandered, boutLength),
@@ -301,7 +303,7 @@ namespace YourBuddy
                 Vector3 toPlayer = playerTransform.position - transform.position;
                 toPlayer.y = 0f;
                 bool caughtUp = toPlayer.sqrMagnitude <= DecideCaughtUpDist * DecideCaughtUpDist &&
-                    Mathf.Abs(FloorUnderPlayer(playerTransform) - FloorUnderBuddy().y) <= FollowSameLevelDeltaY;
+                    OnPlayersDeck(playerTransform);
                 float chasing = Time.time - boutEnteredAt;
                 if (!caughtUp && chasing < DecideCatchUpSeconds)
                 {
@@ -310,7 +312,7 @@ namespace YourBuddy
                 }
                 boutSince = Time.time;
             }
-            string? owner = BuddyNodeGraph.NearestActiveNodeOwner(transform.position, DecideNodeOwnerRadius);
+            string? owner = NavGraph.NearestActiveNodeOwner(transform.position, DecideNodeOwnerRadius);
             float followed = Time.time - boutSince;
             Add(Urge.Wander, 0.3f, 1f, owner != null ? 1f : 0f, BoutReadiness(followed, boutLength),
                 owner != null ? $"followed you {followed:0}s of {boutLength:0}, nodes of '{owner}' here"

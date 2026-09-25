@@ -47,8 +47,9 @@ In theory, the mod should reduce anxiety; in practice, after playing alone for a
 ## Installation
 
 1. Install **[BepInEx 5](https://github.com/BepInEx/BepInEx/releases)** for Isolated Inhale - the Windows x64 build (`BepInEx_win_x64_5.x.x.zip`), extracted into the game folder next to `Isolated Inhale.exe`.
-2. Download the latest `YourBuddy.dll` from the [Releases](https://github.com/bytenull1/yourbuddy-inhl/releases) page.
-3. Place the `.dll` into `BepInEx/plugins/`.
+2. Download the latest `YourBuddy.dll` from the [Releases](https://github.com/bytenull1/yourbuddy-inhl/releases) page, and
+   `NPC.Core.dll` from [NPC.Core's releases](https://github.com/bytenull1/npc-core-inhl/releases) - the shared NPC library the buddy walks with.
+3. Place both `.dll` files into `BepInEx/plugins/`.
 4. Launch the game. The mod will create a configuration file at `BepInEx/config/com.bytenull1.yourbuddy.cfg`.
 
 > For debugging, you can enable the console in `BepInEx/config/BepInEx.cfg`, the `[Logging.Console]` block is responsible for this, change the value of the parameter `Enabled = false` to `Enabled = true`
@@ -70,6 +71,8 @@ The project is an SDK-style class library targeting **.NET Standard 2.1**, so no
    `YourBuddy/lib/`. The list and where each one comes from is in
    [`YourBuddy/lib/README.md`](YourBuddy/lib/README.md). They are not redistributed
    here and are not copied into the build output.
+   YourBuddy builds on [NPC.Core](https://github.com/bytenull1/npc-core-inhl): clone it beside this repository
+   (`../npc-core-inhl`) and it is built with YourBuddy, or copy its `NPC.Core.dll` into `YourBuddy/lib/`.
 
 4. **Build the project**
    - From the command line, in the repository root: `dotnet build YourBuddy/YourBuddy.csproj -c Release`
@@ -77,13 +80,13 @@ The project is an SDK-style class library targeting **.NET Standard 2.1**, so no
    - There is no framework/toolset mismatch to worry about - `netstandard2.1` builds the same way on any platform with the .NET SDK installed.
 
 5. **Output file**
-   After a successful build, `YourBuddy.dll` will appear in `YourBuddy/bin/Release/netstandard2.1/`. Copy it to `BepInEx/plugins/` in your game directory and launch the game.
+   After a successful build, `YourBuddy.dll` will appear in `YourBuddy/bin/Release/netstandard2.1/`. Copy it to `BepInEx/plugins/` in your game directory, together with `NPC.Core.dll`, and launch the game.
 
 ---
 
 ## Configuration
 
-General settings (section `General` unless noted; the node editor keys live in section `NodeEditor`, documented in the Usage section below):
+General settings (section `General`). The debug level, the bundled nav graph and the node editor keys are NPC.Core's, in `com.bytenull1.npccore.cfg` ([its README](https://github.com/bytenull1/npc-core-inhl#configuration)); a first start copies over what you had set here.
 
 <details>
 <summary>Show all settings</summary>
@@ -112,11 +115,9 @@ General settings (section `General` unless noted; the node editor keys live in s
 | `ItemPlay` | General | `true` | Now and then, with nothing better to do, the buddy plays with something loose: carries it across the room, takes it into another room, or throws it about and fetches it back. One to three games in a row. `buddy_play` starts a session now. |
 | `ItemPlayAnything` | General | `false` | What it may play with. Off: rubbish only. On: any loose object, your tools, food and cells included, which it will throw about like anything else. |
 | `ItemPlayIntervalMinutes` | General | `5` | Roughly how many minutes pass between play sessions (25% more or less each time). |
-| `DebugLevel` | General | `1` | Debug log verbosity: `0` quiet (warnings only), `1` normal (stuck diagnostics, door logs), `2` thinking (path planning details, the gate inventory and gate-frame audit), `3` obstacle diagnostics (per-tick obstacle reports). Also changeable at runtime with `debug_level`. |
 | `DebugVisuals` | General | `false` | Draws navigation probes, target markers, and path lines. |
 | `ShowHud` | General | `false` | Displays an on‑screen status panel (mode, orders, position, room, environment, fear, mind, errand timers, target); hidden while the console is open. |
 | `MoveSpeed` | General | `3.5` | Default movement speed in m/s. |
-| `BundledGraph` | Navigation | `true` | Use the ready-made nav graph shipped with the mod for any ship or station you have not edited yourself. |
 
 </details>
 
@@ -151,12 +152,9 @@ You can change these values in the config file or via console commands (see belo
 | `buddy_auto` | `[on\|off]` | Let the buddy decide for itself (`on` also cancels the order in force), or stop it deciding. Saved in the config. |
 | `buddy_password` | `<code>` | Tell the buddies a door PIN code - all of them learn it. It is used only on keypads whose own code matches, and is saved with your game. |
 | `buddy_speed` | `<value> [@who]` | Set movement speed (0.5–10 m/s). |
-| `buddy_node` | `add`, `count`, `clear`, `save`, `list`, `remove <index>` (alias `delete`), `link <a> <b>`, `unlink <index>`, `type <index> <ground\|stair>`, `bundled`, `unfork <owner>` | Manually manage the nav graph, including links and stair nodes. `link` toggles a link between two nodes; `unlink` removes every link of one node. `bundled` shows which ships and stations use the shipped graph; `unfork` hands one back to it. |
-| `ai_disable` | `[buddy\|monster\|all] [on\|off]` | Debug: freeze the buddy's AI, the Breathless's, or both. Nothing is written to your save, so a reload always clears it. |
-| `ai_notarget` | `[on\|off]` | Debug: the Breathless stops noticing **you** - it keeps wandering, and it still hunts the buddy. |
-| `node_editor` | – | Toggle the interactive node editor overlay (all its keys are configurable in the config, section `NodeEditor`). |
-| `buddy_gates` | – | List every gate in the scene and the doorway carve-out it was given (opening width, whether it counts as a walkable passage). |
-| `debug_level` | `<0-3>` | Set debug log verbosity at runtime. |
+| `buddy_node` / `buddy_gates` | | NPC.Core's `npc_node` and `npc_gates` under their old names ([NPC.Core commands](https://github.com/bytenull1/npc-core-inhl#console-commands)); `node_editor` and `debug_level` are NPC.Core's too. |
+| `ai_disable` | `[buddy\|monster\|all] [on\|off]` | NPC.Core's. Debug: freeze the buddies' AI (every NPC mod's), the Breathless's, or both. Nothing is written to your save, so a reload always clears it. |
+| `ai_notarget` | `[on\|off]` | NPC.Core's. Debug: the Breathless stops noticing **you** - it keeps wandering, and it still hunts the buddy. |
 | `buddy_debug` | `[on/off]` | Toggle debug visuals (path, probes, target markers). |
 | `buddy_hud` | `[on/off]` | Toggle status HUD. It shows the buddy commands go to. |
 
@@ -199,28 +197,9 @@ The first five words above are orders; `hide`, `tidy up`, `sell` and `play` just
 
 ### The Nav Graph & Node Editor
 
-Wandering and long walks follow a node graph. **The mod ships one for the ship and every station**, so there is nothing to set up. The moment you edit anything on a ship or station, that one becomes yours: it is saved to `BepInEx/config/YourBuddyRoutes/nodegraph.json` (automatically, about 20 seconds after a change) and mod updates no longer change it. `buddy_node bundled` shows which are yours, and `buddy_node unfork <owner>` returns one to the shipped graph (after a restart).
+Wandering and long walks follow a node graph. **NPC.Core ships one for the ship and every station**, so there is nothing to set up. To edit it, press `F8` in game - the editor, its keys and where your own graph is saved (`BepInEx/config/NPC.Core/nodegraph.json`) are described in [NPC.Core's README](https://github.com/bytenull1/npc-core-inhl#the-node-editor). A graph you edited under an older YourBuddy is carried over on first start.
 
-Open the editor with `F8` or `node_editor` (every key can be changed in the config, section `NodeEditor`):
-
-| Key | Action |
-|-----|--------|
-| `F8` | Toggle the editor overlay |
-| `Insert` / `Numpad0` | Place a node at your position |
-| `Delete` | Remove the nearest node on your deck |
-| `L` | Toggle connection lines |
-| `K` | Link two nodes - press once at one node, again at another (press again on a linked pair to remove it) |
-| `U` | Remove every link of the nearest node |
-| `T` | Ground <-> **Stair** node |
-| `F6` | Save nodes |
-
-Nodes are never connected automatically - draw a link (`K`, shown yellow) between any two you want
-the buddy to walk between. A link always works, at any distance and with no line of sight needed,
-so it is also how you cross tight ramps, steep stairs and railings.
-
-Grey nodes belong to a station you are not docked to. To make the buddy use a staircase, put a
-Stair node (`T`) on the bottom and top landings and link them (`K`); check with `L` that the
-connection is there.
+To make the buddy use a staircase, put a Stair node (`T`) on the bottom and top landings and link them (`K`); check with `L` that the connection is there.
 
 ---
 
@@ -266,7 +245,7 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 
 **Priority 2 - Major features**
 - [x] Add support for multiple NPCs.
-- [ ] Convert the mod into a public library for NPC mods. Separate the core from the buddy-specific code, move it to a separate repository, and use the core as a dependency.
+- [x] Convert the mod into a public library for NPC mods. Separate the core from the buddy-specific code, move it to a separate repository, and use the core as a dependency: [NPC.Core](https://github.com/bytenull1/npc-core-inhl).
 - [ ] Add EVA suit support for dangerous atmospheres and space walks through FuelStation. A redrawn pilot suit texture is needed, since the game doesn’t have an isolated suit skin for the player model, only an item texture (I can't do that yet).
 
 **Priority 3 - Other**

@@ -21,7 +21,7 @@ body:
     attributes:
       label: Versions
       description: Mod version (the log line "Loading [YourBuddy Mod x.y.z]") and game version.
-      placeholder: YourBuddy 1.0.7, Isolated Inhale v0.8.9
+      placeholder: YourBuddy 1.0.8, Isolated Inhale v0.8.9
     validations:
       required: true
 
@@ -31,7 +31,7 @@ body:
       label: Log
       description: |
         In the game console run `debug_level 2`, reproduce the problem, then attach `BepInEx/LogOutput.log`.
-        If you can, trim it first: `python tools/trimlog.py BepInEx/LogOutput.log --fold > capture.txt`,
+        If you can, trim it first with NPC.Core's [trimlog.py](https://github.com/bytenull1/npc-core-inhl/blob/main/tools/trimlog.py): `python trimlog.py BepInEx/LogOutput.log --fold > capture.txt`,
         and add a note in the file where things went wrong ("here it walks into the wall").
       placeholder: Drag the log file here.
     validations:

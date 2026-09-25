@@ -6,7 +6,7 @@
     <RootNamespace>YourBuddy</RootNamespace>
     <LangVersion>12</LangVersion>
     <Nullable>enable</Nullable>
-    <Version>1.0.7</Version>
+    <Version>1.0.8</Version>
     <Deterministic>true</Deterministic>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- IDE0005 (unused usings) only runs in build with doc generation on; the XML itself is not shipped. -->
@@ -16,11 +16,24 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- The ready-made nav graph. The plugin extracts it to
-         BepInEx/config/YourBuddyRoutes/nodegraph.bundled.json whenever its BundleVersion
-         changes; regenerate it with tools/bundle_nodegraph.py. -->
-    <EmbeddedResource Include="Resources/nodegraph.bundled.json" />
+  <PropertyGroup>
+    <!-- NPC.Core, the shared NPC library: its project when the repositories sit side by side,
+         else the DLL in lib/ (lib/README.md). Neither is copied to the output: NPC.Core is its
+         own plugin in BepInEx/plugins. -->
+    <NpcCoreProject>$(MSBuildThisFileDirectory)..\..\npc-core-inhl\NPC.Core\NPC.Core.csproj</NpcCoreProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(NpcCoreProject)')">
+    <ProjectReference Include="$(NpcCoreProject)">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="!Exists('$(NpcCoreProject)')">
+    <Reference Include="NPC.Core">
+      <HintPath>lib\NPC.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

@@ -89,7 +89,7 @@ What it relies on, if you need to extend it:
 
 Reach for it whenever a question is about the scene rather than the code - for example, it
 shows that every station interior lives under the root `StaticObjects/<Station>Parts`, not
-under the station object ([game-model.md](../docs/game-model.md#a-stations-interior-is-not-under-the-station)).
+under the station object ([game-model.md](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/game-model.md#a-stations-interior-is-not-under-the-station)).
 
 ## Serialized field values: the AssetRipper export
 
