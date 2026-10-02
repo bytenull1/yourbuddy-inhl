@@ -9,8 +9,6 @@ bit unnerving. Try it yourself.
 > ⚠️ **Disclaimer**: the game is single-player by design, and this mod may break immersion. Best played after
 > you finish the story.
 
-[Watch the showcase on YouTube](https://www.youtube.com/watch?v=zlu82lW7UME)
-
 ---
 
 ## Features
@@ -294,6 +292,8 @@ Then came endless bug fixes: strict checks broke valid paths, relaxing them intr
 ---
 
 ## Showcase
+
+[Watch the showcase on YouTube](https://www.youtube.com/watch?v=zlu82lW7UME)
 
 ![The order window with the list of commands](docs/images/commands.png)
 

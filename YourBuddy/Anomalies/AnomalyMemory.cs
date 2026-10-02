@@ -4,7 +4,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// What this save has already seen: the anomalies that happened and every line said. Kept in
+    /// What this save has already seen, the anomalies that happened and every line said. Kept in
     /// the '.buddy' sidecar. docs/anomalies.md#once-per-save
     /// </summary>
     internal static class AnomalyMemory
@@ -17,7 +17,7 @@ namespace YourBuddy
         internal static void Remember(AnomalyKind kind) => Happened.Add(kind.ToString());
 
         /// <summary>
-        /// Nobody saw it and it left nothing behind: it may come again.
+        /// Nobody saw it and it left nothing behind, so it may come again.
         /// </summary>
         internal static void Forget(AnomalyKind kind) => Happened.Remove(kind.ToString());
 

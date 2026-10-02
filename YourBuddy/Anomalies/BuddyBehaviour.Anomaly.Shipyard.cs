@@ -11,14 +11,14 @@ namespace YourBuddy
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // Talking with the Shipyard's robot: whose turn, and the robot's line. docs/anomalies.md#bottalk
+        // Talking with the Shipyard's robot, with whose turn it is and the robot's line. docs/anomalies.md#bottalk
         private AssistanceBot? talkBot = null;
         /// <summary>
-        /// The Shipyard a set piece put it on, and where it stood aboard before: an undock puts it back.
+        /// The Shipyard a set piece put it on, and where it stood aboard before, so an undock can put it back.
         /// </summary>
         private ShipyardStation? shipyard = null;
         private Vector3? fromAboard = null;
-        // Meat: the cryo room, its doorways, the one it faces, and whether it ran. docs/anomalies.md#meat
+        // Meat state, with the cryo room, its doorways, the one it faces, and whether it ran. docs/anomalies.md#meat
         private Room? cryoRoom = null;
         private readonly List<EntryDetector> cryoDoorways = [];
         private EntryDetector? caughtDoorway = null;
@@ -49,17 +49,16 @@ namespace YourBuddy
         private const float CaughtWaitSeconds = 480f;
         private const float CaughtNearDist = 3f;
         private const float CaughtTurnSeconds = 0.6f;
+        private const float CaughtStareSeconds = 3f;
         private const float CaughtCorneredSeconds = 120f;
         private const float CaughtGoneUnseenSeconds = 1f;
         private const float CaughtRunMin = 2f;
         private const float CaughtRunGain = 1f;
 
-        // ------------------------------------------------------------------
         // The Shipyard
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// The Shipyard, with your ship docked at it; else null and why not. Each set piece then checks
+        /// The Shipyard, with your ship docked at it, else null and why not. Each set piece then checks
         /// how far you are from where it plays.
         /// </summary>
         private static ShipyardStation? DockedShipyard(out string why)
@@ -74,8 +73,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Undocked while it is on the Shipyard for a set piece: back where it stood aboard, never left
-        /// behind, and the set piece ends. True when it did.
+        /// Undocked while it is on the Shipyard for a set piece. It goes back where it stood aboard, never
+        /// left behind, and the set piece ends. True when it did.
         /// </summary>
         private bool EndIfUndocked()
         {
@@ -88,9 +87,7 @@ namespace YourBuddy
             return true;
         }
 
-        // ------------------------------------------------------------------
         // Caught in the cryo room
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Out of your sight, it is put in the Shipyard's cryo room, bloody, back to the shut door and in view
@@ -114,7 +111,7 @@ namespace YourBuddy
 
             if (!Items.Loadable(cryo.ContentParent)) return "the cryo room cannot be loaded";
 
-            // The doorway you will come through: the one nearest you.
+            // The doorway you will come through is the one nearest you.
             EntryDetector doorway = cryoDoorways[0];
             foreach (EntryDetector d in cryoDoorways)
             {
@@ -179,7 +176,7 @@ namespace YourBuddy
 
         /// <summary>
         /// The Shipyard's cryo room, and into `doorways` the doorways with a door that join it. They come from
-        /// the doorway detectors, as NPC.Core loads rooms by them: the room's own door list can leave one out.
+        /// the doorway detectors, as NPC.Core loads rooms by them, since the room's own door list can leave one out.
         /// </summary>
         private static Room? CryoRoom(List<EntryDetector> doorways)
         {
@@ -211,7 +208,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The floor CaughtViewInset inside the doorway, on the cryo room's side: where you first see in.
+        /// The floor CaughtViewInset inside the doorway, on the cryo room's side, where you first see in.
         /// </summary>
         private static Vector3? DoorwayView(EntryDetector doorway, Room cryo, Gate door)
         {
@@ -233,7 +230,7 @@ namespace YourBuddy
         /// <summary>
         /// A ground node in clear view of the doorway, on the cryo room's side, CaughtStandMin..Max in and
         /// nearest CaughtStandDist, out of your sight. NPC.Core gives a room the nodes nearest its furniture,
-        /// which can lie in the hallway: the side and the clear line keep it in the room you open.
+        /// which can lie in the hallway, so the side and the clear line keep it in the room you open.
         /// </summary>
         private static Vector3? CaughtStand(EntryDetector doorway, Room cryo, Vector3 view)
         {
@@ -303,7 +300,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Wet sounds until you open a door or come near; then it stares at you until you step in, and runs
+        /// Feeding sounds until you open a door or come near. Then it stares at you until you step in, and runs
         /// deeper into the room. Gone once you have seen it and look away; it comes back clean.
         /// </summary>
         private void UpdateCaught(float now, float dist, Transform you)
@@ -338,16 +335,17 @@ namespace YourBuddy
                     }
                     if (now < anomalyStepAt) return;
 
-                    anomalyStepAt = now + Random.Range(2.5f, 4.5f);
-                    ScareSounds.Play(ScareSound.Wet, agent.GroundPos(0.6f));
+                    ScareSounds.Play(ScareSound.Gore, agent.GroundPos(0.6f), transform, out float seconds);
+                    anomalyStepAt = now + seconds + Random.Range(2f, 4f);
                     break;
                 case 1:
-                    // It stares at you until you step in.
+                    // It stares at you until you step in, or have watched it CaughtStareSeconds.
                     if (now < anomalyStepAt) return;
 
                     bool youIn = dist < CaughtNearDist || (InCryo(caughtDoorway, cryoRoom, you.position) &&
                                                            FlatDistance(you.position, caughtDoorway.transform.position) < CaughtEnterDist);
-                    if (!youIn && now < anomalyUntil) return;
+                    bool staredDown = anomalySeenFor >= CaughtStareSeconds;
+                    if (!youIn && !staredDown && now < anomalyUntil) return;
 
                     if (!youIn && !anomalySeen)
                     {
@@ -365,6 +363,8 @@ namespace YourBuddy
                     {
                         anomalyStep = 2;
                         caughtRan = true;
+                        YourBuddyPlugin.Log.LogInfo($"[anomaly] {Name} runs deeper into the cryo room - " +
+                                                    (youIn ? "you stepped in" : staredDown ? $"you watched it {anomalySeenFor:0.0}s" : "out of time"));
                         return;
                     }
                     anomalyStep = 3;
@@ -399,7 +399,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// There, or the run gave up: it waits, cornered, for you to look away.
+        /// There, or the run gave up. It waits, cornered, for you to look away.
         /// </summary>
         private void StopCaughtRun()
         {
@@ -407,9 +407,7 @@ namespace YourBuddy
             anomalyStep = 3;
         }
 
-        // ------------------------------------------------------------------
         // The Shipyard's robot
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Out of your sight, it is put at the Shipyard robot's desk, on the side you will come from, while
@@ -425,7 +423,7 @@ namespace YourBuddy
             if (station == null) return why;
 
             AssistanceBot? bot = station.Bot;
-            // Off with its hallway while you are aboard: loaded below, as a sell run loads its station.
+            // Off with its hallway while you are aboard, so it is loaded below, as a sell run loads its station.
             // docs/items.md#4-selling-trash-boxes
             if (bot == null || !Items.Loadable(bot)) return "the Shipyard's robot is not here";
 
@@ -493,8 +491,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Turns: a line of its blips, then the robot's answer in its own talk sound, its eye moving.
-        /// The robot's sound plays as fast as its typewriter would: about once a frame.
+        /// Turns of a line of its blips, then the robot's answer in its own talk sound, its eye moving.
+        /// The robot's sound plays as fast as its typewriter would, about once a frame.
         /// </summary>
         private void Converse(float now, AssistanceBot bot)
         {
@@ -525,7 +523,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Talking until you come near, then a look round at you, then a run away from you; done once it
+        /// Talking until you come near, then a look round at you, then a run away from you. Done once it
         /// is out of your sight. The run itself is WalkAnomalyLeg's.
         /// </summary>
         private void UpdateBotTalk(float now, float dist, Transform you)
@@ -595,7 +593,7 @@ namespace YourBuddy
                 RunOffNodes.Add(node);
             }
             Vector3 from = agent.FloorUnderNpc();
-            // Out of your sight first, so it is gone once there; else anywhere away from you.
+            // Out of your sight first, so it is gone once there, else anywhere away from you.
             for (int pass = 0; pass < 2; pass++)
             {
                 for (int i = 0; i < RunOffNodes.Count; i++)
@@ -622,7 +620,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// There, or the run gave up: it stands still and waits to be out of your sight.
+        /// There, or the run gave up. It stands still and waits to be out of your sight.
         /// </summary>
         private void StopBloodyRun()
         {
@@ -638,7 +636,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The robot as the game leaves it when you walk away: eye still, looking ahead.
+        /// The robot as the game leaves it when you walk away, eye still and looking ahead.
         /// </summary>
         private void ReleaseBot()
         {

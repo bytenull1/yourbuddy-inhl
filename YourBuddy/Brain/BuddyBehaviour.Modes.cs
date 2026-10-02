@@ -7,12 +7,12 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The modes the brain steers with: Follow and Route here, Wander and Stay straight from the agent, Flee in
-    /// BuddyBehaviour.Fear.cs. Mode switches and routes. docs/behaviour.md
+    /// Mode switches, routes and the modes the brain steers with. Follow and Route are here, Wander and
+    /// Stay come straight from the agent, Flee is in BuddyBehaviour.Fear.cs. docs/behaviour.md
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // Follow hysteresis in XZ: start walking beyond the first, keep walking down to the second.
+        // Follow hysteresis in XZ. Start walking beyond the first, keep walking down to the second.
         private const float FollowStartDistance = 2.0f;
         private const float FollowStopDistance = 1.8f;
 
@@ -28,12 +28,12 @@ namespace YourBuddy
 
             if (agent.Floating) return FollowFloating(player, playerTransform, out wantMove);
 
-            // If the player went EVA, the buddy politely waits inside - unless it is suited and
-            // came out with them. docs/eva.md
+            // If the player went EVA, the buddy waits inside unless it is suited and came out with
+            // them. docs/eva.md
             if (NpcAgent.IsPlayerInSpace(player) && !suit.Suited) return Vector3.zero;
 
-            // Step-off stretch: a short unvalidated walk that gets him off chair seats
-            // and ledges, or out of a doorway he is holding open.
+            // Step-off stretch, a short unvalidated walk off chair seats and ledges or out of a
+            // doorway it is holding open.
             if (agent.TryStepOff(out Vector3 stepOff))
             {
                 wantMove = true;
@@ -57,9 +57,9 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Floating: after you, and all the way into an airlock's chamber when you float into one - short
-        /// of it, the cycle would leave it outside or shut a door on it. With you back in, it hovers
-        /// until you come out for it; NPC.Core pulls it aboard if the ship moves off. docs/eva.md#7-floating
+        /// Floating follow. It goes after you all the way into an airlock's chamber, since stopping short
+        /// would leave it outside the cycle or under a closing door. With you back in, it hovers until
+        /// you come out for it; NPC.Core pulls it aboard if the ship moves off. docs/eva.md#7-floating
         /// </summary>
         private Vector3 FollowFloating(Player player, Transform playerTransform, out bool wantMove)
         {
@@ -79,13 +79,13 @@ namespace YourBuddy
         private const float ChamberHoldArrival = 0.3f;
 
         /// <summary>
-        /// Floor to floor, not an XZ test: npc-core:docs/invariants.md#follow-arrival-is-level-aware
+        /// Floor to floor, not an XZ test. npc-core:docs/invariants.md#follow-arrival-is-level-aware
         /// </summary>
         private bool OnPlayersDeck(Transform playerTransform) =>
             Mathf.Abs(agent.FloorUnderPlayer(playerTransform) - agent.FloorUnderNpc().y) <= NpcAgent.FollowSameLevelDeltaY;
 
         /// <summary>
-        /// A goto or an errand leg: the plan with the simple advance, then the leg's own approach.
+        /// A goto or an errand leg. Walks the plan with the simple advance, then the leg's own approach.
         /// npc-core:docs/invariants.md#a-stair-leg-is-walked-not-improvised (Route keeps its own advance)
         /// </summary>
         private Vector3 UpdateRoute(out bool wantMove)
@@ -111,7 +111,7 @@ namespace YourBuddy
 
         private void FinishRoute()
         {
-            // Every waypoint was skipped rather than reached: the buddy is not there.
+            // Every waypoint was skipped rather than reached, so the buddy is not there.
             bool abandoned = agent.SkippedWaypoint && agent.PlanIndex > 0;
             Vector3 goal = routeGoal;
             agent.DropPlan();
@@ -135,7 +135,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Where a route ends up: the order in force (buddy_order snack runs under one), else Follow.
+        /// The mode a finished route returns to. That is the order in force (buddy_order snack runs
+        /// under one), else Follow.
         /// </summary>
         private BuddyMode ModeAfterTask => orderedMode is { } order && order != BuddyMode.Route && OrderInForce ? order : BuddyMode.Follow;
 

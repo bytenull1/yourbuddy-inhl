@@ -3,7 +3,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// A copy of a buddy's body and nothing else: no brain, no agent, no colliders, never saved. The
+    /// A copy of a buddy's body and nothing else (no brain, agent or colliders, never saved). The
     /// sleeper in its capsule. docs/anomalies.md#sleeper
     /// </summary>
     internal static class BuddyDouble
@@ -42,7 +42,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Walking at `speed`, or standing still at 0: the parameters the player's animator reads.
+        /// Sets the parameters the player's animator reads, walking at `speed` or standing still at 0.
         /// </summary>
         internal static void Walk(GameObject root, float speed)
         {
@@ -59,7 +59,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Every script, joint, body and collider out: it is a picture of the buddy, nothing more.
+        /// Strips every script, joint, body and collider. It is a picture of the buddy, nothing more.
         /// Joints before bodies, which they require.
         /// </summary>
         private static void Strip(GameObject copy)

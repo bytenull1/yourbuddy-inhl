@@ -10,8 +10,8 @@ namespace YourBuddy
     public sealed record BuddySaveFile
     {
         /// <summary>
-        /// Every buddy. Null in a sidecar written before there could be several: the single-buddy
-        /// fields below are then the one buddy.
+        /// Every buddy. Null in an older single-buddy sidecar, where the fields below hold the
+        /// one buddy.
         /// </summary>
         public BuddyState[]? Buddies { get; init; }
 
@@ -108,11 +108,9 @@ namespace YourBuddy
         public string? Name { get; init; }
         public bool Alive { get; init; }
         /// <summary>
-        /// The vessel the buddy was standing on - "ship", "world" or a station's
-        /// GameObject name, the same key the game itself uses for SaveData.dockedStation
-        /// - and its position in that vessel's own space. A ship-local point is a world
-        /// point in disguise, so without these a buddy left on a station reloads into
-        /// vacuum. npc-core:docs/invariants.md#an-npc-rides-its-own-floor
+        /// The vessel the buddy stood on ("ship", "world" or a station's GameObject name, the key
+        /// SaveData.dockedStation uses) and its position in that vessel's space. Without these a
+        /// buddy left on a station reloads into vacuum. npc-core:docs/invariants.md#an-npc-rides-its-own-floor
         /// </summary>
         public string? Owner { get; init; }
         public float[]? OwnerLocalPosition { get; init; }
@@ -124,23 +122,23 @@ namespace YourBuddy
         /// </summary>
         public string? SleepingCapsule { get; init; }
         /// <summary>
-        /// The suit the buddy was wearing, by the game item's id: the worn item is inactive, so a
-        /// load needs the id to give it back. docs/eva.md
+        /// Item id of the worn suit. The worn item is inactive, so a load needs the id to give it
+        /// back. docs/eva.md
         /// </summary>
         public uint SuitId { get; init; }
         /// <summary>
-        /// Why that suit was on (`Ordered`, `Survival`): only a survival suit comes off by itself,
-        /// so a load must not forget it. Missing restores as survival. docs/eva.md
+        /// Why that suit was on (`Ordered`, `Survival`). Only a survival suit comes off by itself,
+        /// so a load must keep it. Missing restores as survival. docs/eva.md
         /// </summary>
         public string? SuitReason { get; init; }
         /// <summary>
-        /// On the outside of the airlocks: only a cycle would tell it again after the load.
+        /// Outside the airlocks. After a load only a cycle would tell this again.
         /// npc-core:docs/invariants.md#an-airlock-is-crossed-by-its-cycle
         /// </summary>
         public bool Outside { get; init; }
         /// <summary>
-        /// The gravity out there, the ExitGravity of the airlock it went through: 0 loads it floating.
-        /// Missing (an older sidecar) loads it on a walkable surface. npc-core:docs/agent.md#8-floating
+        /// ExitGravity of the airlock it went out through; 0 loads it floating. Missing (an older
+        /// sidecar) loads it on a walkable surface. npc-core:docs/agent.md#8-floating
         /// </summary>
         public float? Gravity { get; init; }
     }

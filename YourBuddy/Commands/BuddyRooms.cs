@@ -4,8 +4,8 @@ using NPC.Core.Navigation;
 namespace YourBuddy
 {
     /// <summary>
-    /// The buddy's words for NPC.Core's station rooms: "goto library" in the dialog. The console keeps
-    /// node numbers. See docs/dialog.md.
+    /// The buddy's words for NPC.Core's station rooms, as in "goto library" in the dialog. The console
+    /// keeps node numbers. See docs/dialog.md.
     /// </summary>
     internal static class BuddyRooms
     {

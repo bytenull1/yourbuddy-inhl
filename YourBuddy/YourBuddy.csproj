@@ -6,7 +6,7 @@
     <RootNamespace>YourBuddy</RootNamespace>
     <LangVersion>12</LangVersion>
     <Nullable>enable</Nullable>
-    <Version>1.0.8</Version>
+    <Version>1.0.9</Version>
     <Deterministic>true</Deterministic>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- IDE0005 (unused usings) only runs in build with doc generation on; the XML itself is not shipped. -->
@@ -117,6 +117,8 @@
     <!-- The skin flickers' overlays: docs/anomalies.md -->
     <EmbeddedResource Include="Resources\FlickerSmile.png" />
     <EmbeddedResource Include="Resources\FlickerFlesh.png" />
+    <!-- The anomalies' own sounds, by prefix: docs/anomalies.md#5-sounds -->
+    <EmbeddedResource Include="Resources\Sounds\*.mp3" />
   </ItemGroup>
 
 </Project>

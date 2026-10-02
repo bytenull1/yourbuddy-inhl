@@ -14,7 +14,7 @@ namespace YourBuddy
     }
 
     /// <summary>
-    /// The AnomalyDifficulty setting: the game's own difficulty, or one fixed for the buddy alone.
+    /// The AnomalyDifficulty setting. The game's own difficulty, or one fixed for the buddy alone.
     /// </summary>
     public enum AnomalyLevel
     {
@@ -60,9 +60,9 @@ namespace YourBuddy
         None = 0,
         /// <summary>Refuses the talk window and every order and task (`IgnoresYou`).</summary>
         IgnoresYou = 1,
-        /// <summary>An order does not end it: it is not listening.</summary>
+        /// <summary>An order does not end it, since it is not listening.</summary>
         Deaf = 2,
-        /// <summary>Its looks, or a set piece elsewhere: the decider, orders and fear go on around it.</summary>
+        /// <summary>Only its looks, or a set piece elsewhere, so the decider, orders and fear go on around it.</summary>
         Background = 4,
         /// <summary>It leaves something behind, so it counts as had even unseen. docs/anomalies.md#once-per-save</summary>
         Lasting = 8,
@@ -71,7 +71,7 @@ namespace YourBuddy
     }
 
     /// <summary>
-    /// One row of the catalogue: its severity, how often it is drawn among its peers, what to call it, and its traits.
+    /// One row of the catalogue with its severity, draw weight among its peers, name and traits.
     /// </summary>
     internal readonly struct AnomalyInfo(AnomalyKind kind, AnomalySeverity severity, float weight, string name,
         AnomalyTraits traits = AnomalyTraits.None)
@@ -105,16 +105,16 @@ namespace YourBuddy
             new(AnomalyKind.Noises, AnomalySeverity.Strange, 1f, "noises behind you"),
             new(AnomalyKind.WindowStare, AnomalySeverity.Strange, 0.9f, "staring out of a window"),
             new(AnomalyKind.WallStare, AnomalySeverity.Strange, 0.6f, "facing the wall"),
-            // Fits only while you are on the ship side of the docked Shipyard: when it does, it should win.
+            // Fits only while you are on the ship side of the docked Shipyard, and should win when it does.
             new(AnomalyKind.BotTalk, AnomalySeverity.Strange, 2.5f, "talking with the Shipyard's robot", IgnoresYou),
             new(AnomalyKind.Bloody, AnomalySeverity.Scary, 1f, "covered in blood", IgnoresYou | Deaf | Background),
             new(AnomalyKind.ClosetAmbush, AnomalySeverity.Scary, 1f, "an ambush from a closet"),
             new(AnomalyKind.ShutDoors, AnomalySeverity.Scary, 0.7f, "shutting every door"),
             new(AnomalyKind.Statue, AnomalySeverity.Scary, 0.9f, "moving only while unseen", IgnoresYou),
-            // Fits only at the docked Shipyard, away from its cryo room: when it does, it should win.
+            // Fits only at the docked Shipyard, away from its cryo room, and should win when it does.
             new(AnomalyKind.Meat, AnomalySeverity.Scary, 1.5f, "caught in the cryo room", IgnoresYou | Deaf | Lasting),
             new(AnomalyKind.Pipe, AnomalySeverity.Scary, 1f, "carrying a bloody pipe", IgnoresYou | Deaf | Lasting),
-            // Fits only while it is left on another station than yours: when it does, it should win.
+            // Fits only while it is left on another station than yours, and should win when it does.
             new(AnomalyKind.Move, AnomalySeverity.Scary, 2f, "turning up far from where you left it", Lasting),
             new(AnomalyKind.Smile, AnomalySeverity.Scary, 0.9f, "a bloody smile, for a blink", Background | OwnCue),
             new(AnomalyKind.Stalker, AnomalySeverity.Extreme, 1f, "the bloody stalker", IgnoresYou | Deaf),

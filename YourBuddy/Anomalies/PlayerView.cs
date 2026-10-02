@@ -5,18 +5,18 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// What the player can see: their camera, a view cone and the sight line. Anomalies happen out of
+    /// What the player can see, from their camera, a view cone and the sight line. Anomalies happen out of
     /// sight and stop when watched. docs/anomalies.md#4-being-seen
     /// </summary>
     internal static class PlayerView
     {
         /// <summary>
-        /// Half the cone counted as "in view", wider than the talk window's aim: the corner of the
-        /// screen still shows the buddy.
+        /// Half the cone counted as "in view". Wider than the talk window's aim, since the corner of
+        /// the screen still shows the buddy.
         /// </summary>
         internal const float ViewHalfAngle = 55f;
         /// <summary>
-        /// Further than this nothing counts as seen: a figure across a station is a few pixels.
+        /// Further than this nothing counts as seen, since a figure across a station is a few pixels.
         /// </summary>
         internal const float ViewRange = 40f;
         /// <summary>
@@ -24,7 +24,7 @@ namespace YourBuddy
         /// </summary>
         internal const float BehindAngle = 115f;
         /// <summary>
-        /// The buddy's points the player could see, above its feet: chest and head.
+        /// The points of the buddy the player could see, its chest and head above its feet.
         /// </summary>
         private const float ChestAboveFeet = 1.1f;
         private const float HeadAboveFeet = 1.6f;
@@ -76,7 +76,7 @@ namespace YourBuddy
             Sees(feet + Vector3.up * ChestAboveFeet, body) || Sees(feet + Vector3.up * HeadAboveFeet, body);
 
         /// <summary>
-        /// Behind the player's back: well off the view, whatever lies between.
+        /// Behind the player's back, well off the view, whatever lies between.
         /// </summary>
         internal static bool IsBehind(Vector3 point) => AngleTo(point) >= BehindAngle;
 

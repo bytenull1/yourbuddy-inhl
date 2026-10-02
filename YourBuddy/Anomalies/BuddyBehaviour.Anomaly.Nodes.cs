@@ -6,7 +6,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Where the set pieces put the buddy and its doubles: node searches and station lookups they share.
+    /// Node searches and station lookups the set pieces share to place the buddy and its doubles.
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
@@ -14,7 +14,7 @@ namespace YourBuddy
 
         /// <summary>
         /// Active ground nodes on `owner` (any when null), `min`..`max` from `center` on the flat and within
-        /// `rise` of its height. One shared list: read it before the next call.
+        /// `rise` of its height. One shared list, so read it before the next call.
         /// </summary>
         private static List<Vector3> GroundNodes(Vector3 center, string? owner, float min, float max, float rise)
         {

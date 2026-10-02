@@ -59,7 +59,7 @@ Never while the talk window is open, you are outside, the Breathless is within `
 | `FakeCommand` | strange | the window is not open on it | its talk log gains an order you never typed | at once |
 | `WrongName` | strange | - | the talk window opens under the wrong name, once | when next opened, or 15 min |
 | `Vanish` | strange | out of your sight, 6 m+ | gone; comes back elsewhere | see below |
-| `Noises` | strange | behind you, 1.2-7 m, unseen | clicks, a wet squelch; scary and worse add the monster's sounds, cut short | 2-3 sounds, or you turn round |
+| `Noises` | strange | behind you, 1.2-7 m, unseen | clicks, odd noises (`Odd`), never the same twice, each after the last has ended and `NoisesGapMin`..`Max` (1.5-3 s) of silence; scary and worse add a `Creature` sound, cut short | 2-3 sounds, or you turn round |
 | `WindowStare` | strange | a window within 20 m on its vessel | walks to it and stares out | 50-140 s |
 | `WallStare` | strange | a wall within 4 m | walks up to it and faces it | 50-140 s |
 | `BotTalk` | strange | docked at the Shipyard, you on the ship side, unseen | talks with the station's robot; looks round as you come, then runs off | see below |
@@ -71,7 +71,7 @@ Never while the talk window is open, you are outside, the Breathless is within `
 | `Pipe` | scary | out of your sight, 5-30 m, Follow or Wander, hands empty | comes up to you holding a bloody pipe, not answering; the moment you spot it, puts it down without a word | until you spot it, at most 120 s |
 | `Smile` | scary | no suit | the next time you look it in the face, a bloody grin on its visor for a blink | see below |
 | `Statue` | scary | 3-30 m, Follow or Wander | follows you, but only while you are not looking; freezes, staring, when you do | 50-90 s, once unseen |
-| `Stalker` | extreme | out of your sight, no suit | `Bloody` and `Statue` together, with sounds at your back; ignores you; opens pin-code doors without the code | 50-90 s, once unseen |
+| `Stalker` | extreme | out of your sight, no suit | `Bloody` and `Statue` together, with up to `StalkerSounds` (3) different sounds at your back; ignores you; opens pin-code doors without the code | 50-90 s, once unseen |
 | `BehindYou` | extreme | out of your sight, 6 m+ | vanishes, then stands right behind you and speaks | when you turn round, or 15 s |
 | `UnderTheSuit` | extreme | no suit | as `Smile`: raw flesh where the suit was, a face behind the glass | see below |
 | `Sleeper` | extreme | you and it aboard your ship, it in Follow or Wander within 25 m, you 8 m+ from its capsule | its cryo capsule is shut again; walk up to it and it opens on the buddy, asleep inside, while it follows you all the same | see below |
@@ -115,6 +115,9 @@ no AI, no catch, no air damage. `BuddyAgentSettings.ShowOnLifecare` turns false,
 too. After 40-110 s it comes back at a ground node on your vessel, 6-16 m from you, that you cannot see.
 If there is none, it waits, then comes back where it vanished once you look away. Its sidecar position
 is where it vanished; a load brings it back there.
+
+It will never walk through the doors it owes a close, so it leaves them to close behind it
+(`NpcAgent.LeaveDoors`, npc-core:docs/doors.md §7), with the open door it stands in, whoever opened it.
 
 ### Bloody
 
@@ -196,8 +199,8 @@ its furniture, and some of those lie in the hallway: a buddy put there is never 
 | Step | What happens | Next |
 |---|---|---|
 | placed | bloody (`Bloody`'s texture), back to the door. Raw meat lies `CaughtMeatAhead` (0.7 m) beyond it, blood under it, round it and at its feet | at once |
-| eating | a wet sound every 2.5-4.5 s, facing the meat | you open a door, see it, or come within `CaughtNearDist` (3 m) |
-| caught | a creature sound, your stress; it turns and stares at you, at least `CaughtTurnSeconds` (0.6 s) | you step in: on the room's side within `CaughtEnterDist` (3 m) of the door, or within 3 m of it. After `CaughtCorneredSeconds` (120 s) it runs if you see it, else it is gone |
+| eating | a feeding sound (`Gore`), 2-4 s of silence after each, facing the meat | you open a door, see it, or come within `CaughtNearDist` (3 m) |
+| caught | a creature sound, your stress; it turns and stares at you, at least `CaughtTurnSeconds` (0.6 s) | you step in: on the room's side within `CaughtEnterDist` (3 m) of the door, or within 3 m of it; or you have watched it `CaughtStareSeconds` (3 s). After `CaughtCorneredSeconds` (120 s) it runs if you see it, else it is gone |
 | runs | at flee speed, inside the room: a node `CaughtRunMin` (2 m) away and `CaughtRunGain` (1 m) further from you, else 1 m away and no nearer. None: cornered | there |
 | cornered | faces you until you look away for `CaughtGoneUnseenSeconds` (1 s), at most 120 s. It never goes before you have seen it, unless it ran | gone |
 | gone | a vanish ([§2](#vanish)); it comes back clean | back |
@@ -219,9 +222,12 @@ saved: a load finds the room clean
 `MaxProps` (16) at once; the oldest go first.
 
 The meat is `YourBuddy/Resources/Meat.bbmodel`, a Blockbench model embedded in the dll and read as it is
-(`BbModel`): cubes only, unrotated, one texture, 1 unit = 1 cm. Edit it in Blockbench and rebuild.
-It is a rib-eye outline in 2 cm rows of cubes that never overlap, and a 32 x 32 texture painted in the
-game's flat style.
+(`BbModel`): cubes and meshes (triangles and quads), unrotated, one texture, 1 unit = 1 cm. Edit it in
+Blockbench and rebuild. It is a slice of a human thigh: one mesh, skin and yellow fat round the whole
+rim, and a 512 x 512 texture (muscle groups, femur, fat, skin), filtered smoothly. Mesh normals are smoothed over shared vertices, so a hard edge
+needs split vertices. Its collider is not the mesh but its outline as a
+low 16-sided prism: Unity's convex hull keeps at most 255 polygons. The material is matte (no highlight or
+reflection), as flesh is not glossy.
 
 ### Pipe
 
@@ -342,18 +348,32 @@ off the view. The running anomaly samples this every 0.1 s.
 ## 5. Sounds
 
 FMOD events borrowed from the game, read off the first instance of their owner in the scene
-(`GameInternals.ScareSoundAccess`) and kept until the world resets:
+(`GameInternals.ScareSoundAccess`) and kept until the world resets, and the mod's own clips:
 
-| `ScareSound` | Events |
+| `ScareSound` | Events and clips |
 |---|---|
 | `Voice` | `AssistanceBot.talkSound` |
 | `Click` | the robot's talk blips, `Gate.closeFailSound` |
-| `Wet` | `Cleanable.cleanSound` |
+| `Odd` | `Cleanable.cleanSound` (the brush), clips `odd_*`: a crack, a rip, knocks, a latch |
+| `Gore` | clips `gore_*`: tearing, a splash, a snap, wet pops |
 | `Creature` | `Breathless.movingSound`, `BreathlessActivity.sound`, `RandomSound.sound`, `BackgroundSound.scarySound` |
 | `Shriek` | `Breathless.screechSound`, `UnsealScream.screamSound` |
 
 A category found empty is looked for again after 60 s, and is silent until then. `Creature` and
 `Shriek` can run for many seconds, so they are cut short with a fade after `SoundCapSeconds` (2.5 s).
+
+A pick is never one of its category's last `RecentCount` (2) picks, so three sounds in a row from one
+category all differ.
+
+The clips are mono mp3s in `YourBuddy/Resources/Sounds`, embedded in the dll and found by their prefix.
+`ModSounds` plays them through FMOD's core API on the game's sfx bus, so the sfx volume applies. They
+fade out with distance to `MaxDistance` (20 m). Studio does not place core sounds, so while a clip
+plays the core listener is moved to the game's each frame. A clip you could not see, by the test for
+being seen ([§4](#4-being-seen)), is muffled: a low-pass at `MuffledCutoff` (600 Hz), at `MuffledVolume` (0.6).
+
+`ScareSounds.Play` says how long the sound lasts: a clip's length, an event's from its description
+(1 s when unknown), a capped one at most `SoundCapSeconds`. Each sound at level 2 logs
+`[anomaly] Sound <category>: <event path or clip> (<seconds>)`.
 
 ---
 

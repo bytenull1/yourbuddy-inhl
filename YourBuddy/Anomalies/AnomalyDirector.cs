@@ -8,8 +8,8 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// When the buddies act out an anomaly, and how far one may go: the game's difficulty and its event
-    /// tier, as the game's own events use them. One at a time across every buddy. docs/anomalies.md
+    /// When the buddies act out an anomaly, and how far one may go, by the game's difficulty and event
+    /// tier as the game's own events use them. One at a time across every buddy. docs/anomalies.md
     /// </summary>
     internal static class AnomalyDirector
     {
@@ -26,7 +26,7 @@ namespace YourBuddy
         /// </summary>
         internal const float CooldownSeconds = 600f;
         /// <summary>
-        /// Never with the Breathless this near the player: the game's own scare owns that moment.
+        /// Never with the Breathless this near the player, whose own scare owns that moment.
         /// </summary>
         internal const float MonsterClearance = 25f;
         /// <summary>
@@ -57,9 +57,7 @@ namespace YourBuddy
             };
         }
 
-        // ------------------------------------------------------------------
-        // Danger: the difficulty and the game's tier
-        // ------------------------------------------------------------------
+        // Danger, from the difficulty and the game's tier
 
         /// <summary>
         /// The game's events frequency (Harmless 0, Normal 1, Expert 2, a custom difficulty its slider),
@@ -83,7 +81,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The game's event tier, 0-3: it rises with the story and drops to 0 for a quiet stretch.
+        /// The game's event tier, 0-3. It rises with the story and drops to 0 for a quiet stretch.
         /// </summary>
         internal static int Tier
         {
@@ -95,8 +93,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Story tasks completed in this save: it only ever rises, where the tier drops back to 0 for a
-        /// quiet stretch.
+        /// Story tasks completed in this save. Unlike the tier, it never drops back to 0.
         /// </summary>
         internal static int Progress
         {
@@ -108,9 +105,9 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Harmless: none. Normal escalates with the story: strange, then scary after
-        /// NormalScaryTasks, extreme after NormalExtremeTasks. Expert: strange, then scary and extreme
-        /// together after ExpertAllTasks. docs/anomalies.md#1-how-often-and-how-far
+        /// Harmless allows none. Normal escalates with the story, strange first, then scary after
+        /// NormalScaryTasks and extreme after NormalExtremeTasks. Expert allows strange, then scary and
+        /// extreme together after ExpertAllTasks. docs/anomalies.md#1-how-often-and-how-far
         /// </summary>
         internal static bool Allows(AnomalySeverity severity)
         {
@@ -125,12 +122,12 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// This kind may be drawn now: its severity, and not had yet in this save.
+        /// This kind may be drawn now, by its severity and because this save has not had it yet.
         /// </summary>
         internal static bool Allows(AnomalyInfo info) => WhyNot(info) == null;
 
         /// <summary>
-        /// Why this kind is not drawn now, or null: it happened already, the difficulty, or the story
+        /// Why this kind is not drawn now, or null. It happened already, the difficulty, or the story
         /// progress it waits for. For buddy_anomaly list.
         /// </summary>
         internal static string? WhyNot(AnomalyInfo info)
@@ -149,7 +146,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The worst severity allowed now, strange at the least: what the line pools lean toward.
+        /// The worst severity allowed now, strange at the least. The line pools lean toward it.
         /// </summary>
         internal static AnomalySeverity Ceiling
         {
@@ -187,7 +184,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// How often a severity is drawn among those allowed: the scarier, the more the tier pushes it.
+        /// How often a severity is drawn among those allowed. The scarier it is, the more the tier pushes it.
         /// </summary>
         private static float SeverityWeight(AnomalySeverity severity)
         {
@@ -201,9 +198,7 @@ namespace YourBuddy
             };
         }
 
-        // ------------------------------------------------------------------
         // The roll
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// From BuddyManager.Tick; acts at most every CheckSeconds.
@@ -277,7 +272,7 @@ namespace YourBuddy
             Actors.Clear();
             foreach (BuddyBehaviour buddy in BuddyManager.All)
             {
-                // Left on a station, it is parked: it may still turn up near you.
+                // Left on a station it is parked, but it may still turn up near you.
                 if (buddy != null && (buddy.AnomalyReady() == null || buddy.MoveReady() == null)) Actors.Add(buddy);
             }
             if (Actors.Count == 0) return false;
@@ -319,7 +314,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A buddy began one, drawn or forced: the cooldown starts and the save remembers it.
+        /// A buddy began one, drawn or forced. The cooldown starts and the save remembers it.
         /// </summary>
         internal static void Began(BuddyBehaviour buddy, AnomalyKind kind)
         {
@@ -330,7 +325,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// buddy_anomaly roll: the next roll happens now, with no cooldown and a certain hit.
+        /// buddy_anomaly roll. The next roll happens now, with no cooldown and a certain hit.
         /// </summary>
         internal static string RollNow()
         {
@@ -340,12 +335,10 @@ namespace YourBuddy
             return TryStartAny(out string report) ? "Started: " + _last : "No anomaly: " + report;
         }
 
-        // ------------------------------------------------------------------
         // The player's side
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// A fright for the player: stress through a source of the mod's own, never the threat that can
+        /// A fright for the player. Stress through a source of the mod's own, never the threat that can
         /// kill. docs/anomalies.md#6-the-players-stress
         /// </summary>
         internal static void Startle(int stress)

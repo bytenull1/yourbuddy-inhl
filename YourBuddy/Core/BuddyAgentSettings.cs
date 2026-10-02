@@ -3,8 +3,8 @@ using NPC.Core.Agents;
 namespace YourBuddy
 {
     /// <summary>
-    /// What one buddy's NpcAgent may do, read live from YourBuddy's config - and from the buddy's
-    /// suit state, which is why every buddy gets its own instance. docs/eva.md
+    /// What one buddy's NpcAgent may do, read live from the config and the buddy's suit state.
+    /// The suit state is why each buddy gets its own instance. docs/eva.md
     /// </summary>
     internal sealed class BuddyAgentSettings(BuddyBehaviour? buddy) : NpcAgentSettings
     {
@@ -14,8 +14,7 @@ namespace YourBuddy
         public override bool Mortal => YourBuddyPlugin.ConfigMortal.Value;
         public override bool DebugVisuals => YourBuddyPlugin.ConfigDebugVisuals.Value;
 
-        // A suited buddy breathes its own air and may route through Outdoor nodes: that is what
-        // the suit means. docs/eva.md
+        // A suited buddy breathes its own air and may route through Outdoor nodes. docs/eva.md
         public override bool Suited => buddy is { } b && b.SuitSuited;
         public override bool MayGoOutside => Suited;
 
@@ -23,7 +22,7 @@ namespace YourBuddy
         public override float SpeedFactor => buddy is { } b ? b.SuitSpeedFactor : 1f;
         public override bool CanJump => !Suited;
 
-        // Vanished, it is off the scanner too: docs/anomalies.md#vanish
+        // A vanished buddy is off the scanner too. docs/anomalies.md#vanish
         public override bool ShowOnLifecare => buddy is not { Vanished: true };
     }
 }

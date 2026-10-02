@@ -4,7 +4,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// A reach task that is the current Route's reason: UpdateRoute hands over to it once the plan is walked.
+    /// A reach task that is the current Route's reason. UpdateRoute hands over to it once the plan is walked.
     /// The walk into reach is NPC.Core's (ReachTask, NpcAgent.Reach.cs). docs/terminals.md §2
     /// </summary>
     internal abstract class ErrandLeg(Vector3 targetPoint, Transform own) : ReachTask(targetPoint, own)
@@ -15,7 +15,7 @@ namespace YourBuddy
         public abstract Vector3 Approach(out bool wantMove);
 
         /// <summary>
-        /// However the leg ended, when no next leg took over: put back what it left half done.
+        /// Called however the leg ended, when no next leg took over. Puts back what it left half done.
         /// </summary>
         public virtual void End()
         {
@@ -32,13 +32,13 @@ namespace YourBuddy
         public virtual bool EndsOnFlee => true;
 
         /// <summary>
-        /// Standing still is this leg's work (the airlock chamber): the agent's idle recovery
+        /// Standing still is this leg's work (the airlock chamber), so the agent's idle recovery
         /// leaves it be. docs/eva.md
         /// </summary>
         public virtual bool Waits => false;
 
         /// <summary>
-        /// Whether this leg is about `t`, so no other buddy takes it: docs/invariants.md#one-buddy-per-target
+        /// Whether this leg is about `t`, so no other buddy takes it. docs/invariants.md#one-buddy-per-target
         /// </summary>
         public virtual bool Holds(Transform t) => t == Own;
     }

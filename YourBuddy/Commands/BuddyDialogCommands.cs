@@ -7,9 +7,8 @@ using NPC.Core.Navigation;
 namespace YourBuddy
 {
     /// <summary>
-    /// Turns what the player typed (or clicked) into one of the orders in
-    /// BuddyCommands. Keyword matching, like the game's own AssistanceBot, so
-    /// "follow me" and "follow" both work. See docs/dialog.md.
+    /// Turns what the player typed or clicked into an order in BuddyCommands. Keyword matching,
+    /// like the game's AssistanceBot, so "follow me" and "follow" both work. See docs/dialog.md.
     /// </summary>
     internal static class BuddyDialogCommands
     {
@@ -20,20 +19,20 @@ namespace YourBuddy
             ["Follow", "Wander", "Stay", "Hide", "Outside", "Inside", "Unsuit", "Tidy", "Sell", "Play", "Snack", "Goto", "Decide", "Password"];
 
         /// <summary>
-        /// What only makes sense outside: every other job is inside. docs/eva.md
+        /// Orders that only make sense outside. Every other job is inside. docs/eva.md
         /// </summary>
         private static readonly string[] OutsideNames = ["Follow", "Wander", "Stay", "Inside", "Goto", "Decide"];
 
         /// <summary>
-        /// Floating there is nothing to walk on: no wander, no goto. docs/eva.md#7-floating
+        /// Floating, there is nothing to walk on, so no wander and no goto. docs/eva.md#7-floating
         /// </summary>
         private static readonly string[] FloatingNames = ["Follow", "Stay", "Inside", "Decide"];
 
         private static readonly Dictionary<bool, string[]> InsideNames = [];
 
         /// <summary>
-        /// The commands page for one buddy: outside only what works out there; inside, "Unsuit"
-        /// only while it wears a suit.
+        /// The commands page for one buddy. Outside it lists only what works there; inside it shows
+        /// "Unsuit" only while the buddy wears a suit.
         /// </summary>
         internal static IReadOnlyList<string> NamesFor(BuddyBehaviour buddy)
         {
@@ -70,17 +69,17 @@ namespace YourBuddy
             string lower = text.Trim().ToLowerInvariant();
             List<BuddyBehaviour> targets = Targets(buddy, ref lower);
 
-            // First: "decide for yourself whether to follow" is not a follow order.
+            // First, since "decide for yourself whether to follow" is not a follow order.
             if (Has(lower, "decide", "yourself", "autonom", "your call", "own mind")) return ForAll(targets, BuddyCommands.DecideForYourself);
 
-            // Before the outside order: "take the suit off outside" is an unsuit order.
+            // Before the outside order, since "take the suit off outside" is an unsuit order.
             // docs/eva.md
             if (Has(lower, "unsuit", "take off the suit", "take the suit off", "remove the suit", "out of the suit"))
             {
                 return ForAll(targets, BuddyCommands.Unsuit);
             }
 
-            // Before the room goto: "go outside" and "come inside" are airlock walks, not rooms.
+            // Before the room goto, since "go outside" and "come inside" are airlock walks, not rooms.
             // docs/eva.md
             if (Has(lower, "inside", "come in", "back in")) return ForAll(targets, BuddyCommands.GoInside);
 
@@ -104,7 +103,7 @@ namespace YourBuddy
 
             if (Has(lower, "stay", "wait", "hold", "stop", "halt")) return ForAll(targets, BuddyCommands.Stay);
 
-            // Sell before tidy: "trash box" contains "trash".
+            // Sell before tidy, since "trash box" contains "trash".
             if (Has(lower, "sell", "trash box", "money", "cash")) return ForAll(targets, BuddyCommands.Sell);
 
             if (Has(lower, "tidy", "clean", "trash", "rubbish", "garbage", "litter", "bin")) return ForAll(targets, BuddyCommands.Tidy);

@@ -10,8 +10,8 @@ using static YourBuddy.Items;
 namespace YourBuddy
 {
     /// <summary>
-    /// Now and then, with nothing else to do: eat or drink something nearby - from a fridge, cabinet,
-    /// chest or locker that holds food, opened and closed again, or lying about. docs/snacks.md
+    /// Now and then, with nothing else to do, eat or drink something nearby. The food lies about or
+    /// sits in a fridge, cabinet, chest or locker, which is opened and closed again. docs/snacks.md
     /// </summary>
     internal sealed class SnackErrand(IErrandBody body) : Errand(body)
     {
@@ -42,6 +42,7 @@ namespace YourBuddy
         public override float RetryDelay => SnackRetryDelay;
         protected override float SkipSeconds => SnackSkipSeconds;
         protected override string Command => "buddy_order snack";
+        protected override string Topic => "Snack";
 
         private enum SnackPhase { Walk, Look, Eat }
 
@@ -50,7 +51,7 @@ namespace YourBuddy
             private readonly SnackErrand errand;
             public readonly Door[] Doors;
             /// <summary>
-            /// A container's Furniture.itemMover: what moves with it, which is what is inside. Null for loose food.
+            /// A container's Furniture.itemMover, which moves what is inside with it. Null for loose food.
             /// </summary>
             public readonly InstantItemDetector? Contents;
             public readonly HidingSpot? Hideout;
@@ -63,7 +64,7 @@ namespace YourBuddy
             public SnackPhase Phase = SnackPhase.Walk;
             public float PhaseUntil;
             /// <summary>
-            /// Only these are closed again: a door the buddy found open stays open.
+            /// Only these are closed again. A door the buddy found open stays open.
             /// </summary>
             public readonly List<Door> OpenedDoors = [];
 
@@ -123,30 +124,14 @@ namespace YourBuddy
             int plans = 0;
             foreach (SnackTask task in SnackSpots)
             {
+                SetOffResult set = SetOff(task, Begin, ref plans, SnackMaxPlans, ref failure);
+                if (set == SetOffResult.NoPlansLeft) break;
+                if (set == SetOffResult.NoPlan) continue;
+
                 string what = task.Item != null ? "lying about" : $"{task.FoodCount} thing(s) to eat in it";
-                if (Body.InReach(task))
-                {
-                    task.Node = task.StandPoint = Here;
-                    Begin(task, null);
-                    report = $"is getting a snack: {task.Name}, {what}, right here";
-                    YourBuddyPlugin.Log.LogInfo($"[mind] Decided: get a snack from {task.Name} - {what}, right here");
-                    return true;
-                }
-                if (plans++ >= SnackMaxPlans) break;
-
-                failure = Body.PlanReach(task, out NavPath plan);
-                if (failure != null)
-                {
-                    Skips.Skip(task.Own, SnackSkipSeconds);
-                    Trace($"not {task.Name} at {task.TargetPoint:0.0}: {failure} - skipping it for {SnackSkipSeconds:0}s");
-                    continue;
-                }
-
-                Begin(task, plan);
-                float distance = Vector3.Distance(Here, task.TargetPoint);
-                report = $"is getting a snack: {task.Name}, {what}, {distance:0.0}m away";
+                report = $"is getting a snack: {task.Name}, {what}, {HowFar(set, task)}";
                 YourBuddyPlugin.Log.LogInfo($"[mind] Decided: get a snack from {task.Name} - {what}, " +
-                                            $"via node {task.Node:0.0}, then {task.StandPoint:0.0}");
+                                            (set == SetOffResult.InReach ? "right here" : $"via node {task.Node:0.0}, then {task.StandPoint:0.0}"));
                 return true;
             }
             report = $"none of the {SnackSpots.Count} snack(s) nearby can be reached ({failure})";
@@ -161,18 +146,13 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A null plan is food already in reach: the Route has nothing to walk. Only eating schedules the
+        /// A null plan means food already in reach, with nothing for the Route to walk. Only eating schedules the
         /// full interval; until then a failed walk tries again after SnackRetryDelay.
         /// </summary>
-        private void Begin(SnackTask task, NavPath? plan)
-        {
-            Body.Walk(task, plan);
-            DueAt = Time.time + SnackRetryDelay;
-            Last = "on the way to " + task.Name;
-        }
+        private void Begin(SnackTask task, NavPath? plan) => Begin(task, plan, SnackRetryDelay, "on the way to " + task.Name);
 
         /// <summary>
-        /// Every snack near the buddy, nearest first: containers that hold food, and food lying about.
+        /// Every snack near the buddy, nearest first. Containers that hold food, and food lying about.
         /// A container without food is never a snack.
         /// </summary>
         private void CollectSnackSpots(out int emptyContainers, out int skipped)
@@ -238,7 +218,7 @@ namespace YourBuddy
             point.y >= floorY - SnackReachBelow && point.y <= floorY + ReachTask.ReachHeight && Body.OnMyVessel(what);
 
         /// <summary>
-        /// The top of the item: what can be seen of it on a floor or a shelf.
+        /// The top of the item, the part visible on a floor or a shelf.
         /// </summary>
         private static Vector3 ItemPoint(Food food)
         {
@@ -258,14 +238,12 @@ namespace YourBuddy
             {
                 if (!Edible(task.Item)) return "someone took it or it is used up";
 
-                return FlatDistanceSq(ItemPoint(task.Item), task.TargetPoint) > SnackItemMovedDist * SnackItemMovedDist
-                    ? "it has been moved"
-                    : null;
+                return MovedBlocker(ItemPoint(task.Item), task.TargetPoint);
             }
             // Opening or closing a hiding spot's door sets the player's hidden flag. docs/snacks.md §1
             if (task.Hideout != null && task.Hideout.CurrentInteractor != null) return "you are hiding in it";
 
-            // Another buddy snacking or hiding there: docs/invariants.md#one-buddy-per-target
+            // Another buddy snacking or hiding there. docs/invariants.md#one-buddy-per-target
             return Body.TakenByAnother(task.Own) ? "another buddy is using it" : null;
         }
 
@@ -290,7 +268,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The player's own Hunger band (Space/Player.cs): the buddy does not need the food.
+        /// The player's own Hunger band (Space/Player.cs). The buddy does not need the food.
         /// </summary>
         private bool PlayerIsHungry(out int satiety)
         {
@@ -300,19 +278,13 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// UpdateRoute, once a snack route's plan is walked: into reach, open, eat, and close on finishing.
+        /// From UpdateRoute once a snack route's plan is walked. Gets into reach, opens, eats, and closes on finishing.
         /// </summary>
         private Vector3 Approach(SnackTask task, out bool wantMove)
         {
             wantMove = false;
             string? blocker = SnackBlocker(task);
-            if (blocker != null)
-            {
-                Last = $"left {task.Name} alone - {blocker}";
-                YourBuddyPlugin.Log.LogInfo($"[ai] Leaving {task.Name} alone - {blocker}");
-                Body.FinishRoute();
-                return Vector3.zero;
-            }
+            if (blocker != null) return Leave(task.Name + " alone", blocker);
 
             switch (task.Phase)
             {
@@ -369,16 +341,11 @@ namespace YourBuddy
             string itemName = meal.gameObject.name;
             string verb = meal is Drink ? "Drank" : "Ate";
             string from = task.Item != null ? "" : $" from {task.Name} ({count - 1} left)";
-            // The game's own consume without an eater: sound, used up, turned to trash.
+            // The game's own consume without an eater. Plays the sound, uses it up, turns it to trash.
             meal.Consume();
             DueAt = Time.time + NextInterval();
             Last = $"{verb.ToLowerInvariant()} '{itemName}'{from}";
             YourBuddyPlugin.Log.LogInfo($"[ai] {verb} '{itemName}'{from}");
-        }
-
-        private static void Trace(string line)
-        {
-            if (NpcLog.Level >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Snack: " + line);
         }
     }
 }

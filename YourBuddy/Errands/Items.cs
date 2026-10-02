@@ -6,13 +6,13 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// What every item errand shares: how close an item is reached from, which items count as trash,
+    /// What every item errand shares. How close an item is reached from, which items count as trash,
     /// what is put away in a container, and opening and closing one. docs/items.md, docs/snacks.md
     /// </summary>
     internal static class Items
     {
         /// <summary>
-        /// Up close, unlike a terminal: the flat distance from the buddy to a door's face or an item's top.
+        /// Up close, unlike a terminal. The flat distance from the buddy to a door's face or an item's top.
         /// </summary>
         public const float SnackReachDist = 0.9f;
         public static readonly float[] SnackStandOffs = [0.55f, 0.7f, 0.85f];
@@ -59,6 +59,12 @@ namespace YourBuddy
             return flat.sqrMagnitude;
         }
 
+        /// <summary>
+        /// Why an item at `now` is no longer the one planned for at `planned`, or null.
+        /// </summary>
+        public static string? MovedBlocker(Vector3 now, Vector3 planned) =>
+            FlatDistanceSq(now, planned) > SnackItemMovedDist * SnackItemMovedDist ? "it has been moved" : null;
+
         public static bool ColliderBounds(GameObject root, out Bounds bounds) => NpcHands.ColliderBounds(root, out bounds);
 
         public static Vector3 ItemTop(Grabbable item)
@@ -97,15 +103,15 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Switched off with its room's content, not gone: a sale or a trash can clears the item's own flag
-        /// (Grabbable.Destroy), an unloaded room leaves it alone. docs/items.md#4-selling-trash-boxes
+        /// Switched off with its room's content, not gone. A sale or a trash can clears the item's own flag
+        /// (Grabbable.Destroy); an unloaded room leaves it alone. docs/items.md#4-selling-trash-boxes
         /// </summary>
         public static bool InUnloadedRoom(Grabbable? item) =>
             item != null && item.gameObject.activeSelf && !item.gameObject.activeInHierarchy;
 
         /// <summary>
         /// Active, or off only with its room's content, which LoadRoomOf switches back on. Not on a station
-        /// you are not docked at: its interior lies in the docked one's place, and its rooms cannot load.
+        /// you are not docked at, since its interior lies in the docked one's place and its rooms cannot load.
         /// </summary>
         public static bool Loadable(Component thing)
         {
@@ -122,8 +128,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A wrapper, can, empty seed pack or broken loot box the game turned to trash, or a trash item:
-        /// never something still useful. CanTrash alone is not trash - first-aid kits have it. docs/items.md §1
+        /// A wrapper, can, empty seed pack or broken loot box the game turned to trash, or a trash item.
+        /// Never something still useful. CanTrash alone is not trash, since first-aid kits have it. docs/items.md §1
         /// </summary>
         public static bool IsTrash(Grabbable item)
         {
@@ -139,7 +145,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// What idle play may pick up: trash, or with ItemPlayAnything any loose item. docs/items.md §5
+        /// What idle play may pick up. Trash, or any loose item with ItemPlayAnything. docs/items.md §5
         /// </summary>
         public static bool IsPlaything(Grabbable item) =>
             YourBuddyPlugin.ConfigItemPlayAnything.Value || IsTrash(item);
@@ -158,8 +164,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// What sits in a fridge, cabinet, closet, chest or locker within `radius` of `here`, flat, into
-        /// PutAwayItems: never loose. docs/items.md §1
+        /// Collects into PutAwayItems what sits in a fridge, cabinet, closet, chest or locker within
+        /// `radius` of `here`, flat. Those items are never loose. docs/items.md §1
         /// </summary>
         public static void CollectContainerContents(Vector3 here, float radius)
         {
@@ -176,8 +182,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The object a furniture door belongs to: the nearest ancestor with a Furniture child that
-        /// has an itemMover. Scene: every fridge, closet, chest and locker. docs/snacks.md §1
+        /// The object a furniture door belongs to, the nearest ancestor with a Furniture child that
+        /// has an itemMover. In the scene that is every fridge, closet, chest and locker. docs/snacks.md §1
         /// </summary>
         public static Transform? ContainerOf(Door door, out InstantItemDetector? contents)
         {
@@ -197,7 +203,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Between the closed doors' colliders: the face the buddy walks up to.
+        /// Between the closed doors' colliders, the face the buddy walks up to.
         /// </summary>
         public static Vector3 DoorFacePoint(Door[] doors)
         {
@@ -222,8 +228,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Door.Open, which is what the player's Door.Switch calls: sound, animation and the scene's
-        /// OnOpen wiring (fridge light and freezer, hiding spot). docs/snacks.md §1
+        /// Door.Open, which the player's Door.Switch calls. Plays the sound and animation and fires the
+        /// scene's OnOpen wiring (fridge light and freezer, hiding spot). docs/snacks.md §1
         /// </summary>
         public static void OpenContainerDoors(Door[] doors, List<Door> opened, string name)
         {
@@ -240,7 +246,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// However a snack or tidying ended. Not while the player hides inside: that is their door.
+        /// However a snack or tidying ended. Not while the player hides inside, since that is their door.
         /// docs/invariants.md#a-snack-closes-what-it-opened
         /// </summary>
         public static void CloseOpenedDoors(List<Door> opened, HidingSpot? hideout, string name)

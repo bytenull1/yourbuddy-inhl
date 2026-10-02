@@ -21,7 +21,7 @@ body:
     attributes:
       label: Versions
       description: Mod version (the log line "Loading [YourBuddy Mod x.y.z]") and game version.
-      placeholder: YourBuddy 1.0.8, Isolated Inhale v0.8.9
+      placeholder: YourBuddy 1.0.9, Isolated Inhale v0.8.9
     validations:
       required: true
 

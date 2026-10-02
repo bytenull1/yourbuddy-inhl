@@ -4,7 +4,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The buddy's suit spattered with blood: a copy of the texture it wears now, with dark red blots
+    /// The buddy's suit spattered with blood. A copy of the texture it wears now with dark red blots
     /// painted over it, put on and taken off through BuddySkin. docs/anomalies.md#bloody
     /// </summary>
     internal static class BuddyGore
@@ -24,7 +24,7 @@ namespace YourBuddy
         private static readonly Color Blood = new(0.4f, 0.02f, 0.03f, 1f);
 
         /// <summary>
-        /// Puts the bloody copy of what the body wears on it; `seed` keeps one buddy's stains the same
+        /// Puts the bloody copy of what the body wears on it. `seed` keeps one buddy's stains the same
         /// each time. Returns the texture it was wearing, for Remove, or null when nothing took it.
         /// </summary>
         internal static Texture? Apply(Component body, int seed, out Texture2D? bloody)
@@ -40,7 +40,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Back to the look it had before Apply: its original, or the skin it wore then.
+        /// Restores the look it had before Apply, its original or the skin it wore then.
         /// </summary>
         internal static void Remove(Component body, Texture? wearing)
         {
@@ -67,16 +67,8 @@ namespace YourBuddy
             return null;
         }
 
-        private static Texture2D? Make(Texture source, int seed)
+        private static Texture2D? Make(Texture source, int seed) => Painted(source, seed, (pixels, w, h) =>
         {
-            if (Made.TryGetValue((source, seed), out Texture2D? cached) && cached != null) return cached;
-
-            Texture2D? copy = Readable(source);
-            if (copy == null) return null;
-
-            Color[] pixels = copy.GetPixels();
-            int w = copy.width;
-            int h = copy.height;
             float scale = w / 64f;
             System.Random random = new(seed * 7919 + 17);
             int placed = 0;
@@ -84,17 +76,41 @@ namespace YourBuddy
             {
                 int cx = random.Next(w);
                 int cy = random.Next(h);
-                // Only on the painted parts of the atlas: a blot on its empty margin shows nowhere.
+                // Only on the painted parts of the atlas, since a blot on its empty margin shows nowhere.
                 if (pixels[cy * w + cx].a < 0.5f) continue;
 
                 placed++;
                 float radius = (BlotMinRadius + (float)random.NextDouble() * (BlotMaxRadius - BlotMinRadius)) * scale;
                 Blot(pixels, w, h, cx, cy, radius, random);
             }
+        });
+
+        /// <summary>
+        /// A readable copy of `source` with `paint` applied to its pixels (and the width and height), made once per key.
+        /// </summary>
+        private static Texture2D? Painted(Texture source, int key, System.Action<Color[], int, int> paint)
+        {
+            if (Made.TryGetValue((source, key), out Texture2D? cached) && cached != null) return cached;
+
+            Texture2D? copy = Readable(source);
+            if (copy == null) return null;
+
+            Color[] pixels = copy.GetPixels();
+            paint(pixels, copy.width, copy.height);
             copy.SetPixels(pixels);
             copy.Apply(false);
-            Made[(source, seed)] = copy;
+            Made[(source, key)] = copy;
             return copy;
+        }
+
+        /// <summary>
+        /// `was` tinted toward `paint` by `amount`, keeping its alpha so the atlas's empty margin stays empty.
+        /// </summary>
+        private static Color Over(Color was, Color paint, float amount)
+        {
+            Color mixed = Color.Lerp(was, paint, amount);
+            mixed.a = was.a;
+            return mixed;
         }
 
         private static void Blot(Color[] pixels, int w, int h, int cx, int cy, float radius, System.Random random)
@@ -108,32 +124,20 @@ namespace YourBuddy
                     float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / Mathf.Max(0.5f, radius);
                     if (d > 1f) continue;
 
-                    // Ragged edge: the rim is hit or miss.
+                    // Ragged edge, the rim is hit or miss.
                     if (d > 0.6f && random.NextDouble() < d - 0.3f) continue;
 
-                    Color was = pixels[y * w + x];
-                    Color blood = Blood * shade;
-                    Color mixed = Color.Lerp(was, blood, d < 0.6f ? 0.92f : 0.7f);
-                    mixed.a = was.a;
-                    pixels[y * w + x] = mixed;
+                    pixels[y * w + x] = Over(pixels[y * w + x], Blood * shade, d < 0.6f ? 0.92f : 0.7f);
                 }
             }
         }
 
         /// <summary>
-        /// The Metal_Pipe atlas with its top end bloody: the sides lie on v 0.25..1 (v 1 at the top end), the
+        /// The Metal_Pipe atlas with its top end bloody. The sides lie on v 0.25..1 (v 1 at the top end), the
         /// top cap at u 0.375..0.56, v 0.06..0.25. Blood thins down the shaft, with a few drips.
         /// </summary>
-        internal static Texture2D? BloodyEnd(Texture source)
+        internal static Texture2D? BloodyEnd(Texture source) => Painted(source, -1, (pixels, w, h) =>
         {
-            if (Made.TryGetValue((source, -1), out Texture2D? cached) && cached != null) return cached;
-
-            Texture2D? copy = Readable(source);
-            if (copy == null) return null;
-
-            Color[] pixels = copy.GetPixels();
-            int w = copy.width;
-            int h = copy.height;
             System.Random random = new(4111);
             float[] drips = new float[w];
             for (int x = 0; x < w; x++) drips[x] = random.NextDouble() < 0.4 ? 0.25f + (float)random.NextDouble() * 0.3f : 1f;
@@ -153,20 +157,14 @@ namespace YourBuddy
                         : u is > 0.375f and < 0.5625f && v > 0.0625f ? 0.9f : 0f;
                     if (random.NextDouble() >= chance) continue;
 
-                    Color mixed = Color.Lerp(was, Blood * (0.7f + (float)random.NextDouble() * 0.3f), 0.85f);
-                    mixed.a = was.a;
-                    pixels[y * w + x] = mixed;
+                    pixels[y * w + x] = Over(was, Blood * (0.7f + (float)random.NextDouble() * 0.3f), 0.85f);
                 }
             }
-            copy.SetPixels(pixels);
-            copy.Apply(false);
-            Made[(source, -1)] = copy;
-            return copy;
-        }
+        });
 
         /// <summary>
         /// What the body wears now with an embedded overlay painted over it, at the larger of the two sizes,
-        /// point sampled: the skin flickers. The overlays follow the suit's atlas layout.
+        /// point sampled so the skin flickers. The overlays follow the suit's atlas layout.
         /// Null when either cannot be read. docs/anomalies.md#smile-and-underthesuit
         /// </summary>
         internal static Texture2D? Overlaid(Component body, string resource, out Texture? wearing)
@@ -192,9 +190,7 @@ namespace YourBuddy
                 {
                     Color was = below[y * under.height / size * under.width + x * under.width / size];
                     Color paint = above[y * overlay.height / size * overlay.width + x * overlay.width / size];
-                    Color mixed = Color.Lerp(was, paint, paint.a);
-                    mixed.a = was.a;
-                    pixels[y * size + x] = mixed;
+                    pixels[y * size + x] = Over(was, paint, paint.a);
                 }
             }
             Texture2D made = new(size, size, TextureFormat.RGBA32, false)

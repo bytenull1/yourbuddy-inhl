@@ -9,9 +9,9 @@ using Object = UnityEngine.Object;
 namespace YourBuddy
 {
     /// <summary>
-    /// A new game's buddy: asleep in a shut prop capsule beside the player's cryo pod until
-    /// a while after the player's pod opens, or at the Shipyard's origin when no capsule can
-    /// be opened. docs/game-model.md#the-cryo-room
+    /// A new game's buddy sleeps in a shut prop capsule beside the player's cryo pod and wakes a
+    /// while after the player's pod opens. With no capsule to open it spawns at the Shipyard's
+    /// origin. docs/game-model.md#the-cryo-room
     /// </summary>
     internal static class BuddyCryoSpawn
     {
@@ -42,7 +42,7 @@ namespace YourBuddy
             _openedIn != null && _openedIn == GameManager.Instance ? _openedCapsule : null;
 
         /// <summary>
-        /// The capsule this buddy is still asleep in, or null. At most one buddy sleeps: the new game's.
+        /// The capsule this buddy is still asleep in, or null. At most one buddy sleeps, the new game's.
         /// </summary>
         internal static string? SleepingCapsuleOf(BuddyBehaviour buddy) =>
             _sleeper != null && _sleeper == buddy ? _sleeperCapsule.Capsule.name : null;
@@ -82,8 +82,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A buddy restored from a save that was made while it slept: it sleeps on, behind
-        /// its shut door, and wakes by the same rules.
+        /// A buddy restored from a save made while it slept. It sleeps on behind its shut door
+        /// and wakes by the same rules.
         /// </summary>
         internal static void ResumeSleep(BuddyBehaviour buddy, string? capsuleName)
         {
@@ -300,7 +300,7 @@ namespace YourBuddy
                 YourBuddyPlugin.Log.LogWarning("[mgr] New game: the buddy could not be spawned. Use 'buddy_spawn'.");
                 return null;
             }
-            // Parented before its first SlowUpdate: npc-core:docs/invariants.md#an-npc-rides-its-own-floor
+            // Parented before its first SlowUpdate. npc-core:docs/invariants.md#an-npc-rides-its-own-floor
             BuddyManager.AttachToOwner(buddy, NpcVessels.OwnerOfTransform(frame));
             return buddy;
         }
@@ -322,12 +322,10 @@ namespace YourBuddy
             }
         }
 
-        // ------------------------------------------------------------------
-        // The second sleeper: docs/anomalies.md#sleeper
-        // ------------------------------------------------------------------
+        // The second sleeper. docs/anomalies.md#sleeper
 
         /// <summary>
-        /// The capsule the buddy woke in, and where a sleeper stands in it; null and why not.
+        /// The capsule the buddy woke in and where a sleeper stands in it, or null and why not.
         /// </summary>
         internal static SleeperBed? OpenedBed(out string why)
         {
@@ -344,7 +342,7 @@ namespace YourBuddy
                 {
                     if (prop.Capsule.name != name) continue;
 
-                    // Where SleepInCapsule put the buddy: the player's spawn point, carried into the capsule.
+                    // Where SleepInCapsule put the buddy, the player's spawn point carried into the capsule.
                     Vector3 position = prop.Capsule.TransformPoint(pod.transform.InverseTransformPoint(pod.SpawnPos));
                     Quaternion rotation = Quaternion.Euler(0f, prop.Capsule.eulerAngles.y + 180f, 0f);
                     return new SleeperBed(prop.Capsule, prop.Door, position, rotation, DoorMotion.Of(pod));
@@ -355,7 +353,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Shut, its monitor on with a pulse: someone is asleep in it.
+        /// Shuts the capsule with its monitor showing a pulse, as if someone sleeps in it.
         /// </summary>
         internal static void ShutWithSleeper(SleeperBed bed)
         {
@@ -368,7 +366,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The door opens as the buddy's own did on waking, with the pod's sound; `opened` once it is up.
+        /// Opens the door the way the buddy's own did on waking, with the pod's sound. Calls `opened`
+        /// once it is up.
         /// </summary>
         internal static void OpenForSleeper(SleeperBed bed, Action opened)
         {
@@ -377,7 +376,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Open and dark again, as the buddy left it.
+        /// Leaves the capsule open and dark again, as the buddy left it.
         /// </summary>
         internal static void OpenEmpty(SleeperBed bed)
         {
@@ -449,7 +448,7 @@ namespace YourBuddy
 
         /// <summary>
         /// Siblings of the pod built from the same mesh with a door at the same path, but no
-        /// CryoPod of their own: the room's decoration.
+        /// CryoPod of their own, i.e. the room's decoration.
         /// </summary>
         private static List<PropCapsule> PropCapsules(CryoPod pod)
         {
@@ -504,7 +503,7 @@ namespace YourBuddy
     }
 
     /// <summary>
-    /// CryoPodAnimator.OpenRoutine replayed on a prop capsule's door: slide out, then lift.
+    /// Replays CryoPodAnimator.OpenRoutine on a prop capsule's door, sliding out and then lifting.
     /// Calls back and removes itself once the door is open.
     /// </summary>
     internal sealed class CryoCapsuleDoor : MonoBehaviour

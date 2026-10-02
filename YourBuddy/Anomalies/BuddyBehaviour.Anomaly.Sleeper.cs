@@ -4,11 +4,11 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Sleeper: a second buddy asleep in the cryo capsule. docs/anomalies.md#sleeper
+    /// Sleeper. A second buddy asleep in the cryo capsule. docs/anomalies.md#sleeper
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // Sleeper: the copy in its capsule, the capsule, and when you last saw it. docs/anomalies.md#sleeper
+        // Sleeper state, with the copy in its capsule, the capsule, and when you last saw it. docs/anomalies.md#sleeper
         private GameObject? sleeper = null;
         private SleeperBed? sleeperBed = null;
         private Vector3 sleeperHead;
@@ -25,13 +25,11 @@ namespace YourBuddy
         private const float SleeperGoneUnseenSeconds = 1f;
         private const float SleeperStareSeconds = 30f;
 
-        // ------------------------------------------------------------------
         // The second sleeper
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// While it follows you aboard, the capsule it woke in is shut again, its monitor showing a pulse, and a
-        /// copy of it sleeps inside. The door is opaque: it opens by itself when you come up to it.
+        /// copy of it sleeps inside. The door is opaque and opens by itself when you come up to it.
         /// docs/anomalies.md#sleeper
         /// </summary>
         private string? StartSleeper(Transform you, float dist, bool sameVessel)
@@ -72,7 +70,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The top of the copy's drawn body, a little down: its head. The bed point plus 1.5 m when nothing draws.
+        /// The top of the copy's drawn body, a little down, i.e. its head. The bed point plus 1.5 m when nothing draws.
         /// </summary>
         private static Vector3 HeadOf(GameObject copy, Vector3 fallback)
         {
@@ -90,7 +88,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// You look at its head, this near: the capsule is the sight test's target, so its own walls never block.
+        /// You look at its head from this near. The capsule is the sight test's target, so its own walls never block.
         /// </summary>
         private bool LooksAtSleeper(float near, float angle)
         {
@@ -102,8 +100,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Shut until you come up to it; then it opens, and there it is. Found: your stress, and the one following
-        /// you stands still facing you until you turn to it. Once you look away from the capsule it is empty.
+        /// Shut until you come up to it, then it opens and there it is. Once found it raises your stress, and the
+        /// one following you stands still facing you until you turn to it. Once you look away from the capsule it is empty.
         /// </summary>
         private void UpdateSleeper(float now, float dist)
         {

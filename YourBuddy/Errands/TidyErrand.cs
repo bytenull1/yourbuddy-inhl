@@ -8,9 +8,9 @@ using static YourBuddy.Items;
 namespace YourBuddy
 {
     /// <summary>
-    /// Now and then, with nothing else to do: pick up a piece of trash - lying about, or from a fridge,
-    /// cabinet, chest or locker, opened and closed again - carry it to a trash can and put it in through
-    /// the slot. docs/items.md §3
+    /// Now and then, with nothing else to do, carry a piece of trash to a trash can and put it in
+    /// through the slot. The trash lies about or sits in a fridge, cabinet, chest or locker, which is
+    /// opened and closed again. docs/items.md §3
     /// </summary>
     internal sealed class TidyErrand(IErrandBody body) : Errand(body)
     {
@@ -31,8 +31,8 @@ namespace YourBuddy
         private const float TidyRoundSeconds = 180f;
         private const float TidySkipSeconds = 600f;
         /// <summary>
-        /// ItemDestroyer hides what it takes the physics step it touches the slot; still active this
-        /// long after reaching out, it did not go in.
+        /// ItemDestroyer hides what it takes in the physics step it touches the slot. Still active this
+        /// long after reaching out means it did not go in.
         /// </summary>
         private const float TidyInsertSeconds = 1.5f;
         private const int TidyMaxInserts = 2;
@@ -46,11 +46,12 @@ namespace YourBuddy
         public override float RetryDelay => TidyRetryDelay;
         protected override float SkipSeconds => TidySkipSeconds;
         protected override string Command => "buddy_order tidy";
+        protected override string Topic => "Tidy";
 
         private enum TidyPhase { Walk, Handle, Insert }
 
         /// <summary>
-        /// A container with trash in it: the doors to open and what it holds (Furniture.itemMover). docs/snacks.md §1
+        /// A container with trash in it, with the doors to open and what it holds (Furniture.itemMover). docs/snacks.md §1
         /// </summary>
         private sealed class TrashContainer(Transform root, Door[] doors, InstantItemDetector contents, HidingSpot? hideout)
         {
@@ -62,7 +63,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// One tidying round: several pieces carried one after another, so the buddy clears a room
+        /// One tidying round of several pieces carried one after another, so the buddy clears a room
         /// instead of binning one wrapper every few minutes. docs/items.md §3
         /// </summary>
         private sealed class TidyRun
@@ -72,7 +73,7 @@ namespace YourBuddy
             public int Done;
 
             /// <summary>
-            /// Whether another piece may be fetched: the budget and the clock, nothing about the world.
+            /// Whether another piece may be fetched, by the budget and the clock only.
             /// </summary>
             public bool WantsMore => Done < Budget && Time.time - startedAt < TidyRoundSeconds;
 
@@ -80,7 +81,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Found trash: where it is walked to (its top, or its container's doors).
+        /// Found trash and where it is walked to (its top, or its container's doors).
         /// </summary>
         private readonly struct TidySpot(Grabbable item, TrashContainer? from, Vector3 point)
         {
@@ -90,7 +91,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Two legs, two tasks: to the item (or its container), then - holding it - to the trash can.
+        /// Two legs, two tasks. To the item (or its container), then, holding it, to the trash can.
         /// </summary>
         private sealed class TidyTask : ErrandLeg
         {
@@ -106,7 +107,7 @@ namespace YourBuddy
             public float PhaseUntil;
             public int Inserts;
             /// <summary>
-            /// Only these are closed again: a door found open stays open.
+            /// Only these are closed again. A door found open stays open.
             /// </summary>
             public readonly List<Door> OpenedDoors = [];
 
@@ -134,7 +135,7 @@ namespace YourBuddy
             public override Vector3 Approach(out bool wantMove) => errand.Approach(this, out wantMove);
 
             /// <summary>
-            /// However tidying ended: the doors it opened, then the item in its hands.
+            /// However tidying ended, closes the doors it opened, then puts down the item in its hands.
             /// </summary>
             public override void End()
             {
@@ -182,30 +183,16 @@ namespace YourBuddy
                 }
 
                 TidyTask task = new(this, run, item, spot.From, bin!, slot!, spot.Point, false);
+                SetOffResult set = SetOff(task, Begin, ref plans, TidyMaxPlans, ref failure);
+                if (set == SetOffResult.NoPlansLeft) break;
+                if (set == SetOffResult.NoPlan) continue;
+
                 string where = task.From != null ? "in " + task.From.Name : "lying about";
-                if (Body.InReach(task))
-                {
-                    task.Node = task.StandPoint = Here;
-                    Begin(task, null);
-                    report = $"is tidying up '{task.ItemLabel}', {where}, right here";
-                    YourBuddyPlugin.Log.LogInfo($"[mind] Decided: tidy up '{task.ItemLabel}' - {where}, right here, then to the trash can");
-                    return true;
-                }
-                if (plans++ >= TidyMaxPlans) break;
-
-                failure = Body.PlanReach(task, out NavPath plan);
-                if (failure != null)
-                {
-                    Skips.Skip(task.Own, TidySkipSeconds);
-                    Trace($"not {task.Name} at {task.TargetPoint:0.0}: {failure} - skipping it for {TidySkipSeconds:0}s");
-                    continue;
-                }
-
-                Begin(task, plan);
-                float distance = Vector3.Distance(Here, task.TargetPoint);
-                report = $"is tidying up '{task.ItemLabel}', {where}, {distance:0.0}m away";
-                YourBuddyPlugin.Log.LogInfo($"[mind] Decided: tidy up '{task.ItemLabel}' - {where}, {distance:0.0}m away, via node " +
-                                            $"{task.Node:0.0}, then to the trash can at {toBin.TargetPoint:0.0}");
+                string far = HowFar(set, task);
+                report = $"is tidying up '{task.ItemLabel}', {where}, {far}";
+                YourBuddyPlugin.Log.LogInfo($"[mind] Decided: tidy up '{task.ItemLabel}' - {where}, {far}, " +
+                                            (set == SetOffResult.InReach ? "then to the trash can"
+                                                : $"via node {task.Node:0.0}, then to the trash can at {toBin.TargetPoint:0.0}"));
                 return true;
             }
             report = $"none of the {TidySpots.Count} piece(s) of trash nearby can be taken to a trash can ({failure})";
@@ -222,15 +209,11 @@ namespace YourBuddy
         /// <summary>
         /// A null plan is a target already in reach. Only trash that went in schedules the full interval.
         /// </summary>
-        private void Begin(TidyTask task, NavPath? plan)
-        {
-            Body.Walk(task, plan);
-            DueAt = Time.time + TidyRetryDelay;
-            Last = (task.Run.Done > 0 ? $"{task.Run.Describe()} so far, now " : "") + "on the way to " + task.Name;
-        }
+        private void Begin(TidyTask task, NavPath? plan) =>
+            Begin(task, plan, TidyRetryDelay, (task.Run.Done > 0 ? $"{task.Run.Describe()} so far, now " : "") + "on the way to " + task.Name);
 
         /// <summary>
-        /// Trash near the buddy, nearest first: one piece per container that holds some, and loose trash.
+        /// Trash near the buddy, nearest first. One piece per container that holds some, and loose trash.
         /// Never what is in someone's hands, or loaded into a machine.
         /// </summary>
         private void CollectTidySpots(out int skipped)
@@ -271,7 +254,7 @@ namespace YourBuddy
                 else TidySpots.Add(new TidySpot(trash, container, point));
             }
             CheckedContainers.Clear();
-            // Loaded into a sell station, furnace or airlock: the player put it there. docs/items.md §3
+            // Loaded into a sell station, furnace or airlock, so the player put it there. docs/items.md §3
             foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>()) ContainedItems.UnionWith(detector.Items);
 
             foreach (Grabbable item in SceneScan.ThisFrame<Grabbable>())
@@ -332,7 +315,7 @@ namespace YourBuddy
 
             if (container.Hideout != null && container.Hideout.CurrentInteractor != null) return "you are hiding in it";
 
-            // Another buddy snacking or hiding there: docs/invariants.md#one-buddy-per-target
+            // Another buddy snacking or hiding there. docs/invariants.md#one-buddy-per-target
             return Body.TakenByAnother(container.Root) ? "another buddy is using it" : null;
         }
 
@@ -345,26 +328,20 @@ namespace YourBuddy
             // ItemDestroyer hides what it takes, in the physics step the item touches the slot.
             if (task.Phase == TidyPhase.Insert && (task.Item == null || !task.Item.gameObject.activeInHierarchy))
             {
-                // Release, never Drop: the can already took it, and the hands must be empty
+                // Release, never Drop. The can already took it, and the hands must be empty
                 // before the round chains into the next piece.
                 if (Body.Hands.Item == task.Item) Body.Hands.Release();
                 task.Run.Done++;
                 YourBuddyPlugin.Log.LogInfo($"[ai] Put '{task.ItemLabel}' into the trash can " +
                                             $"({task.Run.Done} of {task.Run.Budget} this round)");
-                // Straight on to the next piece: FinishRoute would end the round and put nothing down.
+                // Straight on to the next piece, since FinishRoute would end the round and put nothing down.
                 if (task.Run.WantsMore && TryStart(out _, task.Run)) return Vector3.zero;
 
                 EndRound(task.Run);
                 return Vector3.zero;
             }
             string? blocker = LegBlocker(task);
-            if (blocker != null)
-            {
-                Last = $"left '{task.ItemLabel}' - {blocker}";
-                YourBuddyPlugin.Log.LogInfo($"[ai] Leaving '{task.ItemLabel}' - {blocker}");
-                Body.FinishRoute();
-                return Vector3.zero;
-            }
+            if (blocker != null) return Leave($"'{task.ItemLabel}'", blocker);
 
             switch (task.Phase)
             {
@@ -404,14 +381,14 @@ namespace YourBuddy
             {
                 if (task.Bin == null || !task.Bin.gameObject.activeInHierarchy) return "the trash can is gone";
 
-                return Body.Hands.Item != task.Item ? "it is no longer in my hands" : null;
+                return NotInHands(task.Item);
             }
             string? item = TakeBlocker(task.Item);
             if (item != null) return item;
 
             if (task.From != null) return ContainerBlocker(task.From);
 
-            return FlatDistanceSq(ItemTop(task.Item), task.TargetPoint) > SnackItemMovedDist * SnackItemMovedDist ? "it has been moved" : null;
+            return MovedBlocker(ItemTop(task.Item), task.TargetPoint);
         }
 
         /// <summary>
@@ -425,10 +402,7 @@ namespace YourBuddy
             if (failure != null)
             {
                 Skips.Skip(task.Own, TidySkipSeconds);
-                Last = $"left '{task.ItemLabel}' - {failure}";
-                YourBuddyPlugin.Log.LogInfo($"[ai] Leaving '{task.ItemLabel}' - {failure}");
-                Body.FinishRoute();
-                return Vector3.zero;
+                return Leave($"'{task.ItemLabel}'", failure);
             }
             string from = task.From != null ? " from " + task.Name : "";
             if (task.Inserts == 0) YourBuddyPlugin.Log.LogInfo($"[ai] Picked up '{task.ItemLabel}'{from}");
@@ -454,14 +428,14 @@ namespace YourBuddy
                 Body.FinishRoute();
                 return Vector3.zero;
             }
-            // Straight from leg to leg: ending this one would put the item down.
+            // Straight from leg to leg, since ending this one would put the item down.
             Body.Walk(toBin, plan);
             Last = $"carrying '{task.ItemLabel}' to the trash can";
             return Vector3.zero;
         }
 
         /// <summary>
-        /// Still active after reaching into the slot: once more, then leave it. The line says why it may have failed.
+        /// Still active after reaching into the slot. Try once more, then leave it. The line says why it may have failed.
         /// </summary>
         private void InsertFailed(TidyTask task)
         {
@@ -485,7 +459,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The round is over: only now does the next one get the full interval.
+        /// The round is over. Only now does the next one get the full interval.
         /// </summary>
         private void EndRound(TidyRun run)
         {
@@ -494,11 +468,6 @@ namespace YourBuddy
             YourBuddyPlugin.Log.LogInfo($"[ai] Tidied up: {run.Describe()} in the trash can" +
                                         (run.Done >= run.Budget ? "" : " - nothing else to clear"));
             Body.FinishRoute();
-        }
-
-        private static void Trace(string line)
-        {
-            if (NpcLog.Level >= 2) YourBuddyPlugin.Log.LogInfo("[mind] Tidy: " + line);
         }
     }
 }

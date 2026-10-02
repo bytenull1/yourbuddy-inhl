@@ -9,8 +9,8 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The buddy's mind: modes, orders, fear and hiding, errands, the decider, the HUD. NPC.Core's NpcAgent on
-    /// the same GameObject walks, opens doors, rides vessels, breathes and dies; this is its brain.
+    /// The buddy's brain: modes, orders, fear and hiding, errands, the decider and the HUD. NPC.Core's
+    /// NpcAgent on the same GameObject walks, opens doors, rides vessels, breathes and dies.
     /// docs/architecture.md
     /// </summary>
     public sealed partial class BuddyBehaviour : MonoBehaviour, INpcBrain, INpcHider
@@ -30,7 +30,7 @@ namespace YourBuddy
         internal string Name => agent.Name;
         internal bool IsDead => agent.IsDead;
         /// <summary>
-        /// Shut in a cryo capsule on a new game: no AI at all until BuddyCryoSpawn wakes it.
+        /// Shut in a cryo capsule on a new game, with no AI at all until BuddyCryoSpawn wakes it.
         /// </summary>
         internal bool Asleep
         {
@@ -39,13 +39,13 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The mod name every buddy's log source starts with: "YourBuddy:Buddy 2".
+        /// The mod name every buddy's log source starts with, as in "YourBuddy:Buddy 2".
         /// </summary>
         internal const string ModName = "YourBuddy";
 
         private BuddyMode mode = BuddyMode.Follow;
         /// <summary>
-        /// Set by BuddyConversation while the talk window is open on it: hold still and face the player.
+        /// Set by BuddyConversation while the talk window is open, so the buddy holds still facing the player.
         /// </summary>
         internal bool InDialog = false;
         /// <summary>
@@ -54,7 +54,7 @@ namespace YourBuddy
         private FearState fearState = FearState.Calm;
 
         /// <summary>
-        /// Alert or Scared: no step within 60 degrees of the monster's bearing while this near it.
+        /// When Alert or Scared, no step within 60 degrees of the monster's bearing inside this distance.
         /// </summary>
         private const float FearRestraintDist = 10f;
         /// <summary>
@@ -66,11 +66,11 @@ namespace YourBuddy
         /// </summary>
         private float monsterDist = float.MaxValue;
         /// <summary>
-        /// Wander nodes near the monster, while it has the buddy on edge: docs/fear.md
+        /// Wander nodes near the monster, while it has the buddy on edge. docs/fear.md
         /// </summary>
         private Predicate<Vector3> nearMonster = null!; // set in Awake
 
-        // Flee: retreat to a node away from the monster, then run to the player. docs/fear.md
+        // Flee retreats to a node away from the monster, then runs to the player. docs/fear.md
         private enum FleePhase { Retreat, ToPlayer, Hold, Hide }
 
         // Hiding in a closet or locker. docs/fear.md §6
@@ -80,7 +80,7 @@ namespace YourBuddy
         private string hideName = "the closet";
         private bool hideFromFear = false;
         /// <summary>
-        /// The player asked for this one: it stays in until they say otherwise, or the monster goes away.
+        /// The player asked for this hide, so it stays in until they say otherwise or the monster goes away.
         /// docs/fear.md §6
         /// </summary>
         private bool hideOrdered = false;
@@ -100,11 +100,11 @@ namespace YourBuddy
         private float fleeRetryAt = 0f;
         private const float FleeSpeedFactor = 1.15f;
 
-        // Orders and autonomy: what the player said, kept apart from what the buddy is
-        // doing. docs/behaviour.md
+        // Orders and autonomy. What the player said is kept apart from what the buddy is doing.
+        // docs/behaviour.md
         /// <summary>
         /// The order in force, or null when there is none. Written only through ApplyOrder,
-        /// ApplyRouteOrder, RevokeOrder, and where an order ends: docs/invariants.md#an-order-is-not-a-mode
+        /// ApplyRouteOrder, RevokeOrder, and where an order ends. docs/invariants.md#an-order-is-not-a-mode
         /// </summary>
         private BuddyMode? orderedMode = null;
         /// <summary>
@@ -114,16 +114,16 @@ namespace YourBuddy
         private float decideAt = 0f;
         private float boutEnteredAt = 0f;
         /// <summary>
-        /// When the bout's clock started: a Follow's starts once it has caught up. Negative until then.
+        /// When the bout's clock started. A Follow's starts once it has caught up. Negative until then.
         /// </summary>
         private float boutSince = -1f;
         private float boutLength = 0f;
 
         private string urgeReport = "nothing weighed yet";
         /// <summary>
-        /// A bout is still a bout: Follow and Wander are not weighed against each other until this much
-        /// of the current one has run, and then the score ramps. So the switch lands somewhere in the last
-        /// third rather than on the tick the clock runs out. docs/behaviour.md §3
+        /// Follow and Wander are not weighed against each other until this much of the current bout has
+        /// run, and then the score ramps. So the switch lands somewhere in the last third rather than on
+        /// the tick the clock runs out. docs/behaviour.md §3
         /// </summary>
         private const float BoutReadyFrom = 0.7f;
         private const float DecideCatchUpSeconds = 60f;
@@ -143,9 +143,7 @@ namespace YourBuddy
         /// </summary>
         internal void Init(NpcAgent walker) => agent = walker;
 
-        // ------------------------------------------------------------------
-        // What the agent asks its brain: npc-core:docs/agent.md#3-the-brain
-        // ------------------------------------------------------------------
+        // What the agent asks its brain. npc-core:docs/agent.md#3-the-brain
 
         void INpcBrain.SlowPhase(int phase, Player player)
         {
@@ -166,14 +164,14 @@ namespace YourBuddy
         {
             move = Vector3.zero;
             wantMove = false;
-            // Being spoken to: hold still and face whoever is talking, whatever the
-            // mode says. Walking off mid-sentence is not a conversation. docs/dialog.md
+            // While spoken to, hold still and face whoever is talking, whatever the mode says.
+            // docs/dialog.md
             if (InDialog)
             {
                 agent.FacePlayer(player);
                 return true;
             }
-            // A spin, a stare, a freeze while watched: docs/anomalies.md
+            // A spin, a stare, a freeze while watched. docs/anomalies.md
             if (AnomalyHoldsBody()) return true;
 
             // Inside the spot, or getting in and out of it, nothing else moves the buddy. The walk there
@@ -189,7 +187,7 @@ namespace YourBuddy
             wantMove = false;
             // The walk to a hiding spot is a walk of its own, whatever the mode says. docs/fear.md §6
             if (hideState == HideState.Walking) return UpdateHide(out wantMove);
-            // So is an anomaly's walk: to a window or wall, or through the doors it shuts. docs/anomalies.md
+            // So is an anomaly's walk to a window or wall, or through the doors it shuts. docs/anomalies.md
             if (anomalyWalking) return WalkAnomalyLeg(out wantMove);
 
             switch (mode)
@@ -211,13 +209,13 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Alert or Scared: no step toward the Breathless, whatever the mode wants, and
+        /// When Alert or Scared, no step toward the Breathless, whatever the mode wants, and
         /// so no door opened that way either. docs/fear.md
         /// </summary>
         Vector3 INpcBrain.Constrain(Vector3 desired, ref bool wantMove) => HoldBackFromMonster(desired, ref wantMove);
 
         /// <summary>
-        /// The kind of walk each mode is, for the agent's recovery: docs/behaviour.md#4-every-place-that-reads-mode-outside-the-dispatch-switch
+        /// The kind of walk each mode is, for the agent's recovery. docs/behaviour.md#4-every-place-that-reads-mode-outside-the-dispatch-switch
         /// </summary>
         NpcActivity INpcBrain.Activity
         {
@@ -244,7 +242,7 @@ namespace YourBuddy
                         };
                         return new NpcActivity(recovery, true, false, true);
                     default:
-                        // Stay, Dead: waiting is legitimate, and nothing is recovered.
+                        // Stay and Dead wait on purpose, so nothing is recovered.
                         return new NpcActivity(NpcRecovery.None, false, false, true);
                 }
             }
@@ -254,8 +252,8 @@ namespace YourBuddy
 
         void INpcBrain.TryIdleFacing(Player player)
         {
-            // Standing still with the Breathless about: watch it - unless being talked
-            // to, where the override already faces the player. docs/fear.md
+            // Standing still with the Breathless about, watch it. Not while being talked to, where
+            // the override already faces the player. docs/fear.md
             if (fearState != FearState.Calm && !InDialog) agent.FacePoint(lastMonsterPos);
             else if (!InDialog && AnomalyFaces(player)) return;
             else if (mode == BuddyMode.Follow) agent.FacePlayer(player);
@@ -271,7 +269,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Its current errand leg or hide: docs/invariants.md#one-buddy-per-target
+        /// Its current errand leg or hide. docs/invariants.md#one-buddy-per-target
         /// </summary>
         bool INpcBrain.Holds(Transform t)
         {
@@ -281,7 +279,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Shut in a closet, it is out of reach: the walls block the monster. docs/fear.md §6
+        /// Shut in a closet, it is out of reach because the walls block the monster. docs/fear.md §6
         /// </summary>
         bool INpcBrain.Sheltered => hideState == HideState.Hidden;
 
@@ -315,13 +313,11 @@ namespace YourBuddy
 
         bool INpcHider.Occupies(HidingSpot spot) => IsHiddenIn(spot);
 
-        // ------------------------------------------------------------------
         // HUD
-        // ------------------------------------------------------------------
 
         private void OnGUI()
         {
-            // Draw-only panel: npc-core:docs/invariants.md#read-only-panels-build-on-repaint
+            // Draw-only panel. npc-core:docs/invariants.md#read-only-panels-build-on-repaint
             if (UnityEngine.Event.current.type != EventType.Repaint) return;
 
             if (!YourBuddyPlugin.ConfigShowHud.Value) return;
@@ -331,11 +327,11 @@ namespace YourBuddy
 
             if (GameManager.Instance == null) return;
 
-            // The console is a uGUI menu, which IMGUI always draws over: the panel steps aside instead.
+            // IMGUI always draws over the console's uGUI menu, so the panel steps aside instead.
             if (NpcConsole.IsOpen) return;
 
             string text = StatusText();
-            // Measured only when the cached text changes: npc-core:docs/invariants.md#read-only-panels-build-on-repaint
+            // Measured only when the cached text changes. npc-core:docs/invariants.md#read-only-panels-build-on-repaint
             if (!ReferenceEquals(text, hudMeasuredText))
             {
                 hudMeasuredText = text;
@@ -352,7 +348,7 @@ namespace YourBuddy
         private const float StatusTextInterval = 0.2f;
         private string? statusText = null;
         private float statusTextAt = 0f;
-        // One builder for every rebuild: appending to a string copied the whole panel per line.
+        // One builder for every rebuild. Appending to a string copied the whole panel per line.
         private static readonly StringBuilder HudText = new();
 
         /// <summary>
@@ -371,13 +367,13 @@ namespace YourBuddy
             if (suit.Suited) text.Append(" [SUITED]");
             if (agent.IsOutside) text.Append(agent.Floating ? " [OUTSIDE, ZERO-G]" : " [OUTSIDE]");
             if (IsDead) text.Append(" [DEAD]");
-            // "none" is the resting state, not news: the Mind line already says it is deciding.
+            // "none" is the resting state, not news. The Mind line already says it is deciding.
             if (orderedMode.HasValue) text.Append("\nOrders: ").Append(DescribeOrders());
 
             text.Append("\nPos: ").Append(transform.position.ToString("0.00"));
             if (agent.CurrentOwner != null) text.Append(", on ").Append(agent.CurrentOwner).Append(parked ? " (unloaded)" : "");
             text.Append('\n').Append(agent.DescribeSurroundings());
-            // The timers are deadlines on Time.time: printed for a dead buddy they count down with nothing behind them.
+            // The timers are deadlines on Time.time. For a dead buddy they would count down with nothing behind them.
             if (IsDead)
             {
                 text.Append("\nFear, mind, air, snack: nothing runs while dead");
@@ -402,7 +398,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// buddy_manage list's line: "#2 Buddy 2 * - Follow (tidying up), on ShipyardStation, 4.1 m away".
+        /// One line of buddy_manage list, e.g. "#2 Buddy 2 * - Follow (tidying up), on ShipyardStation, 4.1 m away".
         /// </summary>
         internal string ListLine(bool focused)
         {
@@ -419,7 +415,7 @@ namespace YourBuddy
 
         private void OnDestroy()
         {
-            // A double lives outside the buddy: docs/invariants.md#an-anomaly-puts-back-what-it-changed
+            // A double lives outside the buddy. docs/invariants.md#an-anomaly-puts-back-what-it-changed
             RemoveSleeper();
             BuddyManager.Unregister(this);
         }

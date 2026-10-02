@@ -6,7 +6,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// One trip through an airlock, out or back in: put a spare suit on first when going out
+    /// One trip through an airlock, out or back in. Put a spare suit on first when going out
     /// (unless already suited), walk into the chamber from this side, wait there for the player
     /// to cycle it, and walk out through the door the cycle opened. The airlock itself is never
     /// driven. docs/eva.md, npc-core:docs/invariants.md#an-airlock-is-crossed-by-its-cycle
@@ -26,9 +26,7 @@ namespace YourBuddy
 
         internal bool Active { get; private set; }
 
-        // ------------------------------------------------------------------
         // Starting
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// The way out. Returns the reply line; a refusal leaves no run behind.
@@ -71,7 +69,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The survival suit-up: a suit on, then normal life aboard until the air is safe again.
+        /// The survival suit-up. A suit on, then normal life aboard until the air is safe again.
         /// `ordered` marks an explicit player command (`buddy_order suit on`), which yields the
         /// only-suit count rule and keeps the suit on afterwards. False with a throttled trace
         /// when no spare is takeable.
@@ -122,7 +120,7 @@ namespace YourBuddy
             phase = Phase.ToChamber;
 
             ChamberLeg leg = new(this, body, airlock, outward, StandPoint(airlock));
-            // Floating, there is no graph: the leg flies. docs/eva.md#7-floating
+            // Floating, there is no graph, so the leg flies. docs/eva.md#7-floating
             if (body.Floating)
             {
                 body.Walk(leg, null);
@@ -133,7 +131,7 @@ namespace YourBuddy
                 body.Walk(leg, plan);
                 return null;
             }
-            // Already beside it, where no node gets it nearer: the leg walks in, or waits at a shut door.
+            // Already beside it, where no node gets it nearer. The leg walks in, or waits at a shut door.
             if (leg.Beside())
             {
                 body.Walk(leg, null);
@@ -151,7 +149,7 @@ namespace YourBuddy
         private const float StandNodeFallbackDist = 1.5f;
 
         /// <summary>
-        /// Where the buddy waits: the graph node placed inside the chamber (the one inside its
+        /// Where the buddy waits. The graph node placed inside the chamber (the one inside its
         /// volume nearest the centre), else the volume's centre. Standing on the node you placed
         /// puts it where you expect it, clear of both doors.
         /// </summary>
@@ -177,9 +175,7 @@ namespace YourBuddy
             return best;
         }
 
-        // ------------------------------------------------------------------
         // Called by the legs
-        // ------------------------------------------------------------------
 
         private void WearNow(Suit spare)
         {
@@ -193,7 +189,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The suit is on: a survival run ends here, an outside run walks on to the airlock.
+        /// The suit is on. A survival run ends here; an outside run walks on to the airlock.
         /// </summary>
         internal void SuitWorn()
         {
@@ -208,7 +204,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// From the chamber leg: the far door opened, the player's cycle is done. Walk through it.
+        /// From the chamber leg. The far door opened and the player's cycle is done, so walk through it.
         /// </summary>
         internal void Cross()
         {
@@ -219,7 +215,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// From the crossing leg: clear of the door, on the far side. The run hands back to the
+        /// From the crossing leg, once clear of the door on the far side. The run hands back to the
         /// mode in force, which follows the player on this side.
         /// </summary>
         internal void Crossed()
@@ -232,8 +228,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// From the crossing leg: the far door shut again before the buddy was through. The run
-        /// goes on: back to the chamber's stand point, waiting for the next cycle.
+        /// From the crossing leg, when the far door shut again before the buddy was through. The run
+        /// goes on, back to the chamber's stand point to wait for the next cycle.
         /// </summary>
         internal void CrossingBlocked()
         {
@@ -242,7 +238,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A leg gave up or the suit was lost: the run ends where it stands. Whatever was worn
+        /// A leg gave up or the suit was lost, so the run ends where it stands. Whatever was worn
         /// stays worn; taking it off is the watcher's or the player's call.
         /// </summary>
         internal void Abort(string why)
@@ -255,7 +251,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Cancelled from outside the run (a new command, death, despawn): no ceremony, the leg
+        /// Cancelled from outside the run (a new command, death, despawn). No ceremony; the leg
         /// in flight is dropped by whoever ends the route.
         /// </summary>
         internal void End()
@@ -266,13 +262,11 @@ namespace YourBuddy
             YourBuddyPlugin.Log.LogInfo("[suit] " + body.Name + "'s run is over");
         }
 
-        // ------------------------------------------------------------------
         // Per frame, from BuddySuit.Update
-        // ------------------------------------------------------------------
 
         public void Update()
         {
-            // Unsuited underneath the way out (the suit is gone): nothing left to walk out for.
+            // Unsuited on the way out (the suit is gone), so nothing is left to walk out for.
             if (Active && outward && !suit.Suited && phase != Phase.Suit) Abort("no longer wearing a suit");
         }
 
@@ -286,12 +280,10 @@ namespace YourBuddy
             YourBuddyPlugin.Log.LogInfo("[suit] " + body.Name + " " + line);
         }
 
-        // ------------------------------------------------------------------
         // The legs
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// Walks to the spare suit and puts it on. The rule is checked again at the suit:
+        /// Walks to the spare suit and puts it on. The rule is checked again at the suit.
         /// docs/invariants.md#the-buddy-never-takes-your-last-suit
         /// </summary>
         private sealed class SuitLeg(EvaRun run, IErrandBody body, BuddySuit suit, Suit target)
@@ -329,7 +321,7 @@ namespace YourBuddy
         /// Gets into the chamber through this side's door and stands on its stand point (the node
         /// placed inside it) until the far door opens. It walks the graph's route toward it,
         /// replanning from each arrival, and the last metres straight in. Beside the airlock it
-        /// never gives up: a shut door on this side is waited out, since only the player's cycle
+        /// never gives up. A shut door on this side is waited out, since only the player's cycle
         /// opens it, and anything else is walked straight at.
         /// </summary>
         private sealed class ChamberLeg(EvaRun run, IErrandBody body, Airlock airlock, bool outward, Vector3 stand)
@@ -338,7 +330,7 @@ namespace YourBuddy
             private const float WaitTraceSeconds = 15f;
             /// <summary>
             /// Arrived within this of the stand point, flat; once arrived, still there until
-            /// InChamberLeave - a nudge is not leaving.
+            /// InChamberLeave, since a nudge is not leaving.
             /// </summary>
             private const float InChamberArrival = 0.3f;
             private const float InChamberLeave = 0.8f;
@@ -380,7 +372,7 @@ namespace YourBuddy
                 if (arrived) return Arrived();
 
                 bool beside = dist <= StraightEnterMaxDist;
-                // The way in is shut: only the player's cycle opens it.
+                // The way in is shut, and only the player's cycle opens it.
                 if (beside && NearDoor is not { Opened: true } && !InsideChamber())
                 {
                     Trace("waits by the airlock for its " + NearName + " door to open");
@@ -405,7 +397,7 @@ namespace YourBuddy
             }
 
             /// <summary>
-            /// On the stand point: through once the far door is open, else waiting for your cycle.
+            /// On the stand point. Through once the far door is open, else waiting for your cycle.
             /// </summary>
             private Vector3 Arrived()
             {
@@ -422,7 +414,7 @@ namespace YourBuddy
             }
 
             /// <summary>
-            /// Floating in from outside: flown to the stand point, straight or along your trail, and held
+            /// Floating in from outside. Flown to the stand point, straight or along your trail, and held
             /// there; a shut door into the chamber is waited out beside it. docs/eva.md#7-floating
             /// </summary>
             private Vector3 Float(out bool wantMove)
@@ -466,7 +458,7 @@ namespace YourBuddy
             internal bool Beside() => FlatDistance() <= StraightEnterMaxDist;
 
             /// <summary>
-            /// Still far off after the route ran out: route again from here, and give up only when
+            /// Still far off after the route ran out. Route again from here, and give up only when
             /// a replan cannot end meaningfully closer.
             /// </summary>
             private void Replan()
@@ -490,7 +482,7 @@ namespace YourBuddy
 
         /// <summary>
         /// The straight steps through the door the cycle opened, ending a couple of metres clear.
-        /// Never planned on the graph: the door is a few metres, and the far side may have no node.
+        /// Never planned on the graph, since the door is a few metres and the far side may have no node.
         /// </summary>
         private sealed class CrossLeg(EvaRun run, IErrandBody body, Airlock airlock, bool outward)
             : ErrandLeg(ClearPoint(airlock, outward), airlock.transform)
@@ -517,7 +509,7 @@ namespace YourBuddy
 
                 if (body.Floating)
                 {
-                    // Out through the door at its own height: there is nothing to stand on out there.
+                    // Out through the door at its own height, since there is nothing to stand on out there.
                     Vector3 clear = TargetPoint;
                     clear.y = body.Transform.position.y;
                     if ((clear - body.Transform.position).sqrMagnitude < ClearArrival * ClearArrival)

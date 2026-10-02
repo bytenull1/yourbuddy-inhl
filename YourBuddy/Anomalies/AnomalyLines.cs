@@ -70,7 +70,7 @@ namespace YourBuddy
         private static readonly string[] WrongNames = ["{0} 2", "B-UDDY 02", "{0} (copy)", "{0}?"];
 
         /// <summary>
-        /// Found aboard, far from where you left it: docs/anomalies.md#move
+        /// Found aboard, far from where you left it. docs/anomalies.md#move
         /// </summary>
         private static readonly string[] LeftBehindLines =
         [

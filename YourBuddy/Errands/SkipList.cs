@@ -14,7 +14,7 @@ namespace YourBuddy
         public void Skip(Transform what, float seconds) => until[what] = Time.time + seconds;
 
         /// <summary>
-        /// While set, nothing counts as skipped: an order from the player looks at everything again.
+        /// While set, nothing counts as skipped, so a player's order looks at everything again.
         /// </summary>
         public bool Ignore;
 

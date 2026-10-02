@@ -11,7 +11,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The buddies: registry, focus and names, the '.buddy' sidecar's contents and the delayed spawn
+    /// The buddy registry, focus and names, the '.buddy' sidecar's contents and the delayed spawn
     /// after a load. Tick() runs on NpcEvents.Tick, exactly while a game scene is loaded.
     /// </summary>
     public sealed class BuddyManager : MonoBehaviour
@@ -24,9 +24,7 @@ namespace YourBuddy
         // Pending spawn after loading a save
         private static BuddySaveFile? _pendingSpawn = null;
 
-        // ------------------------------------------------------------------
-        // The buddies: registry, focus, names. docs/architecture.md#6-buddy-lifecycle
-        // ------------------------------------------------------------------
+        // Registry, focus and names. docs/architecture.md#6-buddy-lifecycle
 
         /// <summary>
         /// Every buddy in the scene, alive or dead. Handlers for game events iterate Snapshot(),
@@ -50,7 +48,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Into this list and NPC.Core's registry, which is what NPCs of other mods see.
+        /// Adds to this list and to NPC.Core's registry, which other mods' NPCs see.
         /// </summary>
         internal static void Register(BuddyBehaviour buddy)
         {
@@ -59,7 +57,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Idempotent: Despawn calls it at once, OnDestroy again at the end of the frame.
+        /// Idempotent. Despawn calls it at once and OnDestroy again at the end of the frame.
         /// </summary>
         internal static void Unregister(BuddyBehaviour buddy)
         {
@@ -69,8 +67,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Out of the registry now, destroyed at the end of the frame: a respawn in the same frame
-        /// gets the numbers and names back.
+        /// Leaves the registry now and is destroyed at the end of the frame, so a respawn in the
+        /// same frame gets the numbers and names back.
         /// </summary>
         public static void Despawn(BuddyBehaviour buddy)
         {
@@ -88,8 +86,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Who a command without a target means: the buddy last talked to or named while it lives,
-        /// else the nearest living one, else any - so a corpse can still be despawned.
+        /// The buddy an untargeted command means. That is the one last talked to or named while it
+        /// lives, else the nearest living one, else any, so a corpse can still be despawned.
         /// </summary>
         internal static BuddyBehaviour? Focus
         {
@@ -154,12 +152,12 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// "Buddy" / "Buddy N": a name is also a console target and a log source.
+        /// "Buddy" or "Buddy N". The name doubles as a console target and a log source.
         /// </summary>
         internal static string NameFor(int number) => number == 1 ? "Buddy" : "Buddy " + number;
 
         /// <summary>
-        /// A console target: case and spaces ignored, so "@buddy2" is "Buddy 2".
+        /// Finds a console target, ignoring case and spaces, so "@buddy2" is "Buddy 2".
         /// </summary>
         internal static BuddyBehaviour? ByName(string name)
         {
@@ -173,12 +171,10 @@ namespace YourBuddy
 
         private static string TargetKey(string name) => name.Replace(" ", "").ToLowerInvariant();
 
-        // ------------------------------------------------------------------
         // What one buddy asks about the others. docs/invariants.md#one-buddy-per-target
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// Another NPC's errand leg or hide - of any mod - holds this. docs/invariants.md#one-buddy-per-target
+        /// Another NPC's errand leg or hide, from any mod, holds this. docs/invariants.md#one-buddy-per-target
         /// </summary>
         internal static bool TakenByAnother(Transform what, BuddyBehaviour me) =>
             NpcRegistry.TakenByAnother(what, me.Agent);
@@ -234,8 +230,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Every living buddy the save holds, then the door codes a sidecar from before NPC.Core kept them
-        /// holds. NPC.Core restores its own from '.npccore'.
+        /// Restores every living buddy in the save, then the door codes an older sidecar holds.
+        /// NPC.Core restores its own codes from '.npccore'.
         /// </summary>
         private static void RestoreBuddies(BuddySaveFile data)
         {
@@ -271,8 +267,8 @@ namespace YourBuddy
 
         private static Vector3 RestorePosition(BuddyState data)
         {
-            // The frame it was standing in wins: a station's world position changes
-            // while the ship flies. npc-core:docs/invariants.md#an-npc-rides-its-own-floor
+            // Prefer the frame it stood in, since a station's world position changes while the
+            // ship flies. npc-core:docs/invariants.md#an-npc-rides-its-own-floor
             if (data.OwnerLocalPosition is { Length: 3 } && !string.IsNullOrEmpty(data.Owner))
             {
                 Transform? anchor = NpcVessels.AnchorForOwner(data.Owner);
@@ -322,9 +318,7 @@ namespace YourBuddy
             return Quaternion.identity;
         }
 
-        // ------------------------------------------------------------------
         // Save sidecar
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Registered with NPC.Core, which writes "&lt;save&gt;.buddy" with every save and deletes and prunes it
@@ -333,8 +327,8 @@ namespace YourBuddy
         internal const string SidecarExtension = "buddy";
 
         /// <summary>
-        /// The sidecar for a save being written, or null for none: NPC.Core then deletes an old one, since a
-        /// sidecar left next to a save it no longer describes is how a buddy comes back from it.
+        /// The sidecar for a save being written, or null for none. Then NPC.Core deletes the old one,
+        /// since a stale sidecar would bring a buddy back.
         /// </summary>
         internal static string? SidecarContents(string _)
         {
@@ -356,7 +350,7 @@ namespace YourBuddy
         private static BuddyState CaptureState(BuddyBehaviour buddy)
         {
             Transform? ship = ShipTransform;
-            // A hidden buddy is saved outside its spot: the load knows nothing of hiding.
+            // A hidden buddy is saved outside its spot because the load knows nothing of hiding.
             // docs/invariants.md#a-hidden-buddy-is-saved-outside-its-hiding-spot
             Vector3 pos = buddy.HiddenSavePoint ?? buddy.transform.position;
             float[]? shipLocal = null;
@@ -415,7 +409,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// From NpcEvents.SaveLoaded: the buddies of that save spawn once its scene is ready.
+        /// On NpcEvents.SaveLoaded. The save's buddies spawn once its scene is ready.
         /// </summary>
         public static void ArmPendingSpawn(string saveFileName)
         {

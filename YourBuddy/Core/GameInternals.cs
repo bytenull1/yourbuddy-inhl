@@ -9,9 +9,9 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Every reflection accessor YourBuddy alone needs into the game's private members, resolved once,
-    /// with a one-time warning naming what a missing member degrades. Misses return null/default. What
-    /// NPC.Core reads is in its own. npc-core:docs/invariants.md#reflection-lives-in-gameinternals
+    /// Reflection into the game's private members that YourBuddy alone needs. Each member resolves
+    /// once and warns once, naming what its loss degrades. Misses return null/default. NPC.Core
+    /// keeps its own. npc-core:docs/invariants.md#reflection-lives-in-gameinternals
     /// </summary>
     internal static class GameInternals
     {
@@ -54,8 +54,8 @@ namespace YourBuddy
         /// casts a changed type or silently reads null.
         /// </summary>
         /// <remarks>
-        /// `critical` marks a member whose loss a player would notice at once (the buddy's
-        /// wake-up, the dialog's keypress); its miss is logged as an error so it stands out.
+        /// A `critical` member (the buddy's wake-up, the dialog's keypress) logs its miss as an
+        /// error, since a player notices that loss at once.
         /// </remarks>
         private static FieldInfo? Field<T>(Type type, string name, string feature, bool critical = false)
         {
@@ -90,7 +90,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// PlayerController: the ragdoll parts and model of the prefab a buddy is cloned from.
+        /// Ragdoll parts and model of the PlayerController prefab a buddy is cloned from.
         /// </summary>
         internal static class PlayerControllerAccess
         {
@@ -104,7 +104,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// GameManager: the player prefab the buddy is cloned from.
+        /// The player prefab on GameManager that the buddy is cloned from.
         /// </summary>
         internal static class GameManagerAccess
         {
@@ -114,8 +114,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// CryoPodAnimator: how the player's pod opens, replayed on the prop capsule the
-        /// buddy wakes in. docs/game-model.md#the-cryo-room
+        /// How the player's pod opens, replayed on the prop capsule the buddy wakes in.
+        /// docs/game-model.md#the-cryo-room
         /// </summary>
         internal static class CryoPodAnimatorAccess
         {
@@ -141,8 +141,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// BreathlessController: the point the monster casts its own sight line from, which
-        /// is where the buddy looks to see it. docs/fear.md
+        /// The point the monster casts its sight line from. The buddy looks there to see it.
+        /// docs/fear.md
         /// </summary>
         internal static class BreathlessControllerAccess
         {
@@ -154,7 +154,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Furniture: the detector for what moves with it, which is what a container holds. docs/snacks.md §1
+        /// The Furniture detector for what moves with it, which is what a container holds. docs/snacks.md §1
         /// </summary>
         internal static class FurnitureAccess
         {
@@ -165,7 +165,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// TrashCan: the trigger that takes an item in. docs/items.md §1
+        /// The TrashCan trigger that takes an item in. docs/items.md §1
         /// </summary>
         internal static class TrashCanAccess
         {
@@ -176,7 +176,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// SellStation: where items are loaded, who would be caught inside, its gate and button. docs/items.md §1
+        /// SellStation detectors (items loaded, anyone caught inside), gate and button. docs/items.md §1
         /// </summary>
         internal static class SellStationAccess
         {
@@ -193,8 +193,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// EquipmentSystem: the equip sound the player's own suit plays, replayed when the buddy
-        /// suits up. docs/eva.md
+        /// The player's suit equip sound, replayed when the buddy suits up. docs/eva.md
         /// </summary>
         internal static class EquipmentSystemAccess
         {
@@ -233,8 +232,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The save id and item flags of the props an anomaly leaves: clones of the game's own item and
-        /// blood decal that the save never sees. docs/anomalies.md#meat
+        /// Save id and item flags for anomaly props. They clone the game's own item and blood decal,
+        /// and the save never sees them. docs/anomalies.md#meat
         /// </summary>
         internal static class PropAccess
         {
@@ -248,7 +247,7 @@ namespace YourBuddy
             private static readonly FieldInfo? Price = Field<int>(typeof(Grabbable), "price", Feature);
 
             /// <summary>
-            /// Every member resolved: a clone left with the original's save id would share its data.
+            /// All members resolved. A clone that kept the original's save id would share its data.
             /// </summary>
             internal static bool Ready => GrabbableId != null && CleanableId != null && Signature != null &&
                                           CanStore != null && CanSell != null && CanTrash != null && Price != null;
@@ -268,8 +267,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Airlock: its two doors. NPC.Core reflects the same fields for gate detection; these
-        /// are for the EVA run's own waiting in the chamber.
+        /// An airlock's two doors. NPC.Core reflects the same fields for gate detection; these
+        /// let the EVA run wait out the cycle in the chamber.
         /// </summary>
         internal static class AirlockAccess
         {

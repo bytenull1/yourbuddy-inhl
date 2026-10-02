@@ -6,12 +6,12 @@ namespace YourBuddy
         Wander,
         Route,
         /// <summary>
-        /// Holds position until told otherwise. Still steps out of a doorway it blocks:
+        /// Holds position until told otherwise. It still steps out of a doorway it blocks.
         /// npc-core:docs/invariants.md#step-off-applies-in-every-mode
         /// </summary>
         Stay,
         /// <summary>
-        /// Owned by the fear system, never ordered: docs/invariants.md#fear-owns-the-buddy
+        /// Owned by the fear system, never ordered. docs/invariants.md#fear-owns-the-buddy
         /// </summary>
         Flee,
         Dead

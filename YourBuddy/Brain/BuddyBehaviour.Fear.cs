@@ -9,8 +9,8 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Fear of the Breathless: seeing it, stress and state, holding back while Alert, and
-    /// the Flee mode while Scared. docs/fear.md
+    /// Fear of the Breathless. Seeing it, stress and state, holding back while Alert, and the Flee
+    /// mode while Scared. docs/fear.md
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
@@ -40,7 +40,7 @@ namespace YourBuddy
         private const float FearApproachSpeed = 2f;
         private const float FearDecayRate = 0.4f;
         private const float FearStressCap = 5f;
-        // Hysteresis: Alert enters at FearAlertEnter and leaves below FearAlertExit; Scared
+        // Hysteresis. Alert enters at FearAlertEnter and leaves below FearAlertExit; Scared
         // enters at FearScaredEnter and leaves below FearAlertEnter.
         private const float FearAlertEnter = 1f;
         private const float FearAlertExit = 0.5f;
@@ -51,18 +51,18 @@ namespace YourBuddy
         private const float FearEyeHeight = 1.5f;
         private const float FearRestraintCos = 0.5f;
         /// <summary>
-        /// A flee with nowhere left to go for this long is a stalemate: the buddy has run as
+        /// A flee with nowhere left to go for this long is a stalemate. The buddy has run as
         /// far as it can and the monster is still in sight. docs/fear.md §5
         /// </summary>
         private const float FleeStalemateSeconds = 6f;
         /// <summary>
-        /// What the stress eases back to while stalemated, and no lower while it still sees it:
+        /// What the stress eases back to while stalemated, and no lower while it still sees it. It sits
         /// between FearAlertExit and FearAlertEnter, so the buddy settles at Alert, not Calm.
         /// </summary>
         private const float FearStalemateStress = 0.75f;
         /// <summary>
         /// A stalemate is off again once the monster has closed this much on where it stood
-        /// when the flee ran out of options - from there, there may be somewhere to run after all.
+        /// when the flee ran out of options. From there it may have somewhere to run after all.
         /// </summary>
         private const float FleeStalemateClosed = 2f;
         private float fearTickAt = 0f;
@@ -75,28 +75,28 @@ namespace YourBuddy
         /// </summary>
         private bool monsterBehind = false;
         /// <summary>
-        /// monsterDist at the previous tick if it was in sight then, else MaxValue: the closing speed.
+        /// monsterDist at the previous tick if it was in sight then, else MaxValue. Gives the closing speed.
         /// </summary>
         private float seenDistBefore = float.MaxValue;
         /// <summary>
-        /// When the flee last ran out of things to try - no hide, no retreat, no back-away, or a
-        /// player it cannot run to - else 0. Cleared the moment anything works. docs/fear.md §5
+        /// When the flee last ran out of things to try (no hide, retreat or back-away, and no player
+        /// it can run to), else 0. Cleared the moment anything works. docs/fear.md §5
         /// </summary>
         private float fleeStuckSince = 0f;
         /// <summary>
-        /// monsterDist when that clock started: the stalemate breaks if it closes on that.
+        /// monsterDist when that clock started. The stalemate breaks if the monster closes on it.
         /// </summary>
         private float fleeStuckDist = float.MaxValue;
         /// <summary>
-        /// The stalemate itself: stuck for FleeStalemateSeconds with the monster not within
+        /// The stalemate itself, stuck for FleeStalemateSeconds with the monster not within
         /// FearPanicDist. The stress eases to FearStalemateStress instead of staying pinned.
         /// </summary>
         private bool fearStalemate = false;
         private float fearStalemateLogAt = 0f;
 
         /// <summary>
-        /// The hide-or-run bias (docs/fear.md §5): multiplied when the monster is watching, and again
-        /// when it is this near - climbing into a closet in front of it is not hiding.
+        /// The hide-or-run bias (docs/fear.md §5). Multiplied when the monster is watching, and again
+        /// when it is this near, since climbing into a closet in front of it is not hiding.
         /// </summary>
         private const float HideSeenFactor = 0.35f;
         private const float HideMonsterClose = 6f;
@@ -107,7 +107,7 @@ namespace YourBuddy
         private float fleeClearanceCheckAt = 0f;
         private float fleeHoldLogAt = 0f;
         /// <summary>
-        /// The last retreat attempt found no node to run to: hiding is worth more. docs/fear.md §5
+        /// The last retreat found no node to run to, so hiding is worth more. docs/fear.md §5
         /// </summary>
         private bool fleeRetreatFailed = false;
         private Vector3 fleeTarget = Vector3.zero;
@@ -141,9 +141,7 @@ namespace YourBuddy
         private const float FleeBackAwayDist = 3f;
         private const float FleeBackAwayTime = 1f;
 
-        // ------------------------------------------------------------------
         // Stress and state
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Phase 2 of SlowUpdate. That runs ahead of Update's catch and dialog early-outs,
@@ -153,11 +151,11 @@ namespace YourBuddy
         {
             if (IsDead || agent.IsBeingCaught) return;
 
-            // ai_disable leaves a monster that does nothing; cowering at it would be reacting
-            // to an AI that is switched off. docs/reference.md
+            // ai_disable leaves a monster that does nothing, so there is nothing to cower at.
+            // docs/reference.md
             if (!YourBuddyPlugin.ConfigFear.Value || NpcMonster.MonsterDisabled)
             {
-                // An ordered hide is not fear's to end: buddy_order hide skips the fear setting going in,
+                // An ordered hide is not fear's to end. buddy_order hide skips the fear setting going in,
                 // so the same setting must not pull the buddy straight back out. docs/fear.md §6
                 if (Hiding && !hideOrdered && !hideAmbush)
                 {
@@ -168,7 +166,7 @@ namespace YourBuddy
                 return;
             }
 
-            // Measured, like AtmosphereTick: the phase interval is not a constant anywhere.
+            // Measured like AtmosphereTick, since the phase interval is not a constant anywhere.
             float dt = fearTickAt > 0f ? Mathf.Clamp(Time.time - fearTickAt, 0f, 1f) : 0.24f;
             fearTickAt = Time.time;
 
@@ -199,7 +197,7 @@ namespace YourBuddy
                 }
             }
 
-            // Behind shut doors it neither sees nor is seen: the stress decays. docs/fear.md §6
+            // Behind shut doors it neither sees nor is seen, so the stress decays. docs/fear.md §6
             if (hideState == HideState.Hidden)
             {
                 if (seen || monsterBehind) hideMonsterSeenAt = Time.time;
@@ -220,9 +218,9 @@ namespace YourBuddy
             }
             else if (seen && fearStalemate)
             {
-                // Run as far as it can be run, and it is still watching: standing there with the
-                // stress pinned is the deadlock this breaks. Ease back to Alert and get on with
-                // life, warily - it still holds back from walking at it. docs/fear.md 5
+                // It has run as far as it can and the monster is still watching. Rather than stand
+                // there with the stress pinned, ease back to Alert. It still holds back from walking
+                // at the monster. docs/fear.md §5
                 rate = stress > FearStalemateStress ? -FearDecayRate : 0f;
             }
             else if (seen)
@@ -248,15 +246,15 @@ namespace YourBuddy
 
             if (fearState == FearState.Scared)
             {
-                // A level, not an edge: a flee held back by the dialog starts once it closes. Floating,
-                // there are no nodes to run along: it keeps with you. docs/eva.md#7-floating
+                // A level, not an edge, so a flee held back by the dialog starts once it closes. Floating,
+                // there are no nodes to run along, so it keeps with you. docs/eva.md#7-floating
                 if (mode != BuddyMode.Flee)
                 {
                     if (!InDialog && !agent.Floating) StartFlee(panic);
                 }
                 else if (panic && fleePhase != FleePhase.Retreat && Time.time >= fleeRetryAt)
                 {
-                    // Caught up with beside the player, or while holding: run again.
+                    // Caught up with beside the player or while holding, so run again.
                     TryStartRetreat();
                 }
             }
@@ -267,7 +265,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The flee ran out of things to try: start the stalemate clock, or leave it running.
+        /// The flee ran out of things to try. Starts the stalemate clock, or leaves it running.
         /// </summary>
         private void MarkFleeStuck()
         {
@@ -278,7 +276,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Something worked - a retreat, a hide, a back-away, a run to the player: no stalemate.
+        /// Something worked (a retreat, a hide, a back-away, a run to the player), so no stalemate.
         /// </summary>
         private void ClearFleeStuck()
         {
@@ -289,8 +287,8 @@ namespace YourBuddy
         /// <summary>
         /// Stuck with nowhere to go for FleeStalemateSeconds, and the monster not within
         /// FearPanicDist, is a stalemate. It breaks the moment the monster panics the buddy or
-        /// closes FleeStalemateClosed on where it stood when the clock started - from there the
-        /// nodes it could not use may be usable. docs/fear.md 5
+        /// closes FleeStalemateClosed on where it stood when the clock started, since from there the
+        /// nodes it could not use may work. docs/fear.md §5
         /// </summary>
         private void UpdateStalemate(bool panic)
         {
@@ -302,7 +300,7 @@ namespace YourBuddy
             }
             if (fleeStuckSince > 0f && monsterDist < fleeStuckDist - FleeStalemateClosed)
             {
-                // It has come at the buddy since: try everything again, frightened.
+                // It has come at the buddy since, so try everything again, frightened.
                 ClearFleeStuck();
                 SetStalemate(false);
                 return;
@@ -410,7 +408,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The closed-door check of docs/fear.md §6: this line, and no stress, is the pass.
+        /// The closed-door check of docs/fear.md §6. The pass is this line with no stress.
         /// </summary>
         private void LogBehindShutGate(Gate? gate)
         {
@@ -422,7 +420,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Fear switched off, or the monster's AI is: calm at once, and hand the buddy back.
+        /// Fear or the monster's AI is switched off. Calm at once and hand the buddy back.
         /// </summary>
         private void ResetFear()
         {
@@ -458,13 +456,11 @@ namespace YourBuddy
             return text;
         }
 
-        // ------------------------------------------------------------------
-        // Alert: holding back
-        // ------------------------------------------------------------------
+        // Alert, holding back
 
         /// <summary>
-        /// Alert or Scared: a step within 60 degrees of the monster's bearing, while near it,
-        /// is not taken. A retreat is exempt - its plan was chosen to keep clear of it.
+        /// When Alert or Scared, no step is taken within 60 degrees of the monster's bearing while
+        /// near it. A retreat is exempt, since its plan was chosen to keep clear of it.
         /// </summary>
         private Vector3 HoldBackFromMonster(Vector3 desired, ref bool wantMove)
         {
@@ -484,7 +480,7 @@ namespace YourBuddy
             if (Vector3.Dot(heading.normalized, toMonster.normalized) < FearRestraintCos) return desired;
 
             wantMove = false;
-            // docs/logging.md §4: a hold that can last must say so.
+            // A hold that can last must say so. docs/logging.md §4
             if (NpcLog.Level >= 1 && Time.time >= fearHoldLogAt)
             {
                 fearHoldLogAt = Time.time + 5f;
@@ -494,12 +490,10 @@ namespace YourBuddy
             return Vector3.zero;
         }
 
-        // ------------------------------------------------------------------
-        // Scared: the Flee mode
-        // ------------------------------------------------------------------
+        // Scared, the Flee mode
 
         /// <summary>
-        /// Scared: remember what to go back to, then run. docs/fear.md
+        /// Scared. Remember what to go back to, then run. docs/fear.md
         /// </summary>
         private void StartFlee(bool panic)
         {
@@ -507,11 +501,11 @@ namespace YourBuddy
             ClearFleeStuck();
             fearStalemate = false;
             SetMode(BuddyMode.Flee);
-            // Already on the way into a closet, or in one: that is the flee. docs/fear.md §6
+            // Already on the way into a closet, or in one. That is the flee. docs/fear.md §6
             if (Hiding)
             {
                 hideFromFear = true;
-                // An ambush hide is a fear hide now: docs/anomalies.md#closetambush
+                // An ambush hide is a fear hide now. docs/anomalies.md#closetambush
                 hideAmbush = false;
                 fleePhase = FleePhase.Hide;
                 YourBuddyPlugin.Log.LogInfo($"[fear] Fleeing the Breathless into {hideName}, then back to {modeBeforeFlee}");
@@ -528,7 +522,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Below Alert again: resume what the flee interrupted, or what was ordered since.
+        /// Below Alert again. Resume what the flee interrupted, or what was ordered since.
         /// A goto is planned afresh from here. docs/invariants.md#fear-owns-the-buddy
         /// </summary>
         private void EndFlee()
@@ -560,7 +554,7 @@ namespace YourBuddy
 
         /// <summary>
         /// Walks the retreat plan, then runs to the player, or holds facing the monster when
-        /// neither is possible. Never ends itself: UpdateFear does.
+        /// neither is possible. Never ends itself; UpdateFear does.
         /// </summary>
         private Vector3 UpdateFlee(Player? player, out bool wantMove)
         {
@@ -580,14 +574,14 @@ namespace YourBuddy
                     (player.Controller.CachedTransform.position - lastMonsterPos).sqrMagnitude <
                     (FleeClearance + FearPanicDist) * (FleeClearance + FearPanicDist))
                 {
-                    // Standing here is not a plan either: it counts toward the stalemate.
+                    // Standing here is not a plan either, so it counts toward the stalemate.
                     agent.ClearMoveTarget();
                     MarkFleeStuck();
                     return Vector3.zero;
                 }
                 Vector3 toPlayer = UpdateFollow(player, out wantMove) * FleeSpeedFactor;
-                // Standing beside the player with the monster still in view is a stalemate too:
-                // the run is over and there is nothing further the flee can do.
+                // Standing beside the player with the monster still in view is a stalemate too.
+                // The run is over and the flee can do nothing more.
                 if (wantMove) ClearFleeStuck();
                 else MarkFleeStuck();
 
@@ -642,8 +636,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A retreat plan, else a step backwards, else holding and watching. Whatever plan
-        /// was there - the run to the player's is Follow's - is not a retreat.
+        /// A retreat plan, else a step backwards, else holding and watching. Any plan already there
+        /// (the run to the player is Follow's) is not a retreat.
         /// </summary>
         private void TryStartRetreat()
         {
@@ -665,7 +659,7 @@ namespace YourBuddy
                 return;
             }
             fleeRetreatFailed = true;
-            // Running turned out to be impossible after all: a closet beats standing here.
+            // Running turned out to be impossible after all, and a closet beats standing here.
             if (!hideFirst && !Hiding && TryStartHide(true, out _))
             {
                 ClearFleeStuck();
@@ -706,7 +700,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Whether to try a hiding spot before running, this time. A coin weighted by FleeHideBias:
+        /// Whether to try a hiding spot before running this time. A coin weighted by FleeHideBias,
         /// lower while the monster is watching or too near to shut the doors in time, higher when the
         /// last retreat found nowhere to go. docs/fear.md §5
         /// </summary>
@@ -741,8 +735,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Scores every active node - far enough from the monster, near the player, a short
-        /// trip - then plans to the best few. docs/fear.md
+        /// Scores every active node (far enough from the monster, near the player, a short trip),
+        /// then plans to the best few. docs/fear.md
         /// </summary>
         private bool TryPlanRetreat()
         {
@@ -824,7 +818,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// No plan: step away from the monster along the first clear bearing, through the
+        /// No plan, so step away from the monster along the first clear bearing, through the
         /// shared step-off. npc-core:docs/invariants.md#step-off-applies-in-every-mode
         /// </summary>
         private bool TryBackAway()

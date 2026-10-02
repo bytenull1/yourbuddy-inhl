@@ -10,16 +10,16 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The buddy's EVA suit. Wearing one mirrors the game's own equip: the spare suit item is
+    /// The buddy's EVA suit. Wearing one mirrors the game's own equip. The spare suit item is
     /// switched off (as Equipment.Equip does to the player's) and the body is drawn with the
-    /// embedded skin; taking it off re-enables the item at the buddy's feet, as
+    /// embedded skin. Taking it off re-enables the item at the buddy's feet, as
     /// EquipmentSystem.UnequipSuit does. The walks live in EvaRun and SuitFetchErrand. docs/eva.md
     /// </summary>
     internal sealed class BuddySuit(IErrandBody body, LifeSupport lifeSupport)
     {
         /// <summary>
-        /// How close to a stranded suit the player may stand before the fetch takes it: within
-        /// this it is the player's to pick up. docs/invariants.md#the-buddy-never-takes-your-last-suit
+        /// Within this of a stranded suit the player may be about to pick it up, so the fetch
+        /// leaves it. docs/invariants.md#the-buddy-never-takes-your-last-suit
         /// </summary>
         internal const float PlayerNearSuitDist = 2f;
 
@@ -27,13 +27,13 @@ namespace YourBuddy
         internal bool Suited { get; private set; }
 
         /// <summary>
-        /// How much the worn suit slows the buddy: its MovementSpeedModifier (Space_Suit 0.4), as
+        /// How much the worn suit slows the buddy. Its MovementSpeedModifier (Space_Suit 0.4), as
         /// PlayerController.MovementSpeed applies it to the player, times SuitedPace. 1 without a suit.
         /// </summary>
         internal float SpeedFactor => Suited && wornSuit != null ? wornSuit.MovementSpeedModifier * SuitedPace : 1f;
 
         /// <summary>
-        /// Keeps up with a sprinting suited player (3 m/s x 1.5 sprint x 0.4 = 1.8 m/s): at the
+        /// Keeps up with a sprinting suited player (3 m/s x 1.5 sprint x 0.4 = 1.8 m/s). At the
         /// default MoveSpeed 3.5 the buddy walks 3.5 x 0.4 x 1.3 = 1.82 m/s.
         /// </summary>
         internal const float SuitedPace = 1.3f;
@@ -50,16 +50,14 @@ namespace YourBuddy
         private Suit? wornSuit;
         private EvaRun? run;
 
-        // ------------------------------------------------------------------
         // Finding and wearing a suit
-        // ------------------------------------------------------------------
 
         private static readonly List<Suit> SuitBuffer = [];
 
         /// <summary>
-        /// Every suit item that could be taken right now: suits lying free in the world, and the
+        /// Every suit item that could be taken right now. Suits lying free in the world, and the
         /// ones a locker displays (inactive, held by an EquipmentHolder, released through its own
-        /// TryDropItem). A worn suit - the player's CachedSuitItem - is in neither and never shows.
+        /// TryDropItem). A worn suit (the player's CachedSuitItem) is in neither and never shows.
         /// </summary>
         private static int CollectSuits()
         {
@@ -77,7 +75,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Whether the player is wearing a suit: then anything on the floor is a spare.
+        /// Whether the player is wearing a suit, which makes anything on the floor a spare.
         /// </summary>
         private static bool PlayerIsSuited()
         {
@@ -108,7 +106,7 @@ namespace YourBuddy
             {
                 if (holder == null || holder.Item != suit) continue;
 
-                // The parameter is unused: TryDropItem drops at the holder's own dropPoint.
+                // The parameter is unused; TryDropItem drops at the holder's own dropPoint.
                 holder.TryDropItem(null!);
                 if (suit.gameObject.activeSelf)
                 {
@@ -121,10 +119,10 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The nearest suit the buddy may take, or null with why. The rule is
-        /// docs/invariants.md#the-buddy-never-takes-your-last-suit: while you wear a suit, one free
+        /// The nearest suit the buddy may take, or null with why. While you wear a suit, one free
         /// suit is a spare; while you do not, two must be free, so taking one leaves you the other.
-        /// A suit you ordered the buddy to take is the exception - you are right there and asked.
+        /// A suit you ordered the buddy to take is the exception, since you are right there and asked.
+        /// docs/invariants.md#the-buddy-never-takes-your-last-suit
         /// </summary>
         internal Suit? TakeableSuit(out string? why, bool playerOrdered = false)
         {
@@ -178,7 +176,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Whether any spare suit is takeable at all - the decider's cheap test before it scores
+        /// Whether any spare suit is takeable at all. The decider's cheap test before it scores
         /// the suit-up urge.
         /// </summary>
         internal bool SpareSuitAvailable() => TakeableSuit(out _) != null;
@@ -189,7 +187,7 @@ namespace YourBuddy
         internal bool RunActive => run is { Active: true };
 
         /// <summary>
-        /// Wears `suit`: off with the item, on with the skin and the equip sound. Null when worn,
+        /// Wears `suit`, switching the item off and the skin on with the equip sound. Null when worn,
         /// else why not. A locker-displayed suit is released first.
         /// </summary>
         internal string? Wear(Suit suit, SuitReason wornFor)
@@ -224,10 +222,10 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Takes the suit off: the skin back, and the item re-enabled where the buddy stands - as
-        /// EquipmentSystem.UnequipSuit does for the player, including the re-parent into the room
-        /// it lands in - judged by the floor under it, since the buddy's tracked room is stale
-        /// aboard the ship. A suit filed under a room it is not in vanishes with that room.
+        /// Takes the suit off, restoring the skin and re-enabling the item where the buddy stands.
+        /// Like EquipmentSystem.UnequipSuit, it re-parents the item into the room it lands in, judged
+        /// by the floor under it since the buddy's tracked room is stale aboard the ship. A suit filed
+        /// under a room it is not in vanishes with that room.
         /// npc-core:docs/invariants.md#a-carried-item-belongs-to-the-room-its-carrier-is-in
         /// </summary>
         internal void TakeOff(string why)
@@ -250,9 +248,7 @@ namespace YourBuddy
             YourBuddyPlugin.Log.LogInfo("[suit] " + body.Name + " put the suit down - " + why);
         }
 
-        // ------------------------------------------------------------------
         // The skin, embedded in the dll
-        // ------------------------------------------------------------------
 
         private const string SkinResource = "YourBuddy.Resources.PilotSuit_eva.png";
 
@@ -305,13 +301,11 @@ namespace YourBuddy
             }
         }
 
-        // ------------------------------------------------------------------
         // Entry points and the watcher
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// The EVA order: suit up if a spare is free, then wait in an airlock - a station's, or the
-        /// ship's own while undocked - for the player to cycle it. Returns the reply line.
+        /// The EVA order. Suit up if a spare is free, then wait in an airlock (a station's, or the
+        /// ship's own while undocked) for the player to cycle it. Returns the reply line.
         /// </summary>
         internal string StartOutsideNow()
         {
@@ -331,7 +325,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The way back in: walk into an airlock's chamber from outside and wait for the player to
+        /// The way back in. Walk into an airlock's chamber from outside and wait for the player to
         /// cycle it. The airlock is the one the player stands in, else the nearest. Returns the reply.
         /// </summary>
         internal string StartInsideNow()
@@ -350,17 +344,17 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A route toward an airlock that ends this near it reaches it: the run walks the rest.
+        /// A route toward an airlock that ends this near it counts as reaching it; the run walks the rest.
         /// </summary>
         private const float AirlockReachedWithin = 6f;
 
         private static readonly List<Airlock> AirlockBuffer = [];
 
         /// <summary>
-        /// The airlock for a trip: the one the player stands in; floating, the nearest chamber;
-        /// walking, the nearest the buddy can walk to from where it
-        /// is - a station's interior can reach only some of its airlocks (the FuelStation refinery opens
-        /// onto the surface alone). Else the nearest, or null.
+        /// The airlock for a trip. The one the player stands in; when floating, the nearest chamber;
+        /// when walking, the nearest the buddy can walk to, since a station's interior reaches only some
+        /// of its airlocks (the FuelStation refinery opens onto the surface alone). Else the nearest,
+        /// or null.
         /// </summary>
         private Airlock? PickAirlock()
         {
@@ -379,7 +373,7 @@ namespace YourBuddy
                 if (airlock != null && OpensOutside(airlock)) AirlockBuffer.Add(airlock);
             }
 
-            // Nothing to walk out there: the nearest chamber. docs/eva.md#7-floating
+            // Nothing to walk on out there, so the nearest chamber. docs/eva.md#7-floating
             if (body.Floating)
             {
                 AirlockBuffer.Sort((a, b) => (NpcDoors.ChamberCenter(a) - here).sqrMagnitude
@@ -405,7 +399,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Every station airlock opens to the outside; the ship's own only while undocked - docked, it
+        /// Every station airlock opens to the outside, the ship's own only while undocked. Docked, it
         /// is the way into the station and both its doors stand open.
         /// </summary>
         private static bool OpensOutside(Airlock airlock)
@@ -415,7 +409,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Why the suit must stay on where the buddy stands, or null: outside, or in an airlock
+        /// Why the suit must stay on where the buddy stands, or null. Outside, or in an airlock
         /// chamber the next cycle may open to space, the ship's included. docs/eva.md
         /// </summary>
         private string? WhyKeepSuitOn()
@@ -426,7 +420,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// buddy_order suit on|off: wear a spare now, or take the worn one off, whatever the air says.
+        /// buddy_order suit on|off. Wear a spare now or take the worn one off, whatever the air says.
         /// </summary>
         internal string SuitNow(string onOff)
         {
@@ -451,7 +445,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Take the worn suit off now, whatever the air - but never outside or in an airlock.
+        /// Takes the worn suit off now, whatever the air, but never outside or in an airlock.
         /// </summary>
         internal string UnsuitNow()
         {
@@ -467,7 +461,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// From the decider, once the suit-up urge won: put a spare on and shelter aboard, until
+        /// From the decider, once the suit-up urge won. Put a spare on and shelter aboard until
         /// the air is safe again. True when the buddy set off for a suit.
         /// </summary>
         internal bool TryStartSurvivalSuitUp()
@@ -501,7 +495,7 @@ namespace YourBuddy
 
             if (!Suited) return;
 
-            // The worn suit was taken or destroyed: the skin would stay on with nothing behind it.
+            // The worn suit was taken or destroyed, and the skin would stay on with nothing behind it.
             // Outside, the buddy stays suited until it is back in the air.
             if (wornSuit == null)
             {
@@ -510,7 +504,7 @@ namespace YourBuddy
             }
 
             // Something in the world can rewrite the body's materials (seen between the docking
-            // corridor and the ship): put the skin back, and the log names when.
+            // corridor and the ship), so put the skin back and log when.
             Texture2D? skin = LoadEmbeddedSkin();
             if (skin != null && Time.time >= nextSkinCheckAt)
             {
@@ -522,8 +516,8 @@ namespace YourBuddy
                 }
             }
 
-            // Back in from outside, by any way (a cycle, "inside", pulled aboard, a rescue), the walk out
-            // is over: the suit comes off like a survival suit once the air is safe. docs/eva.md#2-the-suit-on-the-buddy
+            // Back in from outside by any way (a cycle, "inside", pulled aboard, a rescue), the walk out
+            // is over. The suit comes off like a survival suit once the air is safe. docs/eva.md#2-the-suit-on-the-buddy
             bool outside = body.IsOutside;
             bool cameIn = wasOutside && !outside;
             if (cameIn && reason == SuitReason.Ordered)
@@ -533,9 +527,9 @@ namespace YourBuddy
             }
             wasOutside = outside;
 
-            // Only the survival suit comes off by itself: one you ordered on inside stays on until you
-            // say "unsuit". Not in an airlock chamber, which the next cycle may vent, and not on the look
-            // it came in: its air is read afresh only at the agent's next slow phase 0. docs/eva.md
+            // Only the survival suit comes off by itself; one you ordered on inside stays on until you
+            // say "unsuit". Not in an airlock chamber, which the next cycle may vent, and not on the check
+            // it came in on, since its air is read afresh only at the agent's next slow phase 0. docs/eva.md
             if (reason == SuitReason.Survival && !outside && !cameIn && WhyKeepSuitOn() == null && AirIsSafeHere())
             {
                 TakeOff("the air is safe again");
@@ -543,7 +537,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Updated by the watcher: coming back in is the edge that ends a walk outside.
+        /// Updated by the watcher. Coming back in is the edge that ends a walk outside.
         /// </summary>
         private bool wasOutside;
 
@@ -559,7 +553,7 @@ namespace YourBuddy
         private float nextSkinCheckAt;
 
         /// <summary>
-        /// The buddy died: the suit it wears goes down beside it, or a load would lose it.
+        /// The buddy died. The suit it wears goes down beside it, or a load would lose it.
         /// </summary>
         internal void OnDied()
         {
@@ -568,7 +562,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Despawning: the worn suit goes back into the world, or it is gone with the buddy.
+        /// On despawn the worn suit goes back into the world, or it would vanish with the buddy.
         /// </summary>
         internal void OnDespawned()
         {
@@ -588,13 +582,13 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The suit the buddy wears, for the sidecar: the item is inactive while worn, so a save
+        /// The suit the buddy wears, for the sidecar. The item is inactive while worn, so a save
         /// and load needs its id to give it back.
         /// </summary>
         internal uint WornSuitId => wornSuit != null ? wornSuit.ID : 0;
 
         /// <summary>
-        /// The suit item this buddy wears, or null: counted as one at home by the fetch.
+        /// The suit item this buddy wears, or null. The fetch counts it as one at home.
         /// </summary>
         internal Suit? WornSuit => Suited ? wornSuit : null;
 
@@ -604,9 +598,9 @@ namespace YourBuddy
         internal string? WornReason => Suited ? reason.ToString() : null;
 
         /// <summary>
-        /// After a load: wear the suit the sidecar says this buddy was wearing, for the reason it
-        /// was worn - or a survival suit would never come off by itself again. A sidecar without a
-        /// reason (older builds) restores survival: the watcher only takes that one off aboard, in
+        /// After a load, wears the suit the sidecar says this buddy was wearing, for the reason it
+        /// was worn, or a survival suit would never come off by itself again. A sidecar without a
+        /// reason (older builds) restores survival, which the watcher only takes off aboard in
         /// safe air. docs/eva.md
         /// </summary>
         internal void RestoreWorn(uint suitId, string? wornFor)

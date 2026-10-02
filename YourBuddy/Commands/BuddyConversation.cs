@@ -5,17 +5,17 @@ using NPC.Core.Interaction;
 namespace YourBuddy
 {
     /// <summary>
-    /// What the player says to one buddy through NPC.Core's talk window: the orders in
-    /// BuddyDialogCommands. See docs/dialog.md.
+    /// One buddy's side of NPC.Core's talk window. The orders are in BuddyDialogCommands.
+    /// See docs/dialog.md.
     /// </summary>
     internal sealed class BuddyConversation(BuddyBehaviour buddy) : INpcConversation
     {
         public INpc Npc => buddy.Agent;
 
-        // Not while it is gone, or frozen staring at you: docs/anomalies.md
+        // Not while it is gone or frozen staring at you. docs/anomalies.md
         public bool CanTalk => YourBuddyPlugin.ConfigDialog.Value && !buddy.Asleep && !buddy.Hiding && !buddy.IgnoresYou;
 
-        // Once, the wrong name: docs/anomalies.md#wrongname
+        // Once, the wrong name. docs/anomalies.md#wrongname
         public string Title => buddy.TitleOverride ?? buddy.Name;
 
         public string Greeting => "Standing by.";
@@ -25,7 +25,7 @@ namespace YourBuddy
         public string Answer(string text) => BuddyDialogCommands.Run(buddy, text);
 
         /// <summary>
-        /// Open: console commands without a target now mean this buddy, and it holds still facing you.
+        /// While open, untargeted console commands mean this buddy, and it holds still facing you.
         /// </summary>
         public void SetOpen(bool open)
         {

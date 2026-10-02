@@ -7,10 +7,9 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The orders the player can give a buddy, in one place. Both the console
-    /// commands in Patches.cs and the dialog window call these, so the two surfaces
-    /// cannot drift apart. Each returns the line to show the player; the caller picks the
-    /// buddy and runs the order inside its BuddyManager.Acting scope.
+    /// Every order the player can give a buddy. The console (BuddyConsole.cs) and the dialog both
+    /// call these, so they cannot drift apart. Each returns the line to show the player; the caller
+    /// picks the buddy and runs the order inside its BuddyManager.Acting scope.
     /// </summary>
     public static class BuddyCommands
     {
@@ -26,7 +25,7 @@ namespace YourBuddy
         private static string? Dead(BuddyBehaviour buddy) => buddy.IsDead ? buddy.Name + " is dead" : null;
 
         /// <summary>
-        /// The refusal for a buddy that is not listening to orders now (an anomaly), else Dead's.
+        /// The refusal for a buddy not taking orders now (an anomaly), else Dead's.
         /// docs/anomalies.md#2-the-anomalies
         /// </summary>
         private static string? Deaf(BuddyBehaviour buddy) => Dead(buddy) ?? (buddy.IgnoresYou ? buddy.Name + " does not answer" : null);
@@ -56,7 +55,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The console's goto: one node, by index, for debugging.
+        /// The console's goto, to one node by index, for debugging.
         /// </summary>
         public static string GoToNode(BuddyBehaviour buddy, int nodeIndex)
         {
@@ -66,7 +65,7 @@ namespace YourBuddy
                 return "Node index out of range (0-" + (NavGraph.NodeCount - 1) + ")";
             }
             if (buddy.Floating) return buddy.Name + " is floating - there are no nodes out here";
-            // A goto stays on the buddy's side: npc-core:docs/invariants.md#an-airlock-is-crossed-by-its-cycle
+            // A goto stays on the buddy's side of the airlocks. npc-core:docs/invariants.md#an-airlock-is-crossed-by-its-cycle
             bool outdoor = NavGraph.GetNodeType(nodeIndex) == NodeType.Outdoor;
             if (outdoor && !buddy.IsOutside)
             {
@@ -81,7 +80,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The dialog's goto: a room by name, through the first of its nodes the buddy can reach.
+        /// The dialog's goto, to a room by name, via the first of its nodes the buddy can reach.
         /// Rooms are inside.
         /// </summary>
         internal static string GoToRoom(BuddyBehaviour buddy, StationRooms.Entry room)
@@ -113,7 +112,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Hands the choice back to the buddy: no order in force. docs/behaviour.md
+        /// Hands the choice back to the buddy, leaving no order in force. docs/behaviour.md
         /// </summary>
         public static string DecideForYourself(BuddyBehaviour buddy)
         {
@@ -127,8 +126,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The Autonomy switch, for the console. Switching it on also revokes every order in
-        /// force, or it would visibly do nothing until the next order.
+        /// The Autonomy switch, for the console. Turning it on also revokes every order in force,
+        /// or it would visibly do nothing until the next order.
         /// </summary>
         public static string SetAutonomy(bool on)
         {
@@ -150,37 +149,37 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A snack now, for testing: skips the schedule and the Snacks setting. docs/snacks.md
+        /// A snack now, for testing. Skips the schedule and the Snacks setting. docs/snacks.md
         /// </summary>
         public static string Snack(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartSnackNow();
 
         /// <summary>
-        /// Tidying now, for testing: skips the schedule and the Tidying setting. docs/items.md §3
+        /// Tidying now, for testing. Skips the schedule and the Tidying setting. docs/items.md §3
         /// </summary>
         public static string Tidy(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartTidyNow();
 
         /// <summary>
-        /// Selling a trash box now, for testing: skips the schedule and the SellTrash setting. docs/items.md §4
+        /// Selling a trash box now, for testing. Skips the schedule and the SellTrash setting. docs/items.md §4
         /// </summary>
         public static string Sell(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartSellNow();
 
         /// <summary>
-        /// Idle play with loose trash now, for testing: skips the schedule and the ItemPlay setting. docs/items.md §5
+        /// Idle play with loose trash now, for testing. Skips the schedule and the ItemPlay setting. docs/items.md §5
         /// </summary>
         public static string Play(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartPlayNow();
 
         /// <summary>
-        /// Fetching a suit left on the docked station now, for testing: skips the schedule and the SuitFetch setting. docs/eva.md#6-bringing-a-forgotten-suit-home
+        /// Fetching a suit left on the docked station now, for testing. Skips the schedule and the SuitFetch setting. docs/eva.md#6-bringing-a-forgotten-suit-home
         /// </summary>
         public static string FetchSuit(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartSuitFetchNow();
 
         /// <summary>
-        /// Hiding in a closet now, for testing: skips the fear and the HideInClosets setting. docs/fear.md §6
+        /// Hiding in a closet now, for testing. Skips the fear and the HideInClosets setting. docs/fear.md §6
         /// </summary>
         public static string Hide(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartHideNow();
 
         /// <summary>
-        /// buddy_anomaly: one now, whatever the chance, the difficulty and the quiet after the last. docs/anomalies.md
+        /// An anomaly now, ignoring the chance, the difficulty and the quiet after the last one. docs/anomalies.md
         /// </summary>
         public static string Anomaly(BuddyBehaviour buddy, string kindName)
         {
@@ -200,29 +199,29 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// What the decider waits for and when it acts next: the HUD's Mind / Air / Snack lines. docs/behaviour.md §3
+        /// What the decider waits for and when it acts next (the HUD's Mind / Air / Snack lines). docs/behaviour.md §3
         /// </summary>
         public static string Mind(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.Name + ": " + buddy.DescribeTimers();
 
         /// <summary>
-        /// The EVA order: suit up if a spare is free, then wait in the docked station's exit
+        /// The EVA order. Suit up if a spare is free, then wait in the docked station's exit
         /// airlock for the player to cycle it. docs/eva.md
         /// </summary>
         public static string GoOutside(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartOutsideNow();
 
         /// <summary>
-        /// The way back: from outside, into an airlock's chamber to wait for the player's cycle,
+        /// The way back in. From outside, into an airlock's chamber to wait for the player's cycle,
         /// then inside. docs/eva.md
         /// </summary>
         public static string GoInside(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartInsideNow();
 
         /// <summary>
-        /// buddy_order suit on|off: wear a spare suit now, or take the worn one off. docs/eva.md
+        /// `buddy_order suit on|off` wears a spare suit now or takes the worn one off. docs/eva.md
         /// </summary>
         public static string Suit(BuddyBehaviour buddy, string onOff) => Dead(buddy) ?? buddy.SuitNow(onOff);
 
         /// <summary>
-        /// Take the worn suit off, whatever the air and wherever the buddy stands. docs/eva.md
+        /// Takes the worn suit off, whatever the air and wherever the buddy stands. docs/eva.md
         /// </summary>
         public static string Unsuit(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.UnsuitNow();
 

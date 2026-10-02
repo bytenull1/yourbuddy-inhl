@@ -13,11 +13,11 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// YourBuddy - BepInEx 5 plugin adding a follower NPC to Isolated Inhale, built on NPC.Core
-    /// (navigation, doors, mortality, space protection) with a save sidecar of its own.
-    /// See README.md and docs/architecture.md.
+    /// BepInEx 5 plugin adding a follower NPC to Isolated Inhale. Built on NPC.Core (navigation,
+    /// doors, mortality, space protection), with its own save sidecar. See README.md and
+    /// docs/architecture.md.
     /// </summary>
-    [BepInPlugin("com.bytenull1.yourbuddy", "YourBuddy Mod", "1.0.8")]
+    [BepInPlugin("com.bytenull1.yourbuddy", "YourBuddy Mod", "1.0.9")]
     [BepInDependency(NpcCorePlugin.Guid, NpcCorePlugin.Version)]
     [BepInProcess("Isolated Inhale.exe")]
     public sealed class YourBuddyPlugin : BaseUnityPlugin
@@ -25,7 +25,7 @@ namespace YourBuddy
         private static YourBuddyPlugin Instance { get; set; }
         private static ManualLogSource? _fallbackLog;
         /// <summary>
-        /// The acting buddy's logger while its code runs, else the plugin's; anything logging before
+        /// The acting buddy's logger while its code runs, else the plugin's. Anything logging before
         /// Awake shares one stand-in source. docs/logging.md#4-rules-for-adding-logs
         /// </summary>
         public static ManualLogSource Log =>
@@ -200,15 +200,13 @@ namespace YourBuddy
         {
             if (GameManager.Instance == null) return null;
 
-            // Get the player prefab from GameManager
             Player? playerPrefab = GameInternals.GameManagerAccess.GetPlayerPrefab(GameManager.Instance);
             if (playerPrefab == null) return null;
 
-            // Instantiate the buddy and immediately deactivate to prevent Start()/Awake() from crashing
+            // Deactivate at once so the player's Start()/Awake() never run on the clone.
             GameObject npcGo = Instantiate(playerPrefab.gameObject, position, rotation);
             npcGo.SetActive(false);
 
-            // Copy Avatar from the real player to the clone
             Player realPlayer = GameManager.Instance.PlayerShip.Pilot;
             if (realPlayer != null)
             {
@@ -225,9 +223,8 @@ namespace YourBuddy
                 }
             }
 
-            // Capture ragdoll / model references from the player's PlayerController before it is stripped.
-            // PlayerController.Ragdoll() swaps between these two child objects, and we reuse the same
-            // objects to turn the buddy into a ragdoll when it dies.
+            // Read before PlayerController is stripped. Its Ragdoll() swaps these two children, and the
+            // buddy reuses them to ragdoll when it dies.
             GameObject? ragdollObject = null;
             Rigidbody? ragdollRigidbody = null;
             GameObject? animatedModel = null;
@@ -239,7 +236,7 @@ namespace YourBuddy
                 if (modelAnimator != null) animatedModel = modelAnimator.gameObject;
             }
 
-            // Safely clean up game logic components while preserving animation scripts
+            // Strip game logic, keeping animation scripts.
             MonoBehaviour[] monoBehaviours = npcGo.GetComponentsInChildren<MonoBehaviour>(true);
             string[] animationScriptWhitelist =
             [
@@ -272,7 +269,6 @@ namespace YourBuddy
                 DestroyImmediate(mb);
             }
 
-            // Fix Physics & Colliders
             foreach (Rigidbody rb in npcGo.GetComponentsInChildren<Rigidbody>(true))
             {
                 rb.isKinematic = true;
@@ -282,8 +278,7 @@ namespace YourBuddy
 
             CharacterController buddyCc = npcGo.GetComponent<CharacterController>();
 
-            // Disable all colliders except CharacterController (the ragdoll's colliders are
-            // re-enabled individually when the buddy dies).
+            // Only the CharacterController stays on. The ragdoll's colliders come back when the buddy dies.
             foreach (Collider col in npcGo.GetComponentsInChildren<Collider>(true))
             {
                 if (col is CharacterController) continue;
@@ -291,12 +286,11 @@ namespace YourBuddy
                 col.enabled = false;
             }
 
-            // "ItemBlocker": solid for thrown objects, ignored by both controllers. Uses
-            // the CharacterController's exact dimensions, so it covers the whole body
-            // and fits wherever the buddy fits.
+            // Solid for thrown objects, ignored by both controllers. It has the CharacterController's
+            // exact size, so it covers the whole body and fits wherever the buddy fits.
             GameObject itemBlocker = new("ItemBlocker");
             itemBlocker.transform.SetParent(npcGo.transform, false);
-            itemBlocker.layer = 0; // Default layer - skipped by player raycasts, solid for physics
+            itemBlocker.layer = 0; // Default layer, skipped by player raycasts but solid for physics
 
             CapsuleCollider blocker = itemBlocker.AddComponent<CapsuleCollider>();
             if (buddyCc != null)
@@ -313,17 +307,16 @@ namespace YourBuddy
             }
             blocker.isTrigger = false;
 
-            // The player, other NPCs and its own controller pass through it: NPC.Core's rule.
+            // The player, other NPCs and its own controller pass through it (NPC.Core's rule).
 
             // Deliberately much narrower than the player's capsule, so the buddy fits
             // through any doorway without precision aiming. The visible model is
             // unaffected and the full-size ItemBlocker still stops thrown items.
             if (buddyCc != null) buddyCc.radius = 0.22f;
 
-            // Fix Visibility, Layers, and RootBones
             foreach (Renderer renderer in npcGo.GetComponentsInChildren<Renderer>(true))
             {
-                renderer.gameObject.layer = 0; // Force to Default layer
+                renderer.gameObject.layer = 0;
                 renderer.gameObject.SetActive(true);
                 renderer.enabled = true;
 
@@ -333,9 +326,8 @@ namespace YourBuddy
                 }
             }
 
-            // Hide the face/mask mesh. The mask geometry lives in the skinned "Avatar" mesh under
-            // PlayerPilotSuit/armature/torso/chest/head - hide exactly that renderer by path.
-            // (EquipmentSystem was already stripped above, so nothing re-enables it.)
+            // The face mask is the skinned "Avatar" mesh under PlayerPilotSuit/armature/torso/chest/head.
+            // EquipmentSystem is already stripped, so nothing re-enables it.
             foreach (Renderer r in npcGo.GetComponentsInChildren<Renderer>(true))
             {
                 string fullPath = GetGameObjectPath(r.gameObject).ToLowerInvariant();
@@ -348,7 +340,6 @@ namespace YourBuddy
                 }
             }
 
-            // Hide cameras and audio
             foreach (Transform child in npcGo.GetComponentsInChildren<Transform>(true))
             {
                 string name = child.name.ToLowerInvariant();
@@ -358,8 +349,8 @@ namespace YourBuddy
                 }
             }
 
-            // Add the brain and NPC.Core's walking agent, and activate. Registered first, so OnEnable finds
-            // the other NPCs to pass through.
+            // Add the brain and NPC.Core's agent. Registered before activation, so OnEnable finds the
+            // other NPCs to pass through.
             int buddyNumber = BuddyManager.FreeNumber(wantedNumber);
             string buddyName = BuddyManager.NameFor(buddyNumber);
             npcGo.name = "YourBuddy " + buddyName;
@@ -387,9 +378,6 @@ namespace YourBuddy
             return buddy;
         }
 
-        /// <summary>
-        /// Gets the full path of a GameObject in the hierarchy.
-        /// </summary>
         private static string GetGameObjectPath(GameObject obj)
         {
             string path = obj.name;

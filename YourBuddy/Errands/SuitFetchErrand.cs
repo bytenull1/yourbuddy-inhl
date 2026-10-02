@@ -9,7 +9,7 @@ namespace YourBuddy
 {
     /// <summary>
     /// A spare suit left on the docked station is carried back aboard and set down by the ship's
-    /// airlock. A suit outside stays there: only your cycle takes the buddy through an airlock.
+    /// airlock. A suit outside stays there, since only your cycle takes the buddy through an airlock.
     /// docs/eva.md, npc-core:docs/invariants.md#an-airlock-is-crossed-by-its-cycle
     /// </summary>
     internal sealed class SuitFetchErrand(IErrandBody body, BuddySuit suit) : Errand(body)
@@ -25,12 +25,13 @@ namespace YourBuddy
         public override float RetryDelay => FetchRetryDelay;
         protected override float SkipSeconds => FetchSkipSeconds;
         protected override string Command => "buddy_order fetchsuit";
+        protected override string Topic => "Suit";
 
         /// <summary>
-        /// The stranded suits right now: isolated, free, filed on the docked station (by the room it
-        /// lies in, else the floor under it) - switched-off rooms included - not outside, and not within PlayerNearSuitDist of the player, who
-        /// may be about to pick it up. Only while the buddy is aboard. Fills `scanNote` with what was
-        /// seen and why each was left.
+        /// The stranded suits right now. Isolated, free, filed on the docked station (by its room, else
+        /// the floor under it, switched-off rooms included), not outside, and not within PlayerNearSuitDist
+        /// of the player, who may be about to pick it up. Only while the buddy is aboard. Fills `scanNote`
+        /// with what was seen and why each was left.
         /// </summary>
         private static readonly List<Suit> Stranded = [];
 
@@ -60,7 +61,7 @@ namespace YourBuddy
             // What the cycle carries out (Airlock.Exit) and a suit taken off outside land here.
             Room? space = GameManager.Instance != null ? GameManager.Instance.SpaceRoom : null;
 
-            // Switched-off ones too: while you are aboard, the station rooms you are not in have their
+            // Switched-off ones too. While you are aboard, the station rooms you are not in have their
             // content off, and a suit lying there with it. Worn and locker-held suits are off themselves.
             foreach (Suit suit in UnityEngine.Object.FindObjectsOfType<Suit>(true))
             {
@@ -72,8 +73,8 @@ namespace YourBuddy
                 // Another station's rooms cannot load, and its interior lies where the docked one is.
                 if (!Items.Loadable(suit)) { elsewhere++; continue; }
 
-                // The room the game filed it under says whose it is - a floor probe can find no
-                // floor in a switched-off room; the probe answers when the filing does not.
+                // The room the game filed it under says whose it is, since a floor probe finds no floor
+                // in a switched-off room. The probe answers when the filing does not.
                 string? owner = NpcVessels.OwnerOfTransform(suit.transform);
                 FloorOwnership floor = owner == NavGraph.ShipOwner ? FloorOwnership.PlayerShip
                     : owner != null ? FloorOwnership.Elsewhere
@@ -98,7 +99,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// This many isolated suits yours or aboard, and a third is not worth a trip: one to wear, one
+        /// With this many isolated suits yours or aboard, a third is not worth a trip. One to wear, one
         /// spare (the spare rule's own count). docs/eva.md
         /// </summary>
         private const int EnoughSuitsAtHome = 2;
@@ -106,7 +107,7 @@ namespace YourBuddy
         private static readonly HashSet<Suit> HomeSuits = [];
 
         /// <summary>
-        /// Isolated suits that are yours or aboard: the one you wear, in your hands, belt or backpack;
+        /// Isolated suits that are yours or aboard. The one you wear or carry in hands, belt or backpack;
         /// any lying aboard or displayed in a locker aboard; any a buddy aboard wears.
         /// </summary>
         private static int CountSuitsAtHome()
@@ -215,7 +216,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The nearest stranded suit this buddy may work on: docs/invariants.md#one-buddy-per-target
+        /// The nearest stranded suit this buddy may work on. docs/invariants.md#one-buddy-per-target
         /// </summary>
         private Suit? PickTarget()
         {
@@ -238,9 +239,7 @@ namespace YourBuddy
 
         public override int Count(out float nearest) => CollectStranded(out nearest);
 
-        // ------------------------------------------------------------------
         // The legs
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Walks to the stranded suit and picks it up, then walks home.
@@ -256,7 +255,7 @@ namespace YourBuddy
             public override Vector3 Approach(out bool wantMove)
             {
                 wantMove = false;
-                // It may still lie in a room whose content is off: the buddy is in there now.
+                // It may still lie in a room whose content is off, and the buddy is in there now.
                 if (Items.InUnloadedRoom(target)) body.LoadRoomOf(target.transform);
 
                 string? blocker = suit.TakeBlockerFor(target);
@@ -295,7 +294,7 @@ namespace YourBuddy
             /// </summary>
             private const float HomeInsideInnerDoor = 1.5f;
             /// <summary>
-            /// The target point's height over the floor there: where reach and sight are measured to.
+            /// The target point's height over the floor, where reach and sight are measured to.
             /// </summary>
             private const float HomeAboveFloor = 0.5f;
 
@@ -350,9 +349,7 @@ namespace YourBuddy
             public override void End() => body.Hands.Drop("stopped fetching");
         }
 
-        // ------------------------------------------------------------------
         // Leg callbacks
-        // ------------------------------------------------------------------
 
         private void BeginHome()
         {
@@ -382,7 +379,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The walk into reach gave up: the target sits out, and the route's own end drops the leg.
+        /// The walk into reach gave up. The target sits out, and the route's own end drops the leg.
         /// </summary>
         private void LegDeferred(Suit? what)
         {

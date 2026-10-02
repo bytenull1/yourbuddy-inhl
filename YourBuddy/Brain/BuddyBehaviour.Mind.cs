@@ -8,19 +8,18 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The utility decider: every urge scores itself, and one of the best few is drawn at random rather
-    /// than the first that fits a fixed order. The tasks themselves are untouched - they are what an urge
-    /// acts through. docs/behaviour.md §3
+    /// The utility decider. Every urge scores itself, and one of the best few is drawn at random.
+    /// An urge acts through the existing tasks. docs/behaviour.md §3
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // The utility decider: what the buddy might want, and how much. docs/behaviour.md §3
+        // What the buddy might want, and how much. docs/behaviour.md §3
         private enum Urge { None, Terminal, Suit, SuitFetch, Snack, Sell, Tidy, Play, Wander, Follow }
 
         private const int UrgeCount = 10;
 
         /// <summary>
-        /// What a collector last found for one urge: how many candidates, and how far the nearest was.
+        /// What a collector last found for one urge, as a candidate count and the nearest distance.
         /// Kept for UrgeOpportunityTtl so the scan budget is not spent re-answering the same question.
         /// </summary>
         private readonly struct Chance(int count, float nearest)
@@ -45,7 +44,7 @@ namespace YourBuddy
         private readonly List<Weighed> urgeScores = [];
         private readonly Chance[] urgeChance = new Chance[UrgeCount];
         /// <summary>
-        /// The urge acted on last: it is worth a little less than the others this round.
+        /// The urge acted on last, worth a little less than the others this round.
         /// </summary>
         private Urge lastUrge = Urge.None;
         /// <summary>
@@ -54,7 +53,7 @@ namespace YourBuddy
         private int urgeScanCursor = 0;
         /// <summary>
         /// Distance at which an urge's opportunity has halved. Distance costs an urge points now
-        /// instead of deleting its candidates: docs/behaviour.md §3
+        /// instead of deleting its candidates. docs/behaviour.md §3
         /// </summary>
         private const float UrgeRangeSoftness = 8f;
         /// <summary>
@@ -83,7 +82,7 @@ namespace YourBuddy
         private const int UrgeScansPerDecision = 2;
         private const float UrgeOpportunityTtl = 10f;
         /// <summary>
-        /// Caught up: this near on the player's deck. A Follow that cannot get there
+        /// Caught up means this near on the player's deck. A Follow that cannot get there
         /// starts its clock anyway after DecideCatchUpSeconds.
         /// </summary>
         private const float DecideCaughtUpDist = 4f;
@@ -109,7 +108,7 @@ namespace YourBuddy
             BuildUrgeReport();
             TraceDecider("weighing: " + urgeReport);
 
-            // Three goes: an urge that turns out to be impossible should not cost the whole round.
+            // Three tries, so an urge that turns out to be impossible does not cost the whole round.
             for (int attempt = 0; attempt < 3 && urgeScores.Count > 0; attempt++)
             {
                 int index = urgeScores[0].Score >= UrgeDecisive ? 0 : SampleUrge();
@@ -150,8 +149,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Starts the task an urge stands for. False when it turned out to be impossible, in which case
-        /// the same bookkeeping the old fixed chain did - a retry delay and a level-2 line - happens here.
+        /// Starts the task an urge stands for. False when it turned out to be impossible, which costs a
+        /// retry delay and a level-2 line.
         /// </summary>
         private bool ActOn(Urge urge)
         {
@@ -188,7 +187,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// False when the errand turned out to be impossible: it waits its retry delay, with a level-2 line.
+        /// False when the errand turned out to be impossible. It then waits its retry delay and logs a level-2 line.
         /// </summary>
         private static bool TryErrand(Errand errand, string lead)
         {
@@ -202,9 +201,7 @@ namespace YourBuddy
             return false;
         }
 
-        // ------------------------------------------------------------------
         // Scoring
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Score = Weight x Need x Opportunity x Readiness x Novelty x jitter, and any factor at zero is
@@ -216,19 +213,19 @@ namespace YourBuddy
             TrackBout();
             int scans = 0;
 
-            // Outside, every job is out of reach: only following and wandering are weighed. docs/eva.md
+            // Outside, every job is out of reach, so only following and wandering are weighed. docs/eva.md
             if (agent.IsOutside)
             {
                 ScoreOutside(player);
                 return;
             }
 
-            // Bad air is the one thing never left to a die roll: it scores 1 and wins outright.
+            // Bad air is never left to a die roll. It scores 1 and wins outright.
             if (lifeSupport.AirIsDangerous())
             {
                 Add(Urge.Terminal, 1f, 1f, 1f, 1f, "the air aboard is dangerous");
-                // A little under the terminal, so fixing the air wins while there is time; once the
-                // air is killing the buddy, over it - the air comes back too slowly. docs/eva.md
+                // Just under the terminal, so fixing the air wins while there is time. Once the air is
+                // killing the buddy it scores over it, since the air comes back too slowly. docs/eva.md
                 if (!suit.Suited && suit.SpareSuitAvailable())
                 {
                     Add(Urge.Suit, agent.LifeInDanger ? 1.2f : 0.9f, 1f, 1f, 1f, agent.LifeInDanger
@@ -275,7 +272,7 @@ namespace YourBuddy
             Chance chance = urgeChance[(int)urge];
             if (!chance.Fresh)
             {
-                // Out of budget: nothing is known about this one, so it sits out until its turn comes.
+                // Out of budget. Nothing is known about this one, so it sits out until its turn comes.
                 if (scans >= UrgeScansPerDecision) return;
 
                 scans++;
@@ -295,8 +292,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Follow and Wander: the two things the buddy does when no errand wins. Their readiness is the
-        /// bout the other one has run, so they still take turns - just no longer only with each other.
+        /// Follow and Wander, what the buddy does when no errand wins. Each one's readiness is the bout
+        /// the other has run, so they still take turns while competing with the errands.
         /// </summary>
         private void ScoreCompany(Player player)
         {
@@ -307,7 +304,7 @@ namespace YourBuddy
             {
                 Vector3 toPlayer = playerTransform.position - transform.position;
                 toPlayer.y = 0f;
-                // Floor to floor: npc-core:docs/invariants.md#follow-arrival-is-level-aware
+                // Floor to floor. npc-core:docs/invariants.md#follow-arrival-is-level-aware
                 bool sameLevel = OnPlayersDeck(playerTransform);
                 float wandered = Time.time - boutSince;
                 Add(Urge.Follow, 0.3f, sameLevel ? Mathf.Clamp01(0.5f + toPlayer.magnitude / 40f) : 1f, 1f,
@@ -321,7 +318,7 @@ namespace YourBuddy
                 Add(Urge.Follow, 0.3f, 1f, 1f, 1f, "no order left, and not following");
                 return;
             }
-            // The Follow clock starts once it has caught up: a wander can end on the far side of a station.
+            // The Follow clock starts once it has caught up, since a wander can end on the far side of a station.
             if (boutSince < 0f)
             {
                 Vector3 toPlayer = playerTransform.position - transform.position;
@@ -344,8 +341,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Outside: Follow and Wander as usual, and only Follow once you stand in an airlock's
-        /// chamber - you are heading in, and the cycle takes whoever is in there with you.
+        /// Outside, Follow and Wander as usual, but only Follow once you stand in an airlock's chamber.
+        /// You are heading in, and the cycle takes whoever is in there with you.
         /// </summary>
         private void ScoreOutside(Player player)
         {
@@ -355,7 +352,7 @@ namespace YourBuddy
                 if (mode != BuddyMode.Follow) Add(Urge.Follow, 1f, 1f, 1f, 1f, "you are in the airlock, heading back in");
                 return;
             }
-            // Nothing to wander on while floating: it keeps with you. docs/eva.md#7-floating
+            // Nothing to wander on while floating, so it keeps with you. docs/eva.md#7-floating
             if (agent.Floating)
             {
                 if (mode != BuddyMode.Follow) Add(Urge.Follow, 1f, 1f, 1f, 1f, "floating out here, it keeps with you");
@@ -376,22 +373,22 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Distance as a cost rather than a wall: 1 at the buddy's feet, a half at UrgeRangeSoftness,
+        /// Distance as a cost rather than a wall. 1 at the buddy's feet, a half at UrgeRangeSoftness,
         /// a quarter at three times that. It never reaches zero, so a far candidate still wins when
         /// nothing nearer is worth doing. docs/behaviour.md §3
         /// </summary>
         private static float Opportunity(float distance) => 1f / (1f + Mathf.Max(0f, distance) / UrgeRangeSoftness);
 
         /// <summary>
-        /// A ramp, not a gate: 0 when the task was just done, 1 when its interval is up, and it keeps
-        /// climbing past that only in the sense that it stays at 1 while better things keep winning.
+        /// A ramp, not a gate. 0 right after the task, 1 once its interval is up, and it stays at 1
+        /// while better things keep winning.
         /// </summary>
         private static float Readiness(float dueAt, float interval) =>
             Mathf.Clamp01(1f - (dueAt - Time.time) / Mathf.Max(1f, interval));
 
         /// <summary>
-        /// Follow and Wander take turns, but not to the second: nothing is offered until BoutReadyFrom of
-        /// the bout has run, and the score then ramps to 1 at its end and stays there.
+        /// Follow and Wander take turns, but not to the second. Nothing is offered until BoutReadyFrom of
+        /// the bout has run, then the score ramps to 1 at its end and stays there.
         /// docs/behaviour.md §3
         /// </summary>
         private static float BoutReadiness(float elapsed, float length)
@@ -409,9 +406,7 @@ namespace YourBuddy
             _ => play,
         };
 
-        // ------------------------------------------------------------------
         // Saying why
-        // ------------------------------------------------------------------
 
         private static string UrgeName(Urge urge) => urge switch
         {

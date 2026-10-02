@@ -66,33 +66,27 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Puts a ready texture on every skinned material of the body: how the buddy wears its
-        /// EVA suit. docs/eva.md. The count of materials changed.
+        /// Puts a ready texture on every skinned material of the body and returns how many changed.
+        /// This is how the buddy wears its EVA suit. docs/eva.md
         /// </summary>
-        internal static int ApplyTexture(Component body, Texture2D skin)
-        {
-            int changed = 0;
-            foreach (SkinnedMeshRenderer renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-            {
-                foreach (Material material in renderer.materials)
-                {
-                    if (Set(material, skin)) changed++;
-                }
-            }
-            return changed;
-        }
+        internal static int ApplyTexture(Component body, Texture2D skin) => Change(body, material => Set(material, skin));
 
         /// <summary>
-        /// Puts every skinned material's original look back. The count of materials restored.
+        /// Restores every skinned material's original look and returns how many were restored.
         /// </summary>
-        internal static int RestoreAll(Component body)
+        internal static int RestoreAll(Component body) => Change(body, Restore);
+
+        /// <summary>
+        /// Runs `change` on every skinned material of the body and returns how many it changed.
+        /// </summary>
+        private static int Change(Component body, System.Func<Material, bool> change)
         {
             int changed = 0;
             foreach (SkinnedMeshRenderer renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 foreach (Material material in renderer.materials)
                 {
-                    if (Restore(material)) changed++;
+                    if (change(material)) changed++;
                 }
             }
             return changed;
@@ -154,7 +148,7 @@ namespace YourBuddy
                 m.HasProperty(BaseColor) ? m.GetColor(BaseColor) : null,
                 m.HasProperty(Color_) ? m.GetColor(Color_) : null));
 
-            // A tint would multiply into the skin: show it as painted.
+            // A tint would multiply into the skin, so show it as painted.
             if (hasBase) material.SetTexture(BaseMap, skin);
             if (hasMain) material.SetTexture(MainTex, skin);
             if (material.HasProperty(BaseColor)) material.SetColor(BaseColor, Color.white);

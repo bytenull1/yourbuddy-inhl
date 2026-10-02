@@ -5,19 +5,17 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Move: left on a station, it turns up where you are. docs/anomalies.md#move
+    /// Move. Left on a station, it turns up where you are. docs/anomalies.md#move
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
         private const float MoveWaitSeconds = 300f;
         private const float MoveStartleDist = 4f;
 
-        // ------------------------------------------------------------------
         // Turning up far from where you left it
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// Why it cannot turn up near you, or null: it must be parked on a station, its interior switched
+        /// Why it cannot turn up near you, or null. It must be parked on a station with its interior switched
         /// off. The only kind a parked buddy acts out. docs/anomalies.md#move
         /// </summary>
         internal string? MoveReady()
@@ -35,8 +33,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Out of the switched-off interior and onto the station you are on, out of your sight; any order it had
-        /// is gone. Never onto a ship: it came without one.
+        /// Out of the switched-off interior and onto the station you are on, out of your sight. Any order it had
+        /// is gone. Never onto a ship, since it came without one.
         /// </summary>
         private string? StartMove(Transform you)
         {
@@ -53,7 +51,7 @@ namespace YourBuddy
             if (spot == null) return "no spot near you out of your sight";
 
             // Placed while still parked, then woken by riding your station. A buddy parked since its load never ran
-            // its agent's Start, which TeleportTo's controller and OriginToFeet come from: docs/anomalies.md#move
+            // its agent's Start, which TeleportTo's controller and OriginToFeet come from. docs/anomalies.md#move
             CharacterController body = GetComponent<CharacterController>();
             float toFeet = body != null ? body.center.y - body.height * 0.5f : agent.OriginToFeet;
             transform.position = spot.Value - Vector3.up * toFeet;
@@ -73,11 +71,11 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Stands where it turned up until you find it; then a line, and it follows you again.
+        /// Stands where it turned up until you find it, says a line, and follows you again.
         /// </summary>
         private void UpdateMove(float now, float dist)
         {
-            // Its first frame awake, the agent started: where it stands against the floor under it.
+            // Its first frame awake, with the agent started. Where it stands against the floor under it.
             if (anomalyStep == 0)
             {
                 anomalyStep = 1;

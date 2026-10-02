@@ -9,7 +9,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The anomalies one buddy acts out: strange or frightening moments that make you doubt it is
+    /// The anomalies one buddy acts out, strange or frightening moments that make you doubt it is
     /// the friend you woke up with. AnomalyDirector decides when; this does them. docs/anomalies.md
     /// </summary>
     public sealed partial class BuddyBehaviour
@@ -28,12 +28,15 @@ namespace YourBuddy
         private float anomalySightAt = 0f;
         private bool anomalyStartled = false;
         /// <summary>
-        /// You saw what it acted out. One nobody saw may come again: docs/anomalies.md#once-per-save
+        /// You saw what it acted out. One nobody saw may come again. docs/anomalies.md#once-per-save
         /// </summary>
         private bool anomalyWitnessed = false;
         private const float SightSampleSeconds = 0.1f;
+        private const int StalkerSounds = 3;
+        private const float NoisesGapMin = 1.5f;
+        private const float NoisesGapMax = 3f;
 
-        // Bloody: the texture it wore before.
+        // Bloody keeps the texture it wore before.
         private Texture? goreWearing = null;
         private Texture2D? goreTexture = null;
 
@@ -54,11 +57,11 @@ namespace YourBuddy
         internal BuddyConversation? Conversation { get; set; }
 
         /// <summary>
-        /// The animated body, set by SpawnBuddy: what a double copies. docs/anomalies.md#sleeper
+        /// The animated body a double copies, set by SpawnBuddy. docs/anomalies.md#sleeper
         /// </summary>
         internal GameObject? Model { get; set; }
 
-        // Tuning: docs/reference.md#1-tuning-constants
+        // Tuning. docs/reference.md#1-tuning-constants
         private const float BloodySeconds = 150f;
         private const float BloodySeenRate = 15f;
         private const float BloodyUnseenSeconds = 5f;
@@ -76,7 +79,7 @@ namespace YourBuddy
         internal bool AnomalyRunning => anomaly.HasValue;
 
         /// <summary>
-        /// Gone from sight, the scanner and the monster's reach: docs/anomalies.md#vanish
+        /// Gone from sight, the scanner and the monster's reach. docs/anomalies.md#vanish
         /// </summary>
         internal bool Vanished => vanished;
 
@@ -86,7 +89,7 @@ namespace YourBuddy
         internal bool IgnoresYou => vanished || Anomalies.Has(anomaly, AnomalyTraits.IgnoresYou);
 
         /// <summary>
-        /// Its looks, or a set piece somewhere else: the decider, orders, fear and bad air go on around it.
+        /// It changes only its looks, or runs a set piece elsewhere, so the decider, orders, fear and bad air go on around it.
         /// docs/anomalies.md#2-the-anomalies
         /// </summary>
         private bool AnomalyInBackground => Anomalies.Has(anomaly, AnomalyTraits.Background);
@@ -96,9 +99,7 @@ namespace YourBuddy
         /// </summary>
         internal string? TitleOverride => wrongTitle != null && Time.time < wrongTitleUntil ? wrongTitle : null;
 
-        // ------------------------------------------------------------------
         // Starting
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Why this buddy cannot act out anything now, or null.
@@ -134,7 +135,7 @@ namespace YourBuddy
         /// </summary>
         internal string? TryStartAnomaly(AnomalyKind kind)
         {
-            // A buddy left on a station is parked: only Move wakes it. docs/anomalies.md#move
+            // A buddy left on a station is parked, and only Move wakes it. docs/anomalies.md#move
             string? blocker = kind == AnomalyKind.Move ? MoveReady() : AnomalyReady();
             if (blocker != null) return blocker;
 
@@ -192,7 +193,7 @@ namespace YourBuddy
             !sameVessel ? "you are on another vessel" : dist > 8f ? $"you are {dist:0.0}m away" : null;
 
         /// <summary>
-        /// Starts a running one: the shared bookkeeping. `keepPlan` leaves a walk already committed alone.
+        /// The shared bookkeeping for starting one. `keepPlan` leaves a walk already committed alone.
         /// </summary>
         private string? StartHold(AnomalyKind kind, float seconds, bool keepPlan = false)
         {
@@ -290,7 +291,7 @@ namespace YourBuddy
         {
             if (goreTexture == null) return;
 
-            // A suit put on since drew over it; taking it off restored the original.
+            // A suit put on since drew over it, and taking it off restored the original.
             if (!suit.Suited && BuddySkin.IsApplied(transform, goreTexture)) BuddyGore.Remove(transform, goreWearing);
 
             goreTexture = null;
@@ -319,7 +320,7 @@ namespace YourBuddy
             string? gore = PutGoreOn();
             if (gore == null)
             {
-                // Your door codes do not stop it: docs/anomalies.md#2-the-anomalies
+                // Your door codes do not stop it. docs/anomalies.md#2-the-anomalies
                 agent.KnowsEveryCode = true;
                 return null;
             }
@@ -327,9 +328,7 @@ namespace YourBuddy
             return gore;
         }
 
-        // ------------------------------------------------------------------
         // Every frame
-        // ------------------------------------------------------------------
 
         private void Update()
         {
@@ -358,7 +357,7 @@ namespace YourBuddy
                 if (seen) anomalySeenFor += SightSampleSeconds;
                 // A flicker is witnessed when it flashes, a sleeper when it is found.
                 if (seen && !Anomalies.Has(anomaly, AnomalyTraits.OwnCue)) anomalyWitnessed = true;
-                // Watched, the blood's time runs out faster: as if it wanted it gone before you looked
+                // Watched, the blood's time runs out faster, as if it wanted it gone before you looked
                 // too closely. docs/anomalies.md#bloody
                 if (seen && anomaly == AnomalyKind.Bloody) anomalyUntil -= SightSampleSeconds * (BloodySeenRate - 1f);
                 else if (anomalySeen) anomalyUnseenSince = now;
@@ -373,7 +372,7 @@ namespace YourBuddy
                     UpdateShutDoors(now);
                     break;
                 case AnomalyKind.ClosetAmbush:
-                    // Fear took the closet over, or the hide ended some other way: docs/invariants.md#fear-owns-the-buddy
+                    // Fear took the closet over, or the hide ended some other way. docs/invariants.md#fear-owns-the-buddy
                     if (!hideAmbush) EndAnomaly(Hiding ? "it is hiding from the Breathless now" : "out of the closet");
                     break;
                 case AnomalyKind.Noises:
@@ -420,7 +419,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Standing past a door it walked through: on to the next once the agent has shut it, or after
+        /// Standing past a door it walked through. On to the next once the agent has shut it, or after
         /// DoorWaitSeconds. The round as a whole ends at anomalyUntil.
         /// </summary>
         private void UpdateShutDoors(float now)
@@ -455,14 +454,15 @@ namespace YourBuddy
             AnomalySeverity ceiling = AnomalyDirector.Ceiling;
             ScareSound sound = anomalyStep switch
             {
-                0 => Random.value < 0.5f ? ScareSound.Click : ScareSound.Wet,
-                1 => ceiling >= AnomalySeverity.Scary && Random.value < 0.5f ? ScareSound.Creature : ScareSound.Wet,
-                _ => ceiling >= AnomalySeverity.Extreme && Random.value < 0.4f ? ScareSound.Shriek : ScareSound.Creature,
+                0 => Random.value < 0.35f ? ScareSound.Click : ScareSound.Odd,
+                1 => ceiling >= AnomalySeverity.Scary && Random.value < 0.5f ? ScareSound.Creature : ScareSound.Odd,
+                _ => ScareSound.Creature,
             };
-            if (ScareSounds.Play(sound, agent.GroundPos(1.2f)) && sound >= ScareSound.Creature) Startle(sound == ScareSound.Shriek ? 25 : 8);
+            if (ScareSounds.Play(sound, agent.GroundPos(1.2f), transform, out float seconds) && sound >= ScareSound.Creature) Startle(8);
 
             anomalyStep++;
-            anomalyStepAt = now + Random.Range(1.2f, 2.6f);
+            // The next one only after this one is over, and a silence.
+            anomalyStepAt = now + seconds + Random.Range(NoisesGapMin, NoisesGapMax);
             int sounds = ceiling >= AnomalySeverity.Scary ? 3 : 2;
             if (anomalyStep >= sounds || dist > 9f) EndAnomaly("silent again");
         }
@@ -474,13 +474,13 @@ namespace YourBuddy
                 EndAnomaly("its look changed");
                 return;
             }
-            // Something in the world can rewrite the body's materials, as BuddySuit's watcher finds: put it back.
+            // Something in the world can rewrite the body's materials, as BuddySuit's watcher finds, so put it back.
             if (!BuddySkin.IsApplied(transform, goreTexture))
             {
                 BuddySkin.ApplyTexture(transform, goreTexture);
                 YourBuddyPlugin.Log.LogWarning($"[anomaly] {Name}'s blood was lost (its materials changed) - applying it again");
             }
-            // The run gives way to the Breathless and to bad air: docs/invariants.md#fear-owns-the-buddy
+            // The run gives way to the Breathless and to bad air. docs/invariants.md#fear-owns-the-buddy
             if (anomalyWalking)
             {
                 if (fearState == FearState.Calm && !lifeSupport.AirIsDangerous()) return;
@@ -490,7 +490,7 @@ namespace YourBuddy
                 YourBuddyPlugin.Log.LogInfo($"[anomaly] {Name} stops running off - it has worse to worry about");
                 return;
             }
-            // Never while you look at it: only once its time is up and you have not seen it for a while.
+            // Never while you look at it, only once its time is up and you have not seen it for a while.
             if (now < anomalyUntil) return;
 
             if (!anomalySeen && now - anomalyUnseenSince >= BloodyUnseenSeconds)
@@ -498,7 +498,7 @@ namespace YourBuddy
                 EndAnomaly(anomalySeenFor > 0f ? "out of your sight, clean again" : "nobody saw");
                 return;
             }
-            // You keep it in sight: it gets away from you to be clean.
+            // You keep it in sight, so it gets away from you to get clean.
             if (now < anomalyStepAt || fearState != FearState.Calm) return;
 
             anomalyStepAt = now + BloodyRunRetrySeconds;
@@ -520,17 +520,19 @@ namespace YourBuddy
             }
             if (anomalySeen && dist < 3f) Startle(25);
 
-            if (!anomalySeen && now >= anomalyStepAt && dist < 6f && PlayerView.IsBehind(agent.GroundPos(1.1f)))
+            // anomalyStep counts its sounds at your back, at most StalkerSounds.
+            if (!anomalySeen && anomalyStep < StalkerSounds && now >= anomalyStepAt && dist < 6f && PlayerView.IsBehind(agent.GroundPos(1.1f)))
             {
-                anomalyStepAt = now + Random.Range(6f, 10f);
-                ScareSounds.Play(Random.value < 0.5f ? ScareSound.Wet : ScareSound.Creature, agent.GroundPos(1.2f));
+                anomalyStep++;
+                ScareSounds.Play(Random.value < 0.6f ? ScareSound.Odd : ScareSound.Creature, agent.GroundPos(1.2f), transform, out float seconds);
+                anomalyStepAt = now + seconds + Random.Range(6f, 10f);
             }
             if (now >= anomalyUntil && !anomalySeen) EndAnomaly("gone quiet");
         }
 
         /// <summary>
-        /// Waits out its time unseen, then comes back where you will not see it arrive - for BehindYou,
-        /// right at your back - and says so in the log while it cannot.
+        /// Waits out its time unseen, then comes back where you will not see it arrive (for BehindYou,
+        /// right at your back). Logs why while it cannot.
         /// </summary>
         private void UpdateVanished(float now, Transform you)
         {
@@ -568,7 +570,7 @@ namespace YourBuddy
                 SpeakNew(AnomalyLines.Spoken(AnomalySeverity.Extreme));
                 return;
             }
-            // BehindYou, standing at your back: once you turn round, it holds a moment and lets go.
+            // BehindYou, standing at your back. Once you turn round, it holds a moment and lets go.
             if (anomalyStep == 1 && anomalySeen)
             {
                 anomalyStep = 2;
@@ -578,9 +580,7 @@ namespace YourBuddy
             if (now >= anomalyUntil) EndAnomaly(anomalyStep == 2 ? "you saw it" : "you never turned round");
         }
 
-        // ------------------------------------------------------------------
         // The body, from OverrideMovement and Steer
-        // ------------------------------------------------------------------
 
         private enum AnomalyFacing
         {
@@ -590,7 +590,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Whether the anomaly holds the body still, and where it looks standing still: one table for
+        /// Whether the anomaly holds the body still, and where it looks standing still. One table for
         /// OverrideMovement and TryIdleFacing.
         /// </summary>
         private (bool Holds, AnomalyFacing Facing) AnomalyPose()
@@ -605,10 +605,10 @@ namespace YourBuddy
                 case AnomalyKind.Stalker:
                     return anomalySeen ? (true, AnomalyFacing.You) : (false, AnomalyFacing.Usual);
                 case AnomalyKind.Sleeper:
-                    // You found the one in the capsule: it stands where it is, facing you, until you see it.
+                    // You found the one in the capsule, so it stands where it is, facing you, until you see it.
                     return anomalyStep == 2 && !sleeperActorFound ? (true, AnomalyFacing.You) : (false, AnomalyFacing.Usual);
                 case AnomalyKind.Bloody:
-                    // Got away from you: it stays there to be clean.
+                    // Got away from you, so it stays there to get clean.
                     return (anomalyStep == 2, AnomalyFacing.Usual);
                 case AnomalyKind.WindowStare:
                 case AnomalyKind.WallStare:
@@ -628,7 +628,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// OverrideMovement's turn: true while the anomaly holds the buddy still. Fear ends any but a vanish.
+        /// OverrideMovement's turn. True while the anomaly holds the buddy still. Fear ends any but a vanish.
         /// docs/invariants.md#fear-owns-the-buddy
         /// </summary>
         private bool AnomalyHoldsBody()
@@ -650,7 +650,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// TryIdleFacing's turn, standing still: where the anomaly looks. False leaves the usual facing.
+        /// TryIdleFacing's turn, standing still. Where the anomaly looks. False leaves the usual facing.
         /// The agent turns an idle body after the brain's override, so facing set there would be undone.
         /// </summary>
         private bool AnomalyFaces(Player player)
@@ -668,12 +668,10 @@ namespace YourBuddy
             }
         }
 
-        // ------------------------------------------------------------------
         // Ending
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// Puts back everything the anomaly changed - looks, collisions, AI, the closet - on every way out.
+        /// Puts back everything the anomaly changed (looks, collisions, AI, the closet) on every way out.
         /// docs/invariants.md#an-anomaly-puts-back-what-it-changed
         /// </summary>
         internal void EndAnomaly(string why)
@@ -706,7 +704,7 @@ namespace YourBuddy
             doorsToShut.Clear();
             if (kind == AnomalyKind.ClosetAmbush && hideAmbush)
             {
-                // With the Breathless about it stays in, hiding for real now: docs/invariants.md#fear-owns-the-buddy
+                // With the Breathless about it stays in, hiding for real now. docs/invariants.md#fear-owns-the-buddy
                 if (fearState != FearState.Calm)
                 {
                     hideAmbush = false;
@@ -720,7 +718,7 @@ namespace YourBuddy
             decideAt = 0f;
             anomalyLast = Anomalies.Info(kind).Name + " - " + why;
             YourBuddyPlugin.Log.LogInfo($"[anomaly] {Name}: {Anomalies.Info(kind).Name} over - {why}");
-            // Nobody saw it, and nothing of it is left to find: it may come again. docs/anomalies.md#once-per-save
+            // Nobody saw it and nothing of it is left to find, so it may come again. docs/anomalies.md#once-per-save
             if (!anomalyWitnessed && !Anomalies.Info(kind).Has(AnomalyTraits.Lasting))
             {
                 AnomalyMemory.Forget(kind);
@@ -729,20 +727,18 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// An order reaching it: it ends what it was acting out, unless it is not listening.
+        /// An order reaching it ends what it was acting out, unless it is not listening.
         /// </summary>
         private void EndAnomalyForOrder(string order)
         {
             if (anomaly.HasValue && !Anomalies.Has(anomaly, AnomalyTraits.Deaf | AnomalyTraits.Background)) EndAnomaly("you told me to " + order);
         }
 
-        // ------------------------------------------------------------------
         // Saying things, and scaring you
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// A line said aloud: in NPC.Core's speech panel and its talk log, with the robot's blips as its
-        /// voice. Null: it was said.
+        /// A line said aloud in NPC.Core's speech panel and its talk log, with the robot's blips as its
+        /// voice. Null when it was said.
         /// </summary>
         private string? Speak(string text)
         {
@@ -766,7 +762,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Once per anomaly: your stress, through the director's own source.
+        /// Once per anomaly, your stress through the director's own source.
         /// </summary>
         private void Startle(int stress)
         {
@@ -777,7 +773,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// BuddyConversation.SetOpen: the window opened under the wrong name, once; it says nothing about it.
+        /// From BuddyConversation.SetOpen. The window opened under the wrong name, once, and it says nothing about it.
         /// </summary>
         internal void OnTalkOpened()
         {

@@ -5,8 +5,8 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// The errands the buddy runs, and the one door they have into it: IErrandBody, implemented
-    /// explicitly so it adds nothing to the component's own surface. docs/behaviour.md
+    /// The errands the buddy runs. They reach it only through IErrandBody, implemented explicitly so
+    /// it adds nothing to the component's own surface. docs/behaviour.md
     /// </summary>
     public sealed partial class BuddyBehaviour : IErrandBody
     {
@@ -43,20 +43,20 @@ namespace YourBuddy
         internal string StartInsideNow() => suit.StartInsideNow();
 
         /// <summary>
-        /// On the outside of the airlocks. npc-core:docs/invariants.md#an-airlock-is-crossed-by-its-cycle
+        /// Outside the airlocks. npc-core:docs/invariants.md#an-airlock-is-crossed-by-its-cycle
         /// </summary>
         internal bool IsOutside => agent.IsOutside;
 
         /// <summary>
-        /// Outside with no gravity: npc-core:docs/agent.md#8-floating
+        /// Outside with no gravity. npc-core:docs/agent.md#8-floating
         /// </summary>
         internal bool Floating => agent.Floating;
         internal string SuitNow(string onOff) => suit.SuitNow(onOff);
         internal string UnsuitNow() => suit.UnsuitNow();
 
         /// <summary>
-        /// Whether the buddy wears a suit: the agent's settings route it into NPC.Core's
-        /// atmosphere and space rules. docs/eva.md
+        /// Whether the buddy wears a suit. The agent's settings pass it to NPC.Core's atmosphere and
+        /// space rules. docs/eva.md
         /// </summary>
         internal bool SuitSuited => suit.Suited;
 
@@ -66,7 +66,7 @@ namespace YourBuddy
         internal float SuitSpeedFactor => suit.SpeedFactor;
 
         /// <summary>
-        /// For the sidecar: the suit the buddy wears, by the game item's id.
+        /// Item id of the worn suit, for the sidecar.
         /// </summary>
         internal uint WornSuitId => suit.WornSuitId;
 
@@ -76,17 +76,17 @@ namespace YourBuddy
         internal Suit? WornSuit => suit.WornSuit;
 
         /// <summary>
-        /// After a load: wear the suit the sidecar named. docs/eva.md
+        /// After a load, wears the suit the sidecar named. docs/eva.md
         /// </summary>
         internal void RestoreWornSuit(uint suitId, string? wornFor) => suit.RestoreWorn(suitId, wornFor);
 
         /// <summary>
-        /// For the sidecar: why the worn suit is on (BuddySuit.SuitReason), null without one.
+        /// Why the worn suit is on (BuddySuit.SuitReason), for the sidecar. Null without one.
         /// </summary>
         internal string? WornSuitReason => suit.WornReason;
 
         /// <summary>
-        /// Despawning: the worn suit goes back into the world, or it is gone with the buddy.
+        /// On despawn the worn suit goes back into the world, or it would vanish with the buddy.
         /// </summary>
         internal void ReleaseWornSuit() => suit.OnDespawned();
 

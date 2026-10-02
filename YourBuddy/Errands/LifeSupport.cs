@@ -6,8 +6,8 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Life-support terminals: when the air aboard turns dangerous and the unit that would fix
-    /// it is switched off, walk to it and flip its power switch. docs/terminals.md
+    /// Life-support terminals. When the air aboard turns dangerous and the unit that would fix it
+    /// is switched off, walk to it and flip its power switch. docs/terminals.md
     /// </summary>
     internal sealed class LifeSupport(IErrandBody body)
     {
@@ -51,8 +51,8 @@ namespace YourBuddy
             kind == TerminalKind.Oxygen ? "oxygen generator" : "climate control";
 
         /// <summary>
-        /// Whether the air aboard is in a band a terminal could fix. The full question - whether a unit
-        /// is off, may be switched on and can be walked to - is TryStart's; this is only what the decider
+        /// Whether the air aboard is in a band a terminal could fix. TryStart answers the full question
+        /// (is a unit off, may it be switched on, can it be reached); this is only what the decider
         /// weighs. docs/terminals.md
         /// </summary>
         public bool AirIsDangerous()
@@ -67,7 +67,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// This air is dangerous to the buddy without a suit: the bands the decider fixes the ship's air by.
+        /// This air is dangerous to the buddy without a suit. These are the bands the decider fixes the ship's air by.
         /// </summary>
         public bool Dangerous(Environment env)
         {
@@ -101,8 +101,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// buddy_order terminal: switch the unit on now, air or no air, retry timer or not - but only one that is
-        /// off and may be switched on: docs/invariants.md#a-terminal-is-only-switched-on
+        /// buddy_order terminal. Switches the unit on now, air or no air, retry timer or not, but only one
+        /// that is off and may be switched on. docs/invariants.md#a-terminal-is-only-switched-on
         /// </summary>
         public string StartNow(string which)
         {
@@ -177,7 +177,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// For the HUD and buddy_dev mind: the air aboard against the danger bands, and each unit's retry timer.
+        /// The air aboard against the danger bands, and each unit's retry timer. For the HUD and buddy_dev mind.
         /// </summary>
         public string Describe()
         {
@@ -210,7 +210,7 @@ namespace YourBuddy
 
         /// <summary>
         /// Why the buddy cannot help with this unit, or null with its power switch.
-        /// It only ever switches a unit on: docs/invariants.md#a-terminal-is-only-switched-on
+        /// It only ever switches a unit on. docs/invariants.md#a-terminal-is-only-switched-on
         /// </summary>
         private static string? TerminalBlocker(Controller? controller, out Switch? powerSwitch)
         {
@@ -228,14 +228,14 @@ namespace YourBuddy
 
             powerSwitch = PowerSwitchOf(controller);
             if (powerSwitch == null) return "it has no power switch I can find";
-            // Switch on, unit off: a fault (OxygenError / ClimateError) the player fixes by hand.
+            // Switch on but unit off is a fault (OxygenError / ClimateError) the player fixes by hand.
             if (powerSwitch.Enabled) return "its switch is on and it is still off - a fault only you can clear";
 
             return null;
         }
 
         /// <summary>
-        /// The unit's own power switch: a Switch on a direct child. Climate's format switch sits deeper.
+        /// The unit's own power switch, a Switch on a direct child. Climate's format switch sits deeper.
         /// </summary>
         private static Switch? PowerSwitchOf(Controller controller)
         {
@@ -247,7 +247,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// UpdateRoute, once a terminal route's plan is walked: the last steps to the switch.
+        /// The last steps to the switch, from UpdateRoute once a terminal route's plan is walked.
         /// </summary>
         private Vector3 Approach(TerminalTask task, out bool wantMove)
         {
@@ -281,7 +281,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// SlowUpdate phase 3: did the flip actually start the unit?
+        /// SlowUpdate phase 3. Checks whether the flip actually started the unit.
         /// </summary>
         public void Update()
         {

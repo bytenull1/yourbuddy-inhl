@@ -7,7 +7,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// WindowStare and WallStare: it walks up to a window or a wall and stares. docs/anomalies.md#windowstare-and-wallstare
+    /// WindowStare and WallStare. It walks up to a window or a wall and stares. docs/anomalies.md#windowstare-and-wallstare
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
@@ -18,9 +18,7 @@ namespace YourBuddy
         private const float WallSearchDist = 4f;
         private const float WallStandOff = 0.45f;
 
-        // ------------------------------------------------------------------
         // Window and wall
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// A window on its own vessel within StareSearchRadius, and a node in front of it to stand on.
@@ -34,7 +32,7 @@ namespace YourBuddy
             {
                 if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
 
-                // The pane itself: every window block of ship and station has a child 'Glass'.
+                // The pane itself. Every window block of ship and station has a child 'Glass'.
                 if (!renderer.name.StartsWith("Glass")) continue;
 
                 float d = Vector3.Distance(renderer.bounds.center, here);
@@ -107,7 +105,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Building, not a body or a loose item: what a wall stare may face.
+        /// Building, not a body or a loose item, which is what a wall stare may face.
         /// </summary>
         private static bool IsWall(Collider? collider)
         {
@@ -121,7 +119,7 @@ namespace YourBuddy
 
 
         /// <summary>
-        /// Steer, while it walks to a window, a wall or through a door: the plan, then a straight stretch
+        /// Steer while it walks to a window, a wall or through a door. The plan, then a straight stretch
         /// to the stand point.
         /// </summary>
         private Vector3 WalkAnomalyLeg(out bool wantMove)
@@ -136,7 +134,7 @@ namespace YourBuddy
 
                 return Vector3.zero;
             }
-            // Running from you after the robot; a walk otherwise.
+            // Running from you after the robot, a walk otherwise.
             float speed = anomaly is AnomalyKind.BotTalk or AnomalyKind.Bloody or AnomalyKind.Meat
                 ? agent.WalkSpeed * FleeSpeedFactor
                 : agent.WalkSpeed;

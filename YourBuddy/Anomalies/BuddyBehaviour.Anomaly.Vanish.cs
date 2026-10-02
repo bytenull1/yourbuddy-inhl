@@ -6,11 +6,11 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Vanish, Stalker and BehindYou: gone from sight, back somewhere else. docs/anomalies.md#vanish
+    /// Vanish, Stalker and BehindYou. Gone from sight, back somewhere else. docs/anomalies.md#vanish
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // Vanished: drawn nowhere, no collisions, no AI. docs/invariants.md#an-anomaly-puts-back-what-it-changed
+        // Vanished means drawn nowhere, no collisions, no AI. docs/invariants.md#an-anomaly-puts-back-what-it-changed
         private bool vanished = false;
         private readonly List<Renderer> vanishedRenderers = [];
 
@@ -21,9 +21,7 @@ namespace YourBuddy
         private const float ReappearMaxDist = 16f;
         private const float BehindYouDist = 1.2f;
 
-        // ------------------------------------------------------------------
         // Vanishing
-        // ------------------------------------------------------------------
 
         private void Disappear()
         {
@@ -36,6 +34,8 @@ namespace YourBuddy
                 vanishedRenderers.Add(renderer);
             }
             cc.detectCollisions = false;
+            // Asleep, it never walks through the doors it owes, so they close behind it now.
+            agent.LeaveDoors();
             agent.ClearMoveTarget();
             agent.DropPlan();
             Asleep = true;
@@ -43,7 +43,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Back where it is now: only the renderers it switched off, so the mask SpawnBuddy hid stays hidden.
+        /// Back where it is now. Only the renderers it switched off return, so the mask SpawnBuddy hid stays hidden.
         /// </summary>
         private void Reappear()
         {

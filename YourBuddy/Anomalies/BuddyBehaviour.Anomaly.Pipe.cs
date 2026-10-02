@@ -3,11 +3,11 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Pipe: it brings you a bloody pipe and drops it when you see it. docs/anomalies.md#pipe
+    /// Pipe. It brings you a bloody pipe and drops it when you see it. docs/anomalies.md#pipe
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
-        // Pipe: the bloody pipe in its hands, and the frame it was made. docs/anomalies.md#pipe
+        // Pipe state, the bloody pipe in its hands and the frame it was made. docs/anomalies.md#pipe
         private Grabbable? pipe = null;
         private int pipeFrame = 0;
         private const float PipeMinDist = 5f;
@@ -15,17 +15,15 @@ namespace YourBuddy
         private const float PipeGiveUpSeconds = 120f;
         private const float PipeStartleDist = 4f;
         /// <summary>
-        /// The pipe's hold, from the body: its bloody top end down and forward, a little to one side.
+        /// The pipe's hold relative to the body, bloody top end down and forward, a little to one side.
         /// </summary>
         private static readonly Quaternion PipeHold = Quaternion.Euler(150f, 0f, 20f);
 
-        // ------------------------------------------------------------------
         // The bloody pipe
-        // ------------------------------------------------------------------
 
         /// <summary>
-        /// Out of your sight a bloody pipe is put in its hands; it comes up to you with it, not answering, and
-        /// the moment you spot it, puts it down without a word. docs/anomalies.md#pipe
+        /// Out of your sight a bloody pipe is put in its hands. It comes up to you with it, not answering,
+        /// and the moment you spot it, puts it down without a word. docs/anomalies.md#pipe
         /// </summary>
         private string? StartPipe(float dist, bool sameVessel)
         {
@@ -48,14 +46,14 @@ namespace YourBuddy
 
             StartHold(AnomalyKind.Pipe, PipeGiveUpSeconds);
             pipe = made;
-            // Picked up next frame: the item's Start puts it back where its data says.
+            // Picked up next frame, since the item's Start puts it back where its data says.
             pipeFrame = Time.frameCount;
             return null;
         }
 
         /// <summary>
         /// Takes the pipe up and comes to you as a Follow does; the moment you see it, it puts the pipe down.
-        /// Never seen in PipeGiveUpSeconds: down unseen.
+        /// If never seen in PipeGiveUpSeconds, it puts it down unseen.
         /// </summary>
         private void UpdatePipe(float now, float dist)
         {

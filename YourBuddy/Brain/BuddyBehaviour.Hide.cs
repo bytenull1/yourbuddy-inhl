@@ -10,8 +10,8 @@ using static YourBuddy.Items;
 namespace YourBuddy
 {
     /// <summary>
-    /// Hiding from the Breathless in a closet or locker: a flee that ends behind shut doors instead of
-    /// across the ship. The mod's own catch and its sight both have to honour it. docs/fear.md §6
+    /// Hiding from the Breathless in a closet or locker, a flee that ends behind shut doors instead
+    /// of across the ship. The mod's own catch and sight both honour it. docs/fear.md §6
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
@@ -50,7 +50,7 @@ namespace YourBuddy
         /// </summary>
         private const float HidePreferWalk = 16f;
         /// <summary>
-        /// Never hidden in this near the Breathless: it would be shut in with it.
+        /// Never hides this near the Breathless, or it would be shut in with it.
         /// </summary>
         private const float HideMonsterClearance = 3f;
         /// <summary>
@@ -60,7 +60,7 @@ namespace YourBuddy
         private const float HideWalkSecondsPerMetre = 1.2f;
         /// <summary>
         /// Inside for at least this long, then out once Calm and nothing has been seen for HideCalmSeconds.
-        /// Neither ends it while the monster is within HideMonsterNearDist: docs/fear.md §6
+        /// Neither ends it while the monster is within HideMonsterNearDist. docs/fear.md §6
         /// </summary>
         private const float HideMinSeconds = 25f;
         private const float HideCalmSeconds = 15f;
@@ -74,7 +74,7 @@ namespace YourBuddy
         /// </summary>
         private const float HideDoorShutSeconds = 6f;
         /// <summary>
-        /// It does not come out at all with the monster this near - measured without sight, through the
+        /// It does not come out at all with the monster this near. Measured without sight through the
         /// closet walls, because hidden it cannot see but can hear.
         /// docs/invariants.md#a-hidden-buddy-waits-out-a-monster-it-can-hear
         /// </summary>
@@ -85,7 +85,7 @@ namespace YourBuddy
         private const float HideMaxSeconds = 240f;
 
         /// <summary>
-        /// In the closet as an anomaly, to jump out at you: docs/anomalies.md#closetambush.
+        /// In the closet as an anomaly, to jump out at you. docs/anomalies.md#closetambush
         /// </summary>
         private bool hideAmbush = false;
         /// <summary>
@@ -110,19 +110,19 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// True while the buddy owns its own movement to hide: the mode logic is skipped.
+        /// True while the buddy moves itself to hide, so the mode logic is skipped.
         /// </summary>
         internal bool Hiding => hideState != HideState.None;
 
         /// <summary>
-        /// Where a save records a hidden buddy: outside, where it will step back out.
+        /// Where a save records a hidden buddy, outside where it will step back out.
         /// docs/invariants.md#a-hidden-buddy-is-saved-outside-its-hiding-spot
         /// </summary>
         internal Vector3? HiddenSavePoint =>
             hideState == HideState.Hidden ? hideStand - Vector3.up * agent.OriginToFeet : null;
 
         /// <summary>
-        /// Whether the buddy is inside this spot now: the game's Interact asks before mounting you.
+        /// Whether the buddy is inside this spot now. The game's Interact asks before mounting you.
         /// </summary>
         internal bool IsHiddenIn(HidingSpot spot) => hideSpot == spot && hideState is HideState.Hidden or HideState.Leaving;
 
@@ -208,14 +208,13 @@ namespace YourBuddy
         {
             if (spot.Mounted) return "you are hiding in it";
 
-            // Opening it would count as finding the one inside: docs/invariants.md#one-buddy-per-target
+            // Opening it would count as finding the one inside. docs/invariants.md#one-buddy-per-target
             if (BuddyManager.TakenByAnother(spot.transform, this)) return "another buddy is using it";
 
-            // `Mountable.locked` is not a lock. Closet.UpdateMountAvailability sets it to
+            // `Mountable.locked` is not a lock, it means shut. Closet.UpdateMountAvailability sets it to
             // `!leftDoor.Opened && !rightDoor.Opened` and Locker.CheckLockState to
-            // `holder.Item != null || !door.Opened`: shut reads as locked. Shut is the state the buddy
-            // finds every spot in and opens for itself, so testing it rejected every cabinet outright -
-            // the doors test below is the real one. docs/fear.md §6
+            // `holder.Item != null || !door.Opened`. The buddy finds every spot shut and opens it itself,
+            // so testing it would reject every cabinet. The doors test below is the real one. docs/fear.md §6
             EquipmentHolder? holder = spot.GetComponentInChildren<EquipmentHolder>(true);
             if (holder != null && holder.Item != null) return "a suit is hanging in it";
 
@@ -249,7 +248,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Takes the plan over from whatever was walking it: hiding owns the buddy until it is out again.
+        /// Takes the plan over from whatever was walking it. Hiding owns the buddy until it is out again.
         /// </summary>
         private void BeginHide(HideTask task, NavPath plan, bool fromFear)
         {
@@ -334,8 +333,8 @@ namespace YourBuddy
                 }
                 agent.DropPlan();
             }
-            // The straight stretch starts at the node: a plan that ran out short of it (stuck recovery
-            // skips waypoints) is planned again, or the walk cuts through a wall.
+            // The straight stretch starts at the node. A plan that ran out short of it (stuck recovery
+            // skips waypoints) is planned again, or the walk would cut through a wall.
             Vector3 toNode = hideNode - transform.position;
             toNode.y = 0f;
             if (toNode.sqrMagnitude > NpcAgent.ReachNodeArrival * NpcAgent.ReachNodeArrival)
@@ -373,8 +372,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Into the spot as the game mounts a player - a teleport, because the buddy cannot walk into
-        /// furniture - then the doors it opened are shut behind it.
+        /// Gets into the spot the way the game mounts a player, by teleport since the buddy cannot walk
+        /// into furniture. Then the doors it opened are shut behind it.
         /// </summary>
         private void EnterHidingSpot()
         {
@@ -417,8 +416,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Waits behind shut doors: a frightened hide until the Breathless has gone, an ordered one
-        /// until you say otherwise. A door opened from outside is the game's only way of finding it.
+        /// Waits behind shut doors. A frightened hide waits until the Breathless has gone, an ordered
+        /// one until you say otherwise. A door opened from outside is the game's only way of finding it.
         /// docs/fear.md §6
         /// </summary>
         private void StayHidden()
@@ -440,7 +439,7 @@ namespace YourBuddy
                 return;
             }
             float inside = Time.time - hiddenSince;
-            // Hidden it cannot see out, but it can hear: the distance needs no sight line.
+            // Hidden, it cannot see out but it can hear, so the distance needs no sight line.
             // docs/invariants.md#a-hidden-buddy-waits-out-a-monster-it-can-hear
             bool monsterNear = monsterDist <= HideMonsterNearDist;
 
@@ -464,7 +463,7 @@ namespace YourBuddy
 
             if (monsterNear && inside < HideMaxSeconds)
             {
-                // docs/logging.md §4: a wait that can last must say so.
+                // A wait that can last must say so. docs/logging.md §4
                 if (Time.time < hideWaitLogAt) return;
 
                 hideWaitLogAt = Time.time + HideWaitLogSeconds;
@@ -530,8 +529,8 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Back to the floor point it came from, the doors it opened shut behind it, and the flee - or the
-        /// decider - takes over again.
+        /// Back to the floor point it came from, shutting the doors it opened behind it. Then the flee
+        /// or the decider takes over again.
         /// </summary>
         private void StepOutOfHidingSpot()
         {
@@ -546,7 +545,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Gives the buddy back: a flee retries its retreat at once, anything else decides again.
+        /// Gives the buddy back. A flee retries its retreat at once; anything else decides again.
         /// </summary>
         private void EndHide()
         {
@@ -563,7 +562,7 @@ namespace YourBuddy
             {
                 if (retry)
                 {
-                    // Cut short - found, or it never got in. The flee still needs somewhere to go.
+                    // Cut short (found, or it never got in). The flee still needs somewhere to go.
                     fleePhase = FleePhase.Retreat;
                     fleeRetryAt = 0f;
                 }
@@ -579,7 +578,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Gave up before it was inside, or the spot went away: nothing to step out of.
+        /// Gave up before it was inside, or the spot went away, so there is nothing to step out of.
         /// </summary>
         private void AbandonHide(string why)
         {
@@ -595,7 +594,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Death, parking, a despawn, a ship rebuild, fear switched off: out at once, wherever it was.
+        /// Out at once, wherever it was, on death, parking, despawn, a ship rebuild or fear switched off.
         /// docs/invariants.md#a-snack-closes-what-it-opened
         /// </summary>
         internal void ForceLeaveHidingSpot(string why)
@@ -614,14 +613,14 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// buddy_order hide, and the dialog's "hide": in now, whatever the fear, and it stays until the
-        /// Breathless is not about or you give it another order. docs/fear.md §6
+        /// buddy_order hide and the dialog's "hide". In now, whatever the fear, and it stays until the
+        /// Breathless is gone or you give it another order. docs/fear.md §6
         /// </summary>
         internal string StartHideNow()
         {
             if (Hiding) return Name + " is already hiding in " + hideName;
 
-            // Hiding is the one thing you ask for under pressure: it takes the buddy off a chore.
+            // Hiding is what you ask for under pressure, so it takes the buddy off a chore.
             // docs/invariants.md#a-command-outranks-an-errand
             string? busy = BusyForCommand(true, true);
             if (busy != null) return busy;
@@ -637,22 +636,22 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The closet ambush: in, out of your sight, to wait for you. Null once the walk there started.
+        /// The closet ambush. It gets in out of your sight to wait for you. Null once the walk there started.
         /// docs/anomalies.md#closetambush
         /// </summary>
         private string? StartAmbushHide()
         {
             if (!TryStartHide(false, out string report)) return report;
 
-            // BeginHide took it for an ordered hide: this one ends on its own.
+            // BeginHide took it for an ordered hide, but this one ends on its own.
             hideOrdered = false;
             hideAmbush = true;
             return null;
         }
 
         /// <summary>
-        /// Hidden for the ambush: out at you with a shriek once you come near. Nobody near within
-        /// AmbushMaxSeconds: it gives up and leaves without a jump.
+        /// Hidden for the ambush, it jumps out at you with a shriek once you come near. If nobody
+        /// comes within AmbushMaxSeconds, it leaves without a jump.
         /// </summary>
         private void WaitToJumpOut(float inside)
         {
@@ -681,7 +680,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Doors open and out at once - no pause to open them - with a shriek.
+        /// Doors open and out at once with a shriek, with no pause to open them.
         /// </summary>
         private void JumpOut(string why)
         {

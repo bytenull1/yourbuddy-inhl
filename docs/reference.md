@@ -230,6 +230,8 @@ See [anomalies.md §1](anomalies.md#1-how-often-and-how-far).
 | `BloodyUnseenSeconds` | 5 s | it goes only once you have not seen the buddy this long |
 | `BloodyRunRetrySeconds` | 6 s | its time up and still seen, it tries to run out of your sight this often |
 | `BehindYouDist` | 1.2 m | how far behind you it stands |
+| `StalkerSounds` | 3 | the most sounds a stalker makes at your back |
+| `NoisesGapMin` / `NoisesGapMax` | 1.5 / 3 s | silence between Noises' sounds, after each has ended |
 | `DoorPassDist` | 1.6 m | how far past a doorway it walks before the door is shut behind it |
 | `DoorLegSeconds` / `DoorWaitSeconds` | 25 / 4 s | a walk through one door gives up; past it, the most it waits for the door to shut |
 | `MaxDoors` | 6 | doors in one round |
@@ -249,6 +251,7 @@ See [anomalies.md §1](anomalies.md#1-how-often-and-how-far).
 | `CaughtWaitSeconds` | 480 s | how long it waits for you |
 | `CaughtNearDist` | 3 m | you this near give it away, door shut or not |
 | `CaughtEnterDist` | 3 m | on the room's side and this near the doorway, you are in: it runs |
+| `CaughtStareSeconds` | 3 s | watched this long when caught, it runs even if you do not step in |
 | `CaughtTurnSeconds` / `CaughtCorneredSeconds` / `CaughtGoneUnseenSeconds` | 0.6 / 120 / 1 s | the least it stares at you; the most it stares or waits cornered; unseen this long (after you saw it), it is gone |
 | `CaughtRunMin` / `CaughtRunGain` | 2 / 1 m | its run inside the room; else 1 / 0 m |
 | `PipeMinDist` / `PipeMaxDist` | 5 / 30 m | Pipe: you this far when it starts ([anomalies.md](anomalies.md#pipe)) |
@@ -277,6 +280,15 @@ See [anomalies.md §1](anomalies.md#1-how-often-and-how-far).
 | `SoundCapSeconds` | 2.5 s | a creature or shriek sound is faded out after this |
 | `BlipGapMin` / `BlipGapMax` | 0.07 / 0.12 s | between the voice blips of a spoken line |
 | `BlipHeight` | 1.5 m | where they play, above the speaker's origin |
+| `RecentCount` | 2 | a category's last picks, not picked again yet |
+
+### The mod's clips - `ModSounds.cs`
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `MinDistance` / `MaxDistance` | 1.5 / 20 m | full volume within, silent past |
+| `Volume` | 0.85 | every clip's volume, under the sfx bus |
+| `MuffledCutoff` / `MuffledVolume` | 600 Hz / 0.6 | a clip behind a wall: low-pass cutoff, and volume over `Volume` |
 
 ### Being seen - `PlayerView.cs`
 

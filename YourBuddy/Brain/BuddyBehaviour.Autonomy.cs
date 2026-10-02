@@ -8,8 +8,8 @@ using UnityEngine;
 namespace YourBuddy
 {
     /// <summary>
-    /// Orders and independent decisions: what the player told the buddy, kept apart from
-    /// what it is doing, and the decider that acts when no order holds. docs/behaviour.md
+    /// Orders and independent decisions. What the player told the buddy is kept apart from what
+    /// it is doing, and the decider acts when no order holds. docs/behaviour.md
     /// </summary>
     public sealed partial class BuddyBehaviour
     {
@@ -32,9 +32,7 @@ namespace YourBuddy
         private const float WanderBoutMin = 40f;
         private const float WanderBoutMax = 90f;
 
-        // ------------------------------------------------------------------
-        // Orders - given only through BuddyCommands
-        // ------------------------------------------------------------------
+        // Orders, given only through BuddyCommands
 
         /// <summary>
         /// Records an order and carries it out, or keeps it for when a flee is over.
@@ -60,7 +58,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// A goto order: the plan to walk now, and the goal to plan for again after a flee.
+        /// A goto order, with the plan to walk now and the goal to plan for again after a flee.
         /// </summary>
         public bool ApplyRouteOrder(NavPath plan, Vector3 goal)
         {
@@ -83,7 +81,7 @@ namespace YourBuddy
 
         /// <summary>
         /// A hide the player asked for ends when they ask for something else. A hide a flee started
-        /// does not: docs/invariants.md#fear-owns-the-buddy
+        /// does not. docs/invariants.md#fear-owns-the-buddy
         /// </summary>
         private void LeaveAnOrderedHide(string order)
         {
@@ -91,11 +89,11 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// "Decide for yourself": no order in force, and a decision at the next chance.
+        /// "Decide for yourself" clears the order and decides at the next chance.
         /// </summary>
         public void RevokeOrder()
         {
-            // An ordered hide waits for an order, and this is one: nothing else would ever end it.
+            // An ordered hide waits for an order, and this is one. Nothing else would ever end it.
             LeaveAnOrderedHide("decide for myself");
             EndAnomalyForOrder("decide for myself");
             if (orderedMode.HasValue)
@@ -131,7 +129,7 @@ namespace YourBuddy
         private static float OrderExpiry => Mathf.Max(5f, YourBuddyPlugin.ConfigOrderExpirySeconds.Value);
 
         /// <summary>
-        /// The player never said "route": they said goto.
+        /// The player never said "route", they said goto.
         /// </summary>
         private static string OrderName(BuddyMode order) => order == BuddyMode.Route ? "Goto" : order.ToString();
 
@@ -153,9 +151,7 @@ namespace YourBuddy
             return order + ", " + Mathf.Max(0f, OrderExpiry - (Time.time - orderedAt)).ToString("0") + "s left";
         }
 
-        // ------------------------------------------------------------------
         // The decider
-        // ------------------------------------------------------------------
 
         /// <summary>
         /// Phase 3 of SlowUpdate, throttled to DecideInterval. docs/behaviour.md
@@ -167,7 +163,7 @@ namespace YourBuddy
             if (!YourBuddyPlugin.ConfigAutonomy.Value) return;
 
             ExpireOrder();
-            // Deadly air outranks an anomaly as it does an order: docs/invariants.md#survival-outranks-an-order
+            // Deadly air outranks an anomaly as it does an order. docs/invariants.md#survival-outranks-an-order
             if (anomaly.HasValue && !vanished && !AnomalyInBackground && lifeSupport.AirIsDangerous()) EndAnomaly("the air is dangerous");
             if (TrySaveOwnLife()) return;
             if (Time.time < decideAt) return;
@@ -175,7 +171,7 @@ namespace YourBuddy
             decideAt = Time.time + DecideInterval;
 
             string? standDown = StandDownReason(player);
-            // Deadly air outranks an order: docs/invariants.md#survival-outranks-an-order
+            // Deadly air outranks an order. docs/invariants.md#survival-outranks-an-order
             if (standDown != null && OrderInForce && StandDownReason(player, ignoreOrder: true) == null &&
                 TrySurvival())
             {
@@ -219,7 +215,7 @@ namespace YourBuddy
 
             if (Hiding) return hideState + " " + hideName;
 
-            // Blood is a look: it goes about its day with it, until it runs off to be clean. docs/anomalies.md#bloody
+            // Blood is only a look. It goes about its day with it until it runs off to get clean. docs/anomalies.md#bloody
             if (anomaly.HasValue && (!AnomalyInBackground || (anomaly == AnomalyKind.Bloody && anomalyStep > 0)))
             {
                 return "acting out " + Anomalies.Info(anomaly.Value).Name;
@@ -228,8 +224,8 @@ namespace YourBuddy
             if (fearState != FearState.Calm || mode == BuddyMode.Flee) return "fear is " + fearState;
 
             if (mode == BuddyMode.Route) return DescribeReachTask() is { } task ? task : "walking a route";
-            // Follow already waits inside for a spacewalk; there is nothing to choose. Outside
-            // itself, it still chooses between following and wandering: ScoreUrges.
+            // Follow already waits inside for a spacewalk, so there is nothing to choose. Once
+            // outside, ScoreUrges still chooses between following and wandering.
             if (!agent.IsOutside && NpcAgent.IsPlayerInSpace(player)) return "the player is outside";
 
             return null;
@@ -238,10 +234,10 @@ namespace YourBuddy
         private float lifeCheckAt;
 
         /// <summary>
-        /// The air is killing the buddy now (NpcAgent.LifeInDanger): drop whatever it is doing - an
-        /// order, an errand, the walk to a terminal, whose air would come back too slowly - and put a
-        /// spare suit on. Checked every second, not every DecideInterval: the death counter runs out
-        /// in about six ticks. docs/invariants.md#survival-outranks-an-order
+        /// The air is killing the buddy now (NpcAgent.LifeInDanger). Drop any order, errand or terminal
+        /// walk (the air would come back too slowly) and put a spare suit on. Checked every second, not
+        /// every DecideInterval, since the death counter runs out in about six ticks.
+        /// docs/invariants.md#survival-outranks-an-order
         /// </summary>
         private bool TrySaveOwnLife()
         {
@@ -264,16 +260,16 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// Under an order, the air aboard turning deadly: switch a terminal on, or when none can be
-        /// tried, put a spare suit on - the same two urges the decider weighs first. The order
-        /// resumes when the task ends (ModeAfterTask). True when one started.
+        /// The air aboard turned deadly during an order. Switch a terminal on, or put a spare suit on
+        /// when none can be tried; these are the two urges the decider weighs first. The order resumes
+        /// when the task ends (ModeAfterTask). True when one started.
         /// </summary>
         private bool TrySurvival()
         {
             if (!lifeSupport.AirIsDangerous()) return false;
 
             string order = OrderName(orderedMode.GetValueOrDefault());
-            // Already dying: only the suit is fast enough (TrySaveOwnLife runs first).
+            // Already dying, so only the suit is fast enough (TrySaveOwnLife runs first).
             if (!agent.LifeInDanger && lifeSupport.TryStart())
             {
                 YourBuddyPlugin.Log.LogInfo("[mind] The air aboard is dangerous - fixing it before order '" + order + "'");
@@ -314,7 +310,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// For the HUD and buddy_dev mind: why the decider waits, or the bout it is timing and when it looks next.
+        /// Why the decider waits, or the bout it is timing and when it looks next. For the HUD and buddy_dev mind.
         /// </summary>
         private string DescribeMind()
         {
@@ -349,10 +345,10 @@ namespace YourBuddy
             "\nAnomalies: " + AnomalyDirector.Describe();
 
         /// <summary>
-        /// The HUD's Mind and Why lines, without repeating what the Mode and Orders lines already say:
-        /// a stand-down for the task in Mode's brackets or for the order in force is left out, and the
-        /// Why line (the scored urges) is left out while the decider is standing down, since it would
-        /// only copy the reason. Null when there is nothing to add.
+        /// The HUD's Mind and Why lines, minus what the Mode and Orders lines already say. A stand-down
+        /// for the task in Mode's brackets or for the order in force is left out. So is the Why line
+        /// while the decider stands down, since it would only copy the reason. Null when there is
+        /// nothing to add.
         /// </summary>
         private string? DescribeHudMind()
         {
@@ -368,7 +364,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// buddy_dev bout: the bout being timed is over now, so the decider's next look switches Follow and Wander.
+        /// buddy_dev bout. Ends the timed bout now, so the decider's next look switches Follow and Wander.
         /// </summary>
         internal string EndBoutNow()
         {
@@ -407,9 +403,9 @@ namespace YourBuddy
         /// <summary>
         /// Why a command cannot start a task now, or null. `whileAlert` is for hiding, the one thing
         /// worth asking for with the Breathless about; a flee still owns the buddy either way.
-        /// `preemptErrand` lets a command take the buddy off a job it is already doing -
-        /// docs/invariants.md#a-command-outranks-an-errand. Outside, only the airlock orders
-        /// (`outsideOk`) run: every job is inside. docs/eva.md
+        /// `preemptErrand` lets a command take the buddy off a job it is already doing
+        /// (docs/invariants.md#a-command-outranks-an-errand). Outside only the airlock orders
+        /// (`outsideOk`) run, since every job is inside. docs/eva.md
         /// </summary>
         private string? BusyForCommand(bool whileAlert = false, bool preemptErrand = false, bool outsideOk = false)
         {
@@ -436,7 +432,7 @@ namespace YourBuddy
 
             if (reachTask != null && !preemptErrand) return Name + " is busy " + DescribeReachTask();
 
-            // A goto is a standing order of yours, not something the buddy chose: it is not an errand.
+            // A goto is the player's standing order, not the buddy's choice, so it is not an errand.
             return GotoUnderway ? Name + " is walking to a node you sent it to" : null;
         }
     }
