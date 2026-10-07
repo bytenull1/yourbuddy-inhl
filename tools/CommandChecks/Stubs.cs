@@ -19,6 +19,10 @@ namespace YourBuddy
     public sealed partial class BuddyBehaviour
     {
         internal bool IsOutside, Floating, SuitSuited, IsDead, Asleep, Hiding;
+        internal bool storeOrder = false;
+        internal object? choreOrder = null;
+        internal string ChoreOrderStatus => "Continuing assigned work.";
+        internal string StoreOrderStatus => "Still on storage duty.";
         internal string Name = "Buddy";
         internal object Agent = new();
         internal string LastOrder = "unchanged";
@@ -60,6 +64,7 @@ namespace YourBuddy
         internal static string GoInside(BuddyBehaviour b) => Set(b, "inside");
         internal static string Unsuit(BuddyBehaviour b) => Set(b, "unsuit");
         internal static string Sell(BuddyBehaviour b) => Set(b, "sell");
+        internal static string Store(BuddyBehaviour b) => Set(b, "store");
         internal static string Tidy(BuddyBehaviour b) => Set(b, "tidy");
         internal static string Play(BuddyBehaviour b) => Set(b, "play");
         internal static string FetchSuit(BuddyBehaviour b) => Set(b, "fetch suit");

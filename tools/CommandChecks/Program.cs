@@ -17,6 +17,7 @@ foreach ((string text, string expected) in new[]
     ("turn on climate", "unchanged"), ("turn off oxygen", "unchanged"),
     ("no, sell", "unchanged"), ("not outside", "unchanged"), ("dont eat", "unchanged"),
     ("don't fetch suit", "unchanged"), ("do not turn on oxygen", "unchanged"),
+    ("store items", "store"), ("put away the food", "store"), ("organise", "store"),
     ("come and tidy", "tidy"), ("come and eat", "snack"), ("come here", "follow"),
     ("FOLLOW me!", "follow"), ("stop following", "stay"), ("stop moving", "stay"),
     ("come and hide", "hide"), ("sell trash box", "sell"), ("go to the workshop", "goto"),
@@ -77,4 +78,9 @@ Check(BuddyDialogCommands.NamesFor(buddy).First() == "Status" && !BuddyDialogCom
 buddy.Hiding = true;
 buddy.SetState(BuddyMode.Stay);
 Check(buddy.ConversationStatus.Contains("hiding", StringComparison.Ordinal), "hidden status");
+buddy.SetState(BuddyMode.Stay); buddy.IsDead = buddy.Asleep = buddy.Hiding = false;
+buddy.storeOrder = true;
+Check(buddy.ConversationStatus.Contains("storage", StringComparison.Ordinal), "waiting store order explains its actual work");
+buddy.SetState(BuddyMode.Stay, FearState.Scared);
+Check(buddy.ConversationStatus.Contains("safe", StringComparison.Ordinal), "danger outranks continuing storage status");
 Console.WriteLine($"Passed {checks} command and status checks.");

@@ -43,6 +43,7 @@ namespace YourBuddy
         {
             if (IsDead) return false;
 
+            StopStoreOrder();
             LeaveAnOrderedHide(OrderName(order));
             EndAnomalyForOrder(OrderName(order));
             orderedMode = order;
@@ -65,6 +66,7 @@ namespace YourBuddy
         {
             if (IsDead) return false;
 
+            StopStoreOrder();
             LeaveAnOrderedHide("Goto");
             EndAnomalyForOrder("Goto");
             orderedMode = BuddyMode.Route;
@@ -94,6 +96,7 @@ namespace YourBuddy
         /// </summary>
         public void RevokeOrder()
         {
+            StopStoreOrder();
             // An ordered hide waits for an order, and this is one. Nothing else would ever end it.
             LeaveAnOrderedHide("decide for myself");
             EndAnomalyForOrder("decide for myself");
@@ -112,6 +115,7 @@ namespace YourBuddy
         {
             get
             {
+                if (storeOrder || choreOrder != null) return true;
                 if (!orderedMode.HasValue) return false;
 
                 if (YourBuddyPlugin.ConfigOrderPersistence.Value == OrderPersistence.UntilRevoked) return true;
@@ -139,6 +143,8 @@ namespace YourBuddy
         /// </summary>
         private string DescribeOrders()
         {
+            if (storeOrder) return "Store items, until another order";
+            if (choreOrder != null) return choreName + ", until another order";
             bool autonomy = YourBuddyPlugin.ConfigAutonomy.Value;
             if (!orderedMode.HasValue) return autonomy ? "none - deciding for itself" : "none (autonomy off)";
 
@@ -161,9 +167,9 @@ namespace YourBuddy
         {
             if (IsDead || player == null || player.Controller == null) return;
 
-            if (!YourBuddyPlugin.ConfigAutonomy.Value) return;
+            if (!YourBuddyPlugin.ConfigAutonomy.Value && !storeOrder && choreOrder == null) return;
 
-            ExpireOrder();
+            if (!storeOrder && choreOrder == null) ExpireOrder();
             // Deadly air outranks an anomaly as it does an order. docs/invariants.md#survival-outranks-an-order
             if (anomaly.HasValue && !vanished && !AnomalyInBackground && lifeSupport.AirIsDangerous()) EndAnomaly("the air is dangerous");
             if (!suit.Suited && lifeSupport.AirIsDangerous()) resources.Cancel("the air needs attention");
@@ -171,6 +177,18 @@ namespace YourBuddy
             if (Time.time < decideAt) return;
 
             decideAt = Time.time + DecideInterval;
+
+            if (storeOrder)
+            {
+                ContinueStoreOrder(player);
+                return;
+            }
+
+            if (choreOrder != null)
+            {
+                ContinueChoreOrder(player);
+                return;
+            }
 
             string? standDown = StandDownReason(player);
             // Deadly air outranks an order. docs/invariants.md#survival-outranks-an-order
@@ -343,7 +361,7 @@ namespace YourBuddy
         internal string DescribeTimers() =>
             "Mind: " + DescribeMind() + "\nWhy: " + DescribeUrges() + "\nAir: " + lifeSupport.Describe() +
             "\nSnack: " + snacks.Describe() + "\nTidy: " + tidying.Describe() + "\nSell: " + selling.Describe() +
-            "\nPlay: " + play.Describe() + "\nFetch suit: " + suitFetch.Describe() + "\nOdd: " + DescribeAnomaly() +
+            "\nStore: " + storing.Describe() + "\nPlay: " + play.Describe() + "\nFetch suit: " + suitFetch.Describe() + "\nOdd: " + DescribeAnomaly() +
             "\nAnomalies: " + AnomalyDirector.Describe();
 
         /// <summary>

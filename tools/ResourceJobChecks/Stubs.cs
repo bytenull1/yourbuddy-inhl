@@ -82,6 +82,7 @@ public class Gate : Component { }
 public class Airlock : Component { }
 public class ItemDetector : Component { public HashSet<Grabbable> Items = []; }
 public class Room : Component { public Transform ContentParent = new(); public bool ContentEnabled = true; }
+public class CustomRoom : Room { public bool EnabledStructure = true; public string name = "room"; }
 public class Shop : Component { public Grabbable[]? Items; public Transform? Outlet; public ResourceContainer? Sells; }
 public class Player { public Wallet CashSystem = new(); public Control Controller = new(); }
 public class Wallet { public int Cash = 1000; }
@@ -250,7 +251,9 @@ namespace YourBuddy
     {
         internal static string LastBlocker = "blocked";
         internal static Vector3 Clearance(Vector3 size) => size;
-        internal static void Candidates(Vector3 p, List<Vector3> result) { }
+        internal readonly record struct Place(CustomRoom Room, Vector3 WorldPoint);
+        internal static int Layout(SpaceShip ship) => 0;
+        internal static void Candidates(SpaceShip ship, int kind, List<Place> result) { }
         internal static bool MayProbe() => true;
         internal static bool FindFloor(Vector3 p, out RaycastHit hit, bool shipOnly = true) { hit = new(); return false; }
         internal static bool Clear(Vector3 p, Vector3 half, Transform? item, bool shipOnly = true) => false;

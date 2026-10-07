@@ -15,6 +15,9 @@ namespace YourBuddy
                 }
                 if (fearState == FearState.Alert) return "Something's nearby. I'm keeping watch.";
                 if (Hiding) return "I'm hiding here.";
+                if (storeOrder && mode != BuddyMode.Route)
+                    return StoreOrderStatus;
+                if (choreOrder != null && mode != BuddyMode.Route) return ChoreOrderStatus;
                 return mode switch
                 {
                     BuddyMode.Stay => "I'll wait here. Tell me when you're ready.",

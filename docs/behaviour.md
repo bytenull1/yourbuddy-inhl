@@ -39,6 +39,14 @@ Follow waits for the player to move a little before walking again, so small step
 
 ## 2. Persistence
 
+**Store items**, **Tidy**, **Sell** and **Play** keep their assignment until another order or
+**Decide**. Completing one batch does not send Buddy back to following. Between batches he waits
+in place; unavailable work retries with the errand's backoff instead of repeatedly grabbing a failed
+item. These explicit duties work with autonomy off. Fear, dialogue and survival can pause them. Navigation deferrals also hold off repeat batches.
+World interruptions end the current errand leg and release its item/door ownership; the duty can
+resume after the interruption.
+Snack and equipment requests remain single tasks. Continuing assignments are not saved.
+
 | `OrderPersistence` | An order holds | Default |
 |---|---|---|
 | `UntilRevoked` | until another order, or "decide for yourself" | **yes** |
@@ -99,6 +107,7 @@ Any factor at zero vetoes; anything under `UrgeFloor` is not worth doing.
 | `Sell` | 0.75 | `0.4 + 0.2 ×` boxes | nearest box | since last look / `SellCheckInterval` |
 | `Resources` | 0.70 | an enabled refill or restock is due | ship loader | resource interval |
 | `Tidy` | 0.65 | `0.5 + 0.25 ×` (pieces − 1) | nearest piece | since last round / `TidyIntervalMinutes` |
+| `Store` | 0.60 | 1 | nearest loose ship item | storing interval |
 | `Snack` | 0.55 | 1 | nearest food | since last snack / `SnackIntervalMinutes` |
 | `SuitFetch` | 0.50 | 1 | nearest suit left on the station ([eva.md §6](eva.md#6-bringing-a-forgotten-suit-home)) | since last look / 120 s |
 | `Play` | 0.35 | 1 | nearest plaything | since last session / `ItemPlayIntervalMinutes` |

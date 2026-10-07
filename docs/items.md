@@ -77,15 +77,18 @@ From the decider, as the `Tidy` urge; the amount of trash nearby raises its scor
      one piece per container. Room built, not a hiding spot you are in;
    - **loose**: in no container zone and no `ItemDetector` zone.
 
-   It needs a trash can within `TidyBinRadius` with a reach node. At most three plans; a failed item
-   or container is skipped for 10 minutes.
+   Bins must be active, unclaimed and on the same vessel, within `TidyBinRadius` of the item.
+   They are tried nearest first, with a complete route check before selecting one. At most
+   `TidyMaxBinPlans` bin routes and `TidyMaxPlans` item routes are searched per selection;
+   unreachable bins, failed items and containers are skipped for 10 minutes. Both legs claim
+   the item and the selected bin so another buddy cannot start the same job.
 4. **Leg one**, up close like a snack (stand points 0.55–0.85 m, reach 0.9 m). **Loose:** 0.5 s,
    `PickUp`; an item moved over 0.5 m, taken or gone ends the walk. **In a container:** open its
    doors, 1.5 s, check the item is still inside, `PickUp`, close the doors it opened at once
    ([a-snack-closes-what-it-opened](invariants.md#a-snack-closes-what-it-opened)).
 5. **Leg two**, holding it, to the trash can's slot: a second `TidyTask` replaces the first directly
-   (not via `FinishRoute`, which would put the item down). A failed plan puts it down and skips that
-   can.
+   (not via `FinishRoute`, which would put the item down). The bin and its route are checked
+   again immediately before pickup. A failed route leaves the trash untouched and skips that can.
 6. **Into the slot.** Face the can, 0.4 s, then the held item reaches to the slot centre
    (`ReachTo`). The can deactivating it is the success signal. Still active after 1.5 s: try
    once more, then give up and skip that can.
@@ -94,7 +97,7 @@ From the decider, as the `Tidy` urge; the amount of trash nearby raises its scor
 the trigger while holding the item, as the player does, needs no release inside the can.
 
 A flee ends tidying like a snack; the item is put down. `buddy_order tidy` and the dialog's **Tidy** start
-a round now, skipping schedule, setting and order.
+continuing tidying duty, repeating rounds until another order ([persistence](behaviour.md#2-persistence)).
 
 ---
 
@@ -201,7 +204,7 @@ the agent's `EmergencyUnstick` (`[ai] Penned in a sell station's fences … - cl
 pen. The fence colliders are never touched.
 
 A flee or order ends the run: a box in hand is put down, loaded boxes stay. `buddy_order sell` and the
-dialog's **Sell** start a run now, skipping schedule, setting and order.
+dialog's **Sell** start continuing selling duty ([persistence](behaviour.md#2-persistence)).
 
 ---
 
@@ -239,7 +242,8 @@ offer.
 5. The walk to the item is tidying's leg one.
 
 A flee, order or save puts a held item down (§2). Nothing is ever thrown at the Breathless or the
-player. `buddy_order play` and the dialog's **Play** start a session now.
+player. `buddy_order play` and the dialog's **Play** repeat sessions until another order
+([persistence](behaviour.md#2-persistence)).
 
 ---
 

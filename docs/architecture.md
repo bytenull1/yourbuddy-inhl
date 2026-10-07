@@ -46,6 +46,7 @@ the buddy through a few `internal` members, never its fields.
 | `AnomalyProps.cs`, `BbModel.cs` | the meat and blood an anomaly leaves, never saved; a Blockbench model read from the dll | `GameInternals`, Newtonsoft | [anomalies](anomalies.md#the-mess-and-the-meat-model) |
 | `PlayerView.cs`, `ScareSounds.cs`, `BuddyGore.cs` | what the player sees; the game's FMOD events borrowed; the bloody texture and the flickers' overlays | `NavProbe`, `GameInternals`, `BuddySkin` | [anomalies](anomalies.md#4-being-seen) |
 | `BuddyBehaviour.Autonomy.cs` | orders (`ApplyOrder`, `ApplyRouteOrder`, `RevokeOrder`), persistence, expiry, stand-down, bouts | `NavGraph` | [behaviour](behaviour.md) |
+| `BuddyBehaviour.ChoreOrder.cs` | continuing Tidy, Sell and Play assignments between individual errand batches | `Errand` | [behaviour](behaviour.md#2-persistence) |
 | `BuddyBehaviour.Mind.cs` | the utility decider: scores urges, draws one, starts its errand | `Errand`, `LifeSupport` | [behaviour](behaviour.md#3-the-decider) |
 | `BuddyBehaviour.Errands.cs` | owns the errands; implements `IErrandBody`, their only way into the buddy | every errand | [behaviour](behaviour.md) |
 | `ErrandLeg.cs` | `ErrandLeg`, NPC.Core's `ReachTask` as the current Route's reason: `Approach`, `End`, `Describe`, `EndsOnFlee`, `Holds` | `ReachTask` | [terminals](terminals.md) |
@@ -63,6 +64,7 @@ the buddy through a few `internal` members, never its fields.
 | `GameInternals.cs` | **every** reflection accessor YourBuddy needs into game types (NPC.Core has its own) | - | [game-model](game-model.md) |
 | `BuddyConversation.cs` | the buddy's side of NPC.Core's talk window: when it can talk, its title, commands and answers | `BuddyDialogCommands`, `BuddyManager` | [dialog](dialog.md) |
 | `BuddyBehaviour.Conversation.cs` | player-facing status for greetings and the Status command | `BuddyConversation`, `BuddyDialogCommands` | [dialog](dialog.md) |
+| `StoreErrand.cs`, `FurnitureStorage.cs`, `StorageOverflow.cs`, `StoragePolicy.cs`, `StorageItems.cs`, `StorageShape.cs`, `StorageAccess.cs` | sorting ship items into category homes or bounded floor overflow, reserving space and checking physical placement | `Errand`, `GameInternals.StorageZoneAccess` | [storing](storing.md) |
 | `BuddyDialogCommands.cs` | keyword-matching typed text to an order, for one buddy or everyone | `BuddyCommands`, `BuddyRooms` | [dialog](dialog.md) |
 | `BuddyRooms.cs` | the buddy's words for NPC.Core's `StationRooms` (the docked station's rooms by name) | `StationRooms` | [dialog](dialog.md#goto-by-room) |
 | `BuddyCommands.cs` | the orders, shared by dialog and console, each for the buddy the caller chose; the only caller of `ApplyOrder` / `ApplyRouteOrder` / `RevokeOrder` | `BuddyBehaviour`, `NavGraph` | [behaviour](behaviour.md) |
@@ -78,15 +80,15 @@ YourBuddy patches nothing: every game hook it needs is NPC.Core's
 ## 2. Dependency direction
 
 ```
-NPC.Core (NpcEvents, NpcAgent) ──▶ BuddyManager, BuddyBehaviour (INpcBrain, INpcHider),
+NPC.Core (NpcEvents, NpcAgent) â”€â”€â–¶ BuddyManager, BuddyBehaviour (INpcBrain, INpcHider),
                                    BuddyConversation, the '.buddy' callback
-BuddyManager ──▶ BuddyBehaviour.* ──▶ NpcAgent and the rest of NPC.Core (NavGraph, NavProbe, NpcRegistry, World)
-      │                  │
-      └──────────────────┴──▶ GameInternals
+BuddyManager â”€â”€â–¶ BuddyBehaviour.* â”€â”€â–¶ NpcAgent and the rest of NPC.Core (NavGraph, NavProbe, NpcRegistry, World)
+      â”‚                  â”‚
+      â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â–¶ GameInternals
 
-BuddyBehaviour.Mind ──▶ Errand / LifeSupport ──▶ IErrandBody ◀── BuddyBehaviour.Errands
-                                  │
-                                  └──▶ Items, SellPens, NpcHands, SkipList
+BuddyBehaviour.Mind â”€â”€â–¶ Errand / LifeSupport â”€â”€â–¶ IErrandBody â—€â”€â”€ BuddyBehaviour.Errands
+                                  â”‚
+                                  â””â”€â”€â–¶ Items, SellPens, NpcHands, SkipList
 ```
 
 Errands never see `BuddyBehaviour` or the agent: everything they may do to the buddy is a member of
@@ -111,7 +113,7 @@ The buddy's answers:
 |---|---|
 | `SlowPhase` | 0: loads every room holding a sell station while `SellTrash` is on; 2: `UpdateFear`; 3: the decider (`UpdateAutonomy`) and `LifeSupport.Update` |
 | `OverrideMovement` | in the talk window: hold still facing you; an anomaly that holds the body (`AnomalyHoldsBody`); hiding, but not on the walk there: `UpdateHide` |
-| `Steer` | the walk to a hiding spot or an anomaly's walk (`WalkAnomalyLeg`: to a window, a wall, through a door), else the mode: Follow → `UpdateFollow` (`Pursue`), Wander → `Wander` on `wanderOwner`, avoiding nodes near the monster while not Calm, Route → `UpdateRoute`, Stay → `Stay`, Flee → `UpdateFlee` |
+| `Steer` | the walk to a hiding spot or an anomaly's walk (`WalkAnomalyLeg`: to a window, a wall, through a door), else the mode: Follow â†’ `UpdateFollow` (`Pursue`), Wander â†’ `Wander` on `wanderOwner`, avoiding nodes near the monster while not Calm, Route â†’ `UpdateRoute`, Stay â†’ `Stay`, Flee â†’ `UpdateFlee` |
 | `Constrain` | `HoldBackFromMonster` |
 | `Activity` | per mode: [behaviour.md §4](behaviour.md#4-every-place-that-reads-mode-outside-the-dispatch-switch) |
 | `TryIdleFacing` | the monster above Calm, else where an anomaly looks (`AnomalyFaces`), else you in Follow |
@@ -168,7 +170,7 @@ The nav graph is NPC.Core's, in `BepInEx/config/NPC.Core/`
 
 NPC.Core deletes sidecars with their save and sweeps orphans
 ([one-sidecar-per-mod](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#one-sidecar-per-mod)). A load reaches the buddy as
-`NpcEvents.SaveLoaded` → `ArmPendingSpawn`; `Tick` restores the buddies once the scene is ready.
+`NpcEvents.SaveLoaded` â†’ `ArmPendingSpawn`; `Tick` restores the buddies once the scene is ready.
 
 ---
 
@@ -240,3 +242,8 @@ gravity ([eva.md §7](eva.md#7-floating)).
 | a new entry point into buddy code (a Unity message, an event, a command) | wrap it in `NpcRegistry.Acting(buddy.Agent)`, or its lines lose the buddy's name ([logging.md §4](logging.md#4-rules-for-adding-logs)) |
 | a game hook | NPC.Core's `NpcEvents` or an optional interface ([one-patch-per-game-hook](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#one-patch-per-game-hook)) |
 | where the player's floor height comes from | only the agent's `FloorUnderPlayer`, through `OnPlayersDeck` ([follow-arrival-is-level-aware](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#follow-arrival-is-level-aware)) |
+
+Continuing player storage orders live in `BuddyBehaviour.StorageOrder.cs`; physical jobs remain in `StoreErrand`.
+
+`StorageRepackPlan` bounds staging/refill order; `StoreErrand.Repacking` validates and schedules
+those moves through the existing storage state machine.

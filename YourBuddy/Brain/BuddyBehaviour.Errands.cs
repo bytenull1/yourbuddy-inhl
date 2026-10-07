@@ -15,6 +15,7 @@ namespace YourBuddy
         private LifeSupport lifeSupport = null!;
         private BuddySuit suit = null!; // Awake; the agent's settings read it only from the slow phases on
         private SnackErrand snacks = null!;
+        private StoreErrand storing = null!; // Initialized in Awake before the decider runs.
         private TidyErrand tidying = null!;
         private SellErrand selling = null!;
         private PlayErrand play = null!;
@@ -31,6 +32,7 @@ namespace YourBuddy
             suit = new BuddySuit(this, lifeSupport);
             snacks = new SnackErrand(this);
             tidying = new TidyErrand(this);
+            storing = new StoreErrand(this);
             selling = new SellErrand(this);
             play = new PlayErrand(this);
             suitFetch = new SuitFetchErrand(this, suit);
@@ -38,9 +40,9 @@ namespace YourBuddy
 
         // Console and dialog commands. docs/behaviour.md
         internal string StartSnackNow() => snacks.StartNow("No snack: ");
-        internal string StartTidyNow() => tidying.StartNow("No tidying: ");
-        internal string StartSellNow() => selling.StartNow("No selling: ");
-        internal string StartPlayNow() => play.StartNow("No play: ");
+        internal string StartTidyNow() => StartChoreOrder(tidying, "tidying");
+        internal string StartSellNow() => StartChoreOrder(selling, "selling");
+        internal string StartPlayNow() => StartChoreOrder(play, "playing");
         internal string StartSuitFetchNow() => suitFetch.StartNow("No suit fetch: ");
         internal string StartTerminalNow(string which) => lifeSupport.StartNow(which);
         internal string StartOutsideNow() => suit.StartOutsideNow();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -49,6 +49,7 @@ namespace YourBuddy
         public static ConfigEntry<bool> ConfigSuitFetch;
         public static ConfigEntry<bool> ConfigSnacks;
         public static ConfigEntry<float> ConfigSnackIntervalMinutes;
+        public static ConfigEntry<bool> ConfigStoring;
         public static ConfigEntry<bool> ConfigTidying;
         public static ConfigEntry<float> ConfigTidyIntervalMinutes;
         public static ConfigEntry<bool> ConfigSellTrash;
@@ -125,6 +126,9 @@ namespace YourBuddy
                 "13 tracks how often the player themselves needs to eat: satiety drains 1/tick (~1.02s) and the game's " +
                 "own Hunger buff starts at 250, so from a full stomach (the ~1000 a player can actually eat up to) " +
                 "that is about 12-13 minutes.");
+            ConfigStoring = Config.Bind("General", "Storing", true,
+                "Put away loose items and sort misplaced storage contents aboard while deciding for itself. " +
+                "Leaves correctly stored items and machine contents alone; uses checked floor overflow when needed. The Store items order continues until replaced by another order.");
             ConfigTidying = Config.Bind("General", "Tidying", true,
                 "Now and then the buddy picks up a piece of trash (an empty wrapper or can, never anything still useful) " +
                 "lying about or from a fridge, cabinet, chest or locker it closes again, and carries it to a trash can within 25m. Only while it decides " +
@@ -176,6 +180,7 @@ namespace YourBuddy
                 "themselves ('buddy_anomaly' still works).");
 
             Logger.LogInfo("[mod] Initializing...");
+            Logger.LogInfo($"[store-detail] diagnostics v1 build={typeof(YourBuddyPlugin).Module.ModuleVersionId}");
             GameInternals.ResolveAll();
 
             // The game's moments and shared services come from NPC.Core, patched once for every NPC mod.

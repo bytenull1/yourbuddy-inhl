@@ -62,6 +62,7 @@ namespace YourBuddy
                 ["wander"] = Order("wander about", BuddyCommands.Wander),
                 ["stay"] = Order("hold its place until told otherwise", BuddyCommands.Stay),
                 ["snack"] = Order("eat or drink something nearby now", BuddyCommands.Snack),
+                ["store"] = Order("put a loose item aboard into storage", BuddyCommands.Store),
                 ["tidy"] = Order("clear the rubbish nearby into a trash can", BuddyCommands.Tidy),
                 ["sell"] = Order("sell the trash boxes nearby at a sell station", BuddyCommands.Sell),
                 ["play"] = Order("play with something loose", BuddyCommands.Play),

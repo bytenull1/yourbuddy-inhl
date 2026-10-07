@@ -151,32 +151,40 @@ namespace YourBuddy
         /// <summary>
         /// A snack now, for testing. Skips the schedule and the Snacks setting. docs/snacks.md
         /// </summary>
-        public static string Snack(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartSnackNow();
+        private static string OtherOrder(BuddyBehaviour buddy, Func<string> run)
+        {
+            if (Dead(buddy) is { } dead) return dead;
+            buddy.StopStoreOrder();
+            return run();
+        }
+
+        public static string Snack(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartSnackNow);
 
         /// <summary>
         /// Tidying now, for testing. Skips the schedule and the Tidying setting. docs/items.md §3
         /// </summary>
-        public static string Tidy(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartTidyNow();
+        public static string Store(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartStoreNow();
+        public static string Tidy(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartTidyNow);
 
         /// <summary>
         /// Selling a trash box now, for testing. Skips the schedule and the SellTrash setting. docs/items.md §4
         /// </summary>
-        public static string Sell(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartSellNow();
+        public static string Sell(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartSellNow);
 
         /// <summary>
         /// Idle play with loose trash now, for testing. Skips the schedule and the ItemPlay setting. docs/items.md §5
         /// </summary>
-        public static string Play(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartPlayNow();
+        public static string Play(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartPlayNow);
 
         /// <summary>
         /// Fetching a suit left on the docked station now, for testing. Skips the schedule and the SuitFetch setting. docs/eva.md#6-bringing-a-forgotten-suit-home
         /// </summary>
-        public static string FetchSuit(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartSuitFetchNow();
+        public static string FetchSuit(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartSuitFetchNow);
 
         /// <summary>
         /// Hiding in a closet now, for testing. Skips the fear and the HideInClosets setting. docs/fear.md §6
         /// </summary>
-        public static string Hide(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartHideNow();
+        public static string Hide(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartHideNow);
 
         /// <summary>
         /// An anomaly now, ignoring the chance, the difficulty and the quiet after the last one. docs/anomalies.md
@@ -194,6 +202,7 @@ namespace YourBuddy
             }
             if (Anomalies.Parse(kindName) is not { } kind) return "No anomaly '" + kindName + "' - 'buddy_anomaly list' names them";
 
+            buddy.StopStoreOrder();
             string? blocker = buddy.TryStartAnomaly(kind);
             return blocker == null ? buddy.Name + ": " + Anomalies.Info(kind).Name : "Not now: " + blocker;
         }
@@ -207,33 +216,33 @@ namespace YourBuddy
         /// The EVA order. Suit up if a spare is free, then wait in the docked station's exit
         /// airlock for the player to cycle it. docs/eva.md
         /// </summary>
-        public static string GoOutside(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartOutsideNow();
+        public static string GoOutside(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartOutsideNow);
 
         /// <summary>
         /// The way back in. From outside, into an airlock's chamber to wait for the player's cycle,
         /// then inside. docs/eva.md
         /// </summary>
-        public static string GoInside(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.StartInsideNow();
+        public static string GoInside(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.StartInsideNow);
 
         /// <summary>
         /// `buddy_order suit on|off` wears a spare suit now or takes the worn one off. docs/eva.md
         /// </summary>
-        public static string Suit(BuddyBehaviour buddy, string onOff) => Dead(buddy) ?? buddy.SuitNow(onOff);
+        public static string Suit(BuddyBehaviour buddy, string onOff) => OtherOrder(buddy, () => buddy.SuitNow(onOff));
 
         /// <summary>
         /// Takes the worn suit off, whatever the air and wherever the buddy stands. docs/eva.md
         /// </summary>
-        public static string Unsuit(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.UnsuitNow();
+        public static string Unsuit(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.UnsuitNow);
 
         /// <summary>
         /// Ends the follow or wander bout now, for testing the switch. docs/behaviour.md §3
         /// </summary>
-        public static string EndBout(BuddyBehaviour buddy) => Dead(buddy) ?? buddy.EndBoutNow();
+        public static string EndBout(BuddyBehaviour buddy) => OtherOrder(buddy, buddy.EndBoutNow);
 
         /// <summary>
         /// Switches the oxygen generator or climate control on now, whatever the air. docs/terminals.md
         /// </summary>
-        public static string Terminal(BuddyBehaviour buddy, string which) => Dead(buddy) ?? buddy.StartTerminalNow(which);
+        public static string Terminal(BuddyBehaviour buddy, string which) => OtherOrder(buddy, () => buddy.StartTerminalNow(which));
 
         /// <summary>
         /// Teaches every NPC a door code. It is used only on a panel whose own code

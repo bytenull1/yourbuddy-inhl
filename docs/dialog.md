@@ -65,6 +65,7 @@ order. "Stop following" and "stop moving" mean Stay. Requests containing "don't"
 | inside / come in / back in | `buddy_order inside` | from outside, walk into an airlock's chamber and wait for your cycle ([eva.md §4](eva.md#4-through-the-airlock)); before the outside order |
 | outside / eva / space walk | `buddy_order outside` | suit up if a spare is free, then wait in an airlock (a station's, or the ship's own while undocked) for your cycle ([eva.md §4](eva.md#4-through-the-airlock)); before the room goto |
 | fetch suit / bring back the suit | `buddy_order fetchsuit` | retrieve an available suit from the docked station ([eva.md](eva.md#6-bringing-a-forgotten-suit-home)) |
+| store items / put away / organise / organize | `buddy_order store` | put a loose ship item into furniture storage ([storing.md](storing.md)); before hide and food words |
 | hide / closet / locker / conceal | `buddy_order hide` | hide and stay until the next order ([fear.md §6](fear.md#6-hiding-in-a-closet-or-locker)) |
 | follow / come | `buddy_order follow` | `ApplyOrder(Follow)` |
 | wander / job | `buddy_order wander` | `ApplyOrder(Wander)` |
@@ -80,7 +81,7 @@ order. "Stop following" and "stop moving" mean Stay. Requests containing "don't"
 ([an-order-is-not-a-mode](invariants.md#an-order-is-not-a-mode)). Given during a flee, an order waits
 until the flee ends, and the reply says so ([fear-owns-the-buddy](invariants.md#fear-owns-the-buddy)).
 
-**Hide, Sell, Tidy, Play, Snack, and Fetch suit are tasks.** They start now, skipping schedule and config switch, and the
+**Hide, Sell, Tidy, Store items, Play, Snack, and Fetch suit are tasks.** They start now, skipping schedule and config switch, and the
 buddy returns to its order afterwards. They refuse while asleep, scared, busy or on a goto. Hide is
 the exception: it works while Alert, and it interrupts an errand the buddy chose itself
 ([a-command-outranks-an-errand](invariants.md#a-command-outranks-an-errand)). An ordered hide ends
@@ -107,3 +108,5 @@ takes, so a wrong pick can be tried from the console.
 
 Orders and mode are not saved; a loaded buddy starts in Follow with no order. Door codes are saved.
 The password reply says whether any door in the scene uses that code, so typos show at once.
+
+**Store items** continues until another order; see [continuing storage](storing.md#continuing-order).

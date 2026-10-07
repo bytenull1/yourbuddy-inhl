@@ -194,3 +194,7 @@ no nodes out there.
   straight and slides along whatever is in the way.
 - A buddy left outside when the ship undocks parks with the station, like any NPC.
 - The buddy does not model suit charge.
+
+A failed route to a suit excludes that suit from autonomous selection for 30 seconds, so
+another free suit can be considered. Explicit suit orders may retry immediately; ownership
+and the rule reserving the player’s only suit still apply.

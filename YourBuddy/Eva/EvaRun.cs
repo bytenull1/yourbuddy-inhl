@@ -100,6 +100,7 @@ namespace YourBuddy
             string? failure = body.PlanReach(leg, out NavPath plan);
             if (failure != null)
             {
+                suit.DeferUnreachableSuit(spare);
                 Abort("cannot reach the suit - " + failure);
                 return body.Name + " cannot reach the suit: " + failure;
             }
