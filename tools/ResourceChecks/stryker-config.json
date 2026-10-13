@@ -2,7 +2,7 @@
   "stryker-config": {
     "project": "ResourceChecks.Subject.csproj",
     "configuration": "Release",
-    "mutate": ["!**/MenuBoundary.cs", "!**/Stubs.cs", "!**/BuddyDialogCommands.cs", "!**/BuddyBehaviour.Conversation.cs", "!**/BuddyMode.cs"],
+    "mutate": ["!**/MenuBoundary.cs", "!**/Stubs.cs", "!**/BuddyDialogCommands.cs", "!**/BuddyBehaviour.Conversation.cs", "!**/BuddyMode.cs", "!**/ResourceKinds.cs"],
     "reporters": ["progress", "html", "json"]
   }
 }

@@ -133,7 +133,7 @@ checks YourBuddy's references, `GameInternals` lookups and patch targets against
 For mutation testing, run `dotnet tool restore` once, then `dotnet stryker` in a harness folder. Stryker
 changes the production files in `Subject/` one small edit at a time and reports each edit no check
 notices (a surviving mutant) in `StrykerOutput/`. Each survivor is a bug the checks would miss.
-ResourceChecks mutates only the resource files; the command parser it links is CommandChecks' to test.
+Each production file is mutated by the one harness that tests it; others link it only to compile.
 
 ---
 

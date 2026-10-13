@@ -315,6 +315,220 @@ public sealed class Checks(ITestOutputHelper output)
         ejectedJob.Cancel("check done");
         ResourceDuty.Settings.Paused = false;
         slot.Items.Clear();
+        // How a run ends. Every exit leaves the player's cell alone and takes back only Buddy's own.
+        void Step(IErrandBody walker)
+        {
+            if (walker.Leg == null) throw new InvalidOperationException("no leg to step");
+            walker.Leg.Approach(out _);
+        }
+        void Calm()
+        {
+            ResourceDuty.Owner = null;
+            ResourceDuty.Settings.Paused = false;
+            ResourceDuty.Settings.Buying = false;
+            ResourceStorage.Floor = p => null;
+            ResourceStorage.IsClear = false;
+            ship.OxygenController.Value = 20;
+            loader.Current = null;
+            loader.Loading = false;
+            slot.isActiveAndEnabled = true;
+            slot.Items.Clear();
+            SkipList.Skipped.Clear();
+            SceneScan.Snapshot<Shop>.Items = [];
+            NpcPlayer.Pilot = null;
+        }
+        // A refill run with a fresh cell at x 2; with `carry`, Buddy has picked it up and walks to the loader.
+        (ResourceErrand Job, IErrandBody Body, Grabbable Item, ResourceContainer Cell) Refill(bool carry = true)
+        {
+            Calm();
+            Grabbable item = new() { transform = new() { position = new(2, 0, 0) } };
+            ResourceContainer fresh = new() { transform = item.transform, Type = ResourceType.Oxygen };
+            fresh.Components[typeof(Grabbable)] = item;
+            SceneScan.Snapshot<ResourceContainer>.Items = [fresh];
+            SceneScan.Snapshot<ItemDetector>.Items = [slot];
+            IErrandBody walker = new();
+            ResourceErrand run = new(walker);
+            Check(run.TryStart(out _) && walker.Leg?.Name == "resource cell", "setup: the run fetches the cell");
+            if (carry)
+            {
+                Step(walker);
+                Check(walker.Hands.Item == item && walker.Leg?.Name == "ship loader", "setup: the cell is carried to the loader");
+            }
+            return (run, walker, item, fresh);
+        }
+        // Buddy's cell in the loader and loading.
+        (ResourceErrand Job, IErrandBody Body, Grabbable Item, ResourceContainer Cell) Loading()
+        {
+            var run = Refill();
+            Step(run.Body); // Reaches into the slot.
+            loader.Current = run.Cell;
+            Step(run.Body); // The loader registered the cell: loading starts.
+            Check(loader.Loading && run.Body.Hands.Item == null && ResourceDuty.Owner == run.Job, "setup: the loader loads Buddy's cell");
+            return run;
+        }
+
+        var player = Refill();
+        ResourceContainer theirs = new() { transform = new(), Type = ResourceType.Oxygen, Value = 50 };
+        loader.Current = theirs;
+        int ejectedBefore = loader.Ejections;
+        ResourceStorage.Floor = p => new BoxCollider { transform = new() };
+        ResourceStorage.IsClear = true;
+        Step(player.Body);
+        Check(ResourceDuty.Owner == null && loader.Current == theirs && loader.Ejections == ejectedBefore && player.Body.Hands.Item == null &&
+            ResourceDuty.Status.Contains("the player is using the loader"), "a cell the player loaded is left in; Buddy sets his own down");
+
+        var paused = Loading();
+        ejectedBefore = loader.Ejections;
+        ResourceDuty.Settings.Paused = true;
+        Step(paused.Body);
+        Check(ResourceDuty.Owner == null && loader.Ejections == ejectedBefore + 1 && loader.Current == null &&
+            ResourceDuty.Status.Contains("paused, unavailable, or timed out"), "pausing ends the run and takes Buddy's own cell back out");
+
+        var late = Loading();
+        ejectedBefore = loader.Ejections;
+        Time.time += 239f;
+        Step(late.Body);
+        Check(ResourceDuty.Owner == late.Job, "a run inside its four minutes goes on");
+        Time.time += 2f;
+        Step(late.Body);
+        Check(ResourceDuty.Owner == null && loader.Ejections == ejectedBefore + 1, "a run past its four minutes ends and takes its cell out");
+
+        var stopped = Loading();
+        ejectedBefore = loader.Ejections;
+        loader.Loading = false;
+        Step(stopped.Body);
+        Check(loader.Ejections == ejectedBefore + 1 && ResourceDuty.Owner == stopped.Job && stopped.Body.Leg?.Describe() == "putting away oxygen" &&
+            ResourceDuty.Status.Contains("loader stopped; storing the cell as a spare"), "a loader switched off mid-load: Buddy takes his cell to store it");
+        stopped.Job.Cancel("check done");
+
+        var target = Loading();
+        ejectedBefore = loader.Ejections;
+        ship.OxygenController.Value = 79;
+        Step(target.Body);
+        Check(ResourceDuty.Owner == target.Job && loader.Ejections == ejectedBefore, "below the target the loading goes on");
+        ship.OxygenController.Value = 80;
+        Step(target.Body);
+        Check(loader.Ejections == ejectedBefore + 1 && ResourceDuty.Status.Contains("target reached"), "at the target the cell comes out as a spare");
+        target.Job.Cancel("check done");
+
+        var empty = Refill();
+        Step(empty.Body); // Reaches into the slot.
+        empty.Cell.Value = 0;
+        loader.Current = empty.Cell;
+        ejectedBefore = loader.Ejections;
+        Step(empty.Body);
+        Check(ResourceDuty.Owner == null && loader.Ejections == ejectedBefore + 1 && ResourceDuty.Status.Contains("cell empty"),
+            "an empty cell ends the run and comes back out");
+
+        var full = Refill();
+        Step(full.Body); // Reaches into the slot.
+        full.Cell.LoadingSpeed = 50;
+        ship.OxygenController.Value = 60;
+        loader.Current = full.Cell;
+        ejectedBefore = loader.Ejections;
+        Step(full.Body);
+        Check(loader.Ejections == ejectedBefore + 1 && ResourceDuty.Status.Contains("not enough room for another loading increment"),
+            "a reserve with no room for one more increment does not start loading");
+        full.Job.Cancel("check done");
+
+        var slow = Refill();
+        Step(slow.Body); // Reaches into the slot; the loader has five seconds to register the cell.
+        slow.Body.Hands.Release();
+        Time.time += 4.9f;
+        Step(slow.Body);
+        Check(ResourceDuty.Owner == slow.Job, "a released cell is given five seconds to register");
+        Time.time += .2f;
+        Step(slow.Body);
+        Check(ResourceDuty.Owner == null && ResourceDuty.Status.Contains("cell did not enter the loader"), "a cell the loader never registers ends the run");
+
+        // Only the loader legs keep their stand points on the loader's side of the airlock's doors.
+        BoxCollider slotBox = (BoxCollider)slot.Components[typeof(BoxCollider)];
+        Bounds onFloor = slotBox.bounds;
+        slotBox.bounds = new Bounds { center = new(1.12f, .85f, 3.9f), extents = onFloor.extents };
+        var room = Refill(carry: false);
+        Vector3 beyond = new(1.02f, 0, 4.69f), chamber = new(.32f, 0, 3.9f);
+        Check(room.Body.Leg?.StandAllowed(beyond) == true, "a fetch may stand anywhere");
+        Step(room.Body);
+        Check(room.Body.Leg?.StandAllowed(beyond) == false && room.Body.Leg?.StandAllowed(chamber) == true,
+            "the insert leg stands only on the loader's side of the outer door");
+        room.Job.Cancel("check done");
+        slotBox.bounds = onFloor;
+
+        var moved = Refill(carry: false);
+        moved.Item.transform.position = new(3, 0, 0);
+        Step(moved.Body);
+        Check(ResourceDuty.Owner == null && moved.Body.Hands.Item == null && ResourceDuty.Status.Contains("cell moved or was taken"),
+            "a cell moved a metre since planning is not picked up");
+
+        // Purchases: a due refill with no cell anywhere buys one at x 0's shop for 750.
+        (ResourceErrand Job, IErrandBody Body, Shop Shop) Shopping()
+        {
+            Calm();
+            Grabbable sold = new() { transform = new() };
+            ResourceContainer soldCell = new() { transform = sold.transform, Type = ResourceType.Oxygen };
+            soldCell.Components[typeof(Grabbable)] = sold;
+            NpcVessels.Owners[sold.transform] = "station";
+            Grabbable product = new() { BuyPrice = 750 };
+            product.Components[typeof(ResourceContainer)] = new ResourceContainer { Type = ResourceType.Oxygen };
+            Shop shop = new() { transform = new(), Outlet = new(), Items = [product], Sells = soldCell };
+            SceneScan.Snapshot<Shop>.Items = [shop];
+            SceneScan.Snapshot<ResourceContainer>.Items = [];
+            NpcPlayer.Pilot = new Player();
+            ResourceDuty.Settings.Buying = true;
+            ResourceDuty.Settings.Budget = 1500;
+            IErrandBody walker = new();
+            ResourceErrand run = new(walker);
+            Check(run.TryStart(out _) && walker.Leg?.Name == "resource shop", "setup: the run walks to the shop");
+            return (run, walker, shop);
+        }
+        Player Pilot()
+        {
+            if (NpcPlayer.Pilot == null) throw new InvalidOperationException("no pilot");
+            return NpcPlayer.Pilot;
+        }
+
+        var busy = Shopping();
+        Pilot().Controller.IsControlling = true;
+        Step(busy.Body);
+        Check(ResourceDuty.Owner == null && Pilot().CashSystem.Cash == 1000 && ResourceDuty.Status.Contains("shop or player is busy"),
+            "nothing is bought while the player is at the controls");
+
+        var poor = Shopping();
+        Pilot().CashSystem.Cash = 700;
+        Step(poor.Body);
+        Check(ResourceDuty.Owner == null && Pilot().CashSystem.Cash == 700 && ResourceDuty.Status.Contains("purchase permission or funds changed"),
+            "nothing is bought once the cell costs more than the player has");
+
+        var denied = Shopping();
+        ResourceDuty.Settings.Buying = false;
+        Step(denied.Body);
+        Check(ResourceDuty.Owner == null && Pilot().CashSystem.Cash == 1000 && ResourceDuty.Status.Contains("purchase permission disabled"),
+            "switching Buying off ends a restock before it spends");
+
+        var unclear = Shopping();
+        unclear.Shop.Sells = null; // The shop takes no money and makes no cell.
+        Step(unclear.Body);
+        Time.frameCount++;
+        Step(unclear.Body);
+        Check(ResourceDuty.Owner == null && ResourceDuty.Settings.Paused && ResourceDuty.Settings.Buying &&
+            ResourceDuty.Status.Contains("purchase outcome unclear"), "a purchase that spent nothing or made no cell pauses the duties");
+
+        var stranded = Shopping();
+        Step(stranded.Body);
+        Time.frameCount++;
+        Step(stranded.Body);
+        Check(stranded.Body.Leg?.Name == "resource cell" && stranded.Body.Leg.Recover("stuck") && ResourceDuty.Owner == null &&
+            ResourceDuty.Settings.Paused && ResourceDuty.Status.Contains("purchased cell needs recovering"),
+            "a bought cell Buddy cannot walk to pauses the duties");
+
+        var interrupted = Shopping();
+        Step(interrupted.Body);
+        Check(Pilot().CashSystem.Cash == 250 && ResourceDuty.Settings.Budget == 750, "a purchase is paid for and taken off the allowance");
+        interrupted.Job.Cancel("check done");
+        Check(!ResourceDuty.Settings.Buying && ResourceDuty.Status.Contains("Buying off: check the interrupted purchase"),
+            "a run ended between paying and finding the cell switches Buying off");
+        Calm();
+        NpcVessels.Owners.Clear();
         GameManager.Instance.PlayerShip = null;
         Check(BuddyResourceDebug.Drain(["fuel"]).Contains("No player ship"), "no ship handled");
         output.WriteLine($"{checks} resource job/debug checks passed.");

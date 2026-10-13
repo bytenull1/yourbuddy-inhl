@@ -2,7 +2,7 @@
   "stryker-config": {
     "project": "ResourceJobChecks.Subject.csproj",
     "configuration": "Release",
-    "mutate": ["!**/Stubs.cs"],
+    "mutate": ["!**/Stubs.cs", "!**/ResourceDutySettings.cs"],
     "reporters": ["progress", "html", "json"]
   }
 }
