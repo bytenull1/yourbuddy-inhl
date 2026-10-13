@@ -160,8 +160,11 @@ namespace YourBuddy
         public bool TakenByAnother(Transform t) => false;
         public void LoadRoomOf(Transform t) { }
         public void StandFacing(Vector3 p) { }
-        public bool InReach(ErrandLeg leg) => true;
-        public string? PlanReach(ErrandLeg leg, out NavPath p) { p = new(); return null; }
+        public bool Near = true;
+        public int Plans, PlannedFrame = -1;
+        public bool InReach(ErrandLeg leg) => Near;
+        public bool PlannedThisFrame => PlannedFrame == Time.frameCount;
+        public string? PlanReach(ErrandLeg leg, out NavPath p) { Plans++; PlannedFrame = Time.frameCount; p = new(); return null; }
         public void Walk(ErrandLeg leg, NavPath? p) { Leg = leg; }
         public void FinishRoute() { var old = Leg; Leg = null; old?.End(); }
         public bool StepIntoReach(ErrandLeg leg, out Vector3 move, out bool wantMove) { move = new(); wantMove = false; return true; }
@@ -198,8 +201,18 @@ namespace YourBuddy
         public abstract int Count(out float nearest);
         public abstract bool TryStart(out string report);
         public virtual string Describe() => "scheduled";
-        protected enum SetOffResult { InReach, Walking }
-        protected SetOffResult SetOff<T>(T leg, Action<T, NavPath?> begin, ref int plans, int max, ref string? failure) where T: ErrandLeg { begin(leg, null); return SetOffResult.InReach; }
+        public virtual bool Resuming => false;
+        protected bool MayPlanNow => !Body.PlannedThisFrame;
+        protected enum SetOffResult { InReach, Walking, NoPlan, NoPlansLeft, Later }
+        protected SetOffResult SetOff<T>(T leg, Action<T, NavPath?> begin, ref int plans, int max, ref string? failure, bool onePlanPerFrame = false) where T: ErrandLeg
+        {
+            if (Body.InReach(leg)) { begin(leg, null); return SetOffResult.InReach; }
+            if (onePlanPerFrame && !MayPlanNow) return SetOffResult.Later;
+            failure = Body.PlanReach(leg, out NavPath plan);
+            if (failure != null) return SetOffResult.NoPlan;
+            begin(leg, plan);
+            return SetOffResult.Walking;
+        }
         protected void Begin(ErrandLeg leg, NavPath? p, float delay, string report) => Body.Walk(leg, p);
         public void Defer(Transform t, float s) { }
     }

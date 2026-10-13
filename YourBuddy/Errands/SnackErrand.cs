@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using NPC.Core.World;
 using NPC.Core;
-using NPC.Core.Agents;
 using NPC.Core.Navigation;
 using Space;
 using UnityEngine;
@@ -90,9 +89,9 @@ namespace YourBuddy
             }
 
             public override string Name => "the " + kindName;
-            public override float Reach => SnackReachDist;
-            public override float[] StandOffs => SnackStandOffs;
-            public override float ReachBelow => SnackReachBelow;
+            public override float Reach => ItemReachDist;
+            public override float[] StandOffs => ItemStandOffs;
+            public override float ReachBelow => ItemReachBelow;
 
             public override void Defer(float seconds) => errand.Defer(Own, seconds);
 
@@ -174,50 +173,39 @@ namespace YourBuddy
         {
             SnackSpots.Clear();
             ContainedFood.Clear();
-            CheckedContainers.Clear();
             Skips.Prune();
             emptyContainers = 0;
             skipped = 0;
             Vector3 here = Here;
             float floorY = Body.FloorUnderBuddy().y;
-            float margin = SnackSearchRadius + SnackContainerMargin;
+            float margin = SnackSearchRadius + ContainerMargin;
 
-            foreach (Door door in SceneScan.ThisFrame<Door>())
+            foreach (ContainerSpot spot in ContainersNear(here, margin))
             {
-                Transform? container = ContainerOf(door, out InstantItemDetector? contents);
-                // A closet has two doors; the first found brings both.
-                if (container == null || !CheckedContainers.Add(container)) continue;
-
-                Door[] doors = container.GetComponentsInChildren<Door>();
-                Vector3 point = DoorFacePoint(doors);
-                if (FlatDistanceSq(point, here) > margin * margin) continue;
-
-                // Both were found together. Its contents are not loose food, even when it is out of bounds.
-                int count = FoodIn(contents!, SnackFoodBuffer);
+                // Its contents are not loose food, even when it is out of bounds.
+                int count = FoodIn(spot.Contents, SnackFoodBuffer);
                 ContainedFood.UnionWith(SnackFoodBuffer);
-                if (!InBounds(point, here, floorY, container)) continue;
+                if (!InBounds(spot.Face, here, floorY, spot.Root)) continue;
 
                 if (count == 0)
                 {
                     emptyContainers++;
                     continue;
                 }
-                CustomRoom room = container.GetComponentInParent<CustomRoom>(true);
-                if (room != null && !room.EnabledStructure) continue;
+                if (spot.StructureOff()) continue;
 
-                SnackTask task = new(this, container, doors, contents!, container.GetComponent<HidingSpot>(), point, count);
+                SnackTask task = new(this, spot.Root, spot.Doors, spot.Contents, spot.Root.GetComponent<HidingSpot>(), spot.Face, count);
                 if (SnackBlocker(task) != null) continue;
 
-                if (Skips.Has(container)) skipped++;
+                if (Skips.Has(spot.Root)) skipped++;
                 else SnackSpots.Add(task);
             }
-            CheckedContainers.Clear();
 
             foreach (Food food in SceneScan.ThisFrame<Food>())
             {
                 if (ContainedFood.Contains(food) || !Edible(food) || Body.TakenByAnother(food.transform)) continue;
 
-                Vector3 point = ItemPoint(food);
+                Vector3 point = ItemTop(food);
                 if (!InBounds(point, here, floorY, food.transform)) continue;
 
                 if (Skips.Has(food.transform)) skipped++;
@@ -229,18 +217,7 @@ namespace YourBuddy
         }
 
         private bool InBounds(Vector3 point, Vector3 here, float floorY, Transform what) =>
-            FlatDistanceSq(point, here) <= SnackSearchRadius * SnackSearchRadius &&
-            point.y >= floorY - SnackReachBelow && point.y <= floorY + ReachTask.ReachHeight && Body.OnMyVessel(what);
-
-        /// <summary>
-        /// The top of the item, the part visible on a floor or a shelf.
-        /// </summary>
-        private static Vector3 ItemPoint(Food food)
-        {
-            if (!ColliderBounds(food.gameObject, out Bounds bounds)) return food.transform.position;
-
-            return new Vector3(bounds.center.x, bounds.max.y, bounds.center.z);
-        }
+            InReachBand(point, here, floorY, SnackSearchRadius) && Body.OnMyVessel(what);
 
         /// <summary>
         /// Why the snack is off limits now, or null. Checked at every step of the task.
@@ -253,7 +230,7 @@ namespace YourBuddy
             {
                 if (!Edible(task.Item)) return "someone took it or it is used up";
 
-                return MovedBlocker(ItemPoint(task.Item), task.TargetPoint);
+                return MovedBlocker(ItemTop(task.Item), task.TargetPoint);
             }
             // Opening or closing a hiding spot's door sets the player's hidden flag. docs/snacks.md §1
             if (task.Hideout != null && task.Hideout.CurrentInteractor != null) return "you are hiding in it";
@@ -308,7 +285,7 @@ namespace YourBuddy
 
                     if (task.Item == null) OpenContainerDoors(task.Doors, task.OpenedDoors, task.Name);
                     task.Phase = SnackPhase.Look;
-                    task.PhaseUntil = Time.time + (task.Item == null ? SnackOpenSeconds : SnackPickSeconds);
+                    task.PhaseUntil = Time.time + (task.Item == null ? DoorOpenSeconds : SnackPickSeconds);
                     break;
                 case SnackPhase.Look:
                     if (Time.time < task.PhaseUntil) break;

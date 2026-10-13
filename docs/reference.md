@@ -107,31 +107,35 @@ See [behaviour.md §3](behaviour.md#3-the-decider).
 | `WaitTraceSeconds` | 15 s | the throttled "waits in the airlock" log line |
 | `FetchInterval` / `FetchRetryDelay` / `FetchSkipSeconds` | 120 s / 180 s / 45 s | the suit-fetch errand's schedule |
 
-### Snacks - `SnackErrand.cs`
+### Items every errand shares - `Items.cs`
 
-The item-reach constants every errand shares (`SnackStandOffs`, `SnackReachDist`, `SnackReachBelow`,
-`SnackItemMovedDist`, `SnackOpenSeconds`, `SnackContainerMargin`, `SnackIntervalJitter`,
-`ContainerSearchDepth`) live in `Items.cs`.
+Snacks, tidying, selling, play and hiding walk up to an item or a container's doors with these.
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `SnackIntervalJitter` / `SnackMinInterval` | ±25 % / 60 s | around `SnackIntervalMinutes`, and the minimum |
+| `ItemStandOffs` / `ItemReachDist` | 0.55 / 0.7 / 0.85 m / 0.9 m | up-close stand points and reach |
+| `ItemReachBelow` | 0.3 m | how far below the floor probe an item's top may be |
+| `ItemMovedDist` | 0.5 m | an item moved further ends the walk |
+| `ContainerMargin` | 2 m | containers this far beyond a search radius still count, so their contents are not "loose" |
+| `ContainerSearchDepth` | 2 | parents up from a `Door` to its container |
+| `DoorOpenSeconds` | 1.5 s | looking in while a container's doors open |
+| `ItemReachSeconds` / `ItemLiftSeconds` / `ItemAimSeconds` | 0.5 / 0.5 / 0.4 s | before pick-up; after, if the next leg is in reach; before letting go |
+| `IntervalJitter` | ±25 % | every errand interval is drawn this far either way |
+
+### Snacks - `SnackErrand.cs`
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `SnackMinInterval` | 60 s | the minimum of `SnackIntervalMinutes` |
 | `SnackRetryDelay` | 120 s | after anything but eating |
 | `SnackSkipSeconds` | 600 s | an unreachable container or item is skipped this long |
-| `SnackSearchRadius` / `SnackContainerMargin` | 25 m / 2 m | search radius; containers this much further still count for "loose" |
+| `SnackSearchRadius` | 25 m | search radius |
 | `SnackMaxPlans` | 3 | candidates tried with a plan |
-| `SnackStandOffs` / `SnackReachDist` | 0.55 / 0.7 / 0.85 m / 0.9 m | up-close stand points and reach |
-| `SnackReachBelow` | 0.3 m | how far below the floor probe an item's top may be |
-| `SnackItemMovedDist` | 0.5 m | loose food moved further ends the walk |
 | `SnackPickSeconds` | 0.8 s | loose food: before eating |
-| `ContainerSearchDepth` | 2 | parents up from a `Door` to its container |
-| `SnackOpenSeconds` / `SnackEatSeconds` | 1.5 / 2 s | looking in; after eating |
+| `SnackEatSeconds` | 2 s | after eating |
 | `PlayerHungryAtOrBelow` | 250 | the player's Hunger band |
 
 ### Tidying - `TidyErrand.cs`
-
-Walking up to an item uses the `Snack*` reach constants. `TidyReachSeconds`, `TidyLiftSeconds` and
-`TidyAimSeconds` are shared by selling and play, and live in `Items.cs`.
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -140,7 +144,6 @@ Walking up to an item uses the `Snack*` reach constants. `TidyReachSeconds`, `Ti
 | `TidySearchRadius` / `TidyBinRadius` | 30 m / 40 m | trash from the buddy; a can from the trash |
 | `TidyRoundMin` / `TidyRoundMax` / `TidyRoundSeconds` | 2 / 5 / 180 s | pieces per round, and the round's time limit |
 | `TidyMaxPlans` | 3 | items tried with a plan |
-| `TidyReachSeconds` / `TidyLiftSeconds` / `TidyAimSeconds` | 0.5 / 0.5 / 0.4 s | before pick-up; after, if the can is in reach; before the slot |
 | `TidyInsertSeconds` / `TidyMaxInserts` | 1.5 s / 2 | time in the slot; attempts |
 
 ### Selling - `SellErrand.cs`
@@ -164,9 +167,28 @@ NPC.Core's ([its reference](https://github.com/bytenull1/npc-core-inhl/blob/main
 | `SellWaitSeconds` | 20 s | for the gate to open, or you to step out |
 | `SellReopenedAfter` / `SellConfirmSeconds` | 1.5 s / 10 s | gate open again after this = failed; sale must happen within this |
 
+### Resource duties - `ResourceErrand.cs`
+
+See [resources.md](resources.md). The refill thresholds (`ResourceRule.Start` / `Target`, 30 % / 80 %)
+are in `ResourceDutySettings.cs`.
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `CheckSeconds` | 30 s | the errand's interval, and the wait after a run |
+| `ResourceSkipSeconds` | 60 s | a cell, shop or spot it could not plan to |
+| `RunSeconds` | 240 s | a run, or a restock's next cell, gives up after this |
+| `ReachMemoSeconds` / `ResumeSeconds` | 10 s / 1 s | a planned reach is remembered; a parked try resumes within |
+| `MaxCellTries` | 8 | cells tried per search |
+| `StagedRescanSeconds` | 0.5 s | what other item zones hold is read again |
+| `StorageChoices` / `MaxStorageWalks` | 4 / 3 | reachable spots compared for the shortest walk; walks to storage per run |
+| `StorageRescanSeconds` | 30 s | the storage spots are listed again |
+| `SettleSeconds` | 1.5 s | an ejected cell comes to rest before it is fetched |
+| `InsertSeconds` / `SlotOffSeconds` | 5 s / 2 s | a released cell must enter the loader within; the slot is off after an eject |
+| `LegReachBelow` | 0.5 m | how far below the floor probe a leg's target may be |
+
 ### Idle play - `PlayErrand.cs`
 
-See [items.md §5](items.md#5-idle-play). Walking up uses the `Snack*` reach constants.
+See [items.md §5](items.md#5-idle-play). Walking up uses the shared item constants in `Items.cs`.
 
 | Constant | Value | Meaning |
 |---|---|---|

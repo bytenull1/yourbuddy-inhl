@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using NPC.Core;
-using UnityEngine;
 
 namespace YourBuddy
 {
@@ -15,26 +14,18 @@ namespace YourBuddy
         private static float cellsAt;
         private static readonly List<ResourceContainer> Merged = [];
 
-        internal static Shop[] Shops() => Cached(ref shops, ref shopsAt);
+        internal static Shop[] Shops() => SceneSweeps.Cached(ref shops, ref shopsAt, Rescan);
 
         // Active cells from this frame's sweep, so a cell just bought counts; switched-off ones from the cache.
         internal static List<ResourceContainer> Cells()
         {
             Merged.Clear();
             Merged.AddRange(SceneScan.ThisFrame<ResourceContainer>());
-            foreach (ResourceContainer cell in Cached(ref cells, ref cellsAt))
+            foreach (ResourceContainer cell in SceneSweeps.Cached(ref cells, ref cellsAt, Rescan))
             {
                 if (cell != null && !cell.gameObject.activeInHierarchy) Merged.Add(cell);
             }
             return Merged;
-        }
-
-        private static T[] Cached<T>(ref T[] items, ref float at) where T : Object
-        {
-            if ((at > 0f && Time.time < at) || !SceneScan.MayRescan(at <= 0f)) return items;
-            at = Time.time + Rescan;
-            items = Object.FindObjectsOfType<T>(true);
-            return items;
         }
     }
 }

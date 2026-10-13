@@ -37,6 +37,14 @@ settings already read from a sidecar. In-progress routes are not restored.
 planning, skip list and deferral helpers. It requires autonomy and respects existing orders,
 fear and survival priorities. Resource buttons do not change the Autonomy configuration or
 release a standing order. **Decide** on the normal orders page uses the existing autonomy order.
+Its readiness is the decider's: `Count` says only whether a duty is due, and the 30 s after a run
+are the readiness ramp, as for any errand.
+
+Like every errand it plans at most one reach a frame ([behaviour.md §3](behaviour.md#3-the-decider)).
+A try that needs a second plan stops, and the decider resumes it on its next slow tick. Reaches
+already planned are remembered for `ReachMemoSeconds` and failed targets are skipped, so each resumed
+try gets further. A step from one leg to the next plans once, outside the budget. A search that spans
+frames waits where it stands (`Phase.Search`).
 
 Only one buddy owns the shared loader duty. What is already in the loader when a refill is due:
 
@@ -64,8 +72,10 @@ Cell candidates reuse a list; staged-item membership refreshes twice per second,
 before buying, and is checked live before pickup.
 After buying, verification waits for the next frame's snapshot instead of forcing a new scan.
 Storage uses active ship nodes and the carried item's footprint. A shared budget permits at
-most four candidate probes per frame; a pending search holds its errand while continuing
-from its cursor. Exhausted searches are cached briefly. Placement is checked again on arrival.
+most four candidate probes per frame, and the route to a spot is one reach plan; a pending search
+holds its errand while continuing from its cursor. Every run starts the search afresh, so an
+interrupted one never leaves a search pending. Exhausted searches are cached briefly. Placement is
+checked again on arrival.
 Of the first four reachable spots, Buddy carries the cell to the one with the shortest walk;
 the nearest by straight line can lie behind the airlock wall. Before setting off he loads the
 switched-off ship rooms under that route, so their furniture is seen. A spot that is then

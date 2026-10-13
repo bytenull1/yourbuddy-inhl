@@ -228,6 +228,23 @@ ResourceErrand shopJob = new(new IErrandBody());
 Check(!shopJob.TryStart(out string priceReport) && priceReport.Contains("costs 1050") && priceReport.Contains("allowance is 100"),
     "price over the allowance is reported");
 ResourceDuty.Settings.Buying = false;
+SceneScan.Snapshot<Shop>.Items = [];
+// One reach plan a frame: the loader check spends it, and the cell is planned on the next try.
+Grabbable farItem = new() { transform = new() };
+ResourceContainer far = new() { transform = farItem.transform };
+far.Components[typeof(Grabbable)] = farItem;
+SceneScan.Snapshot<ResourceContainer>.Items = [far];
+loader.Current = null;
+ship.OxygenController.Value = 20;
+IErrandBody farBody = new() { Near = false };
+ResourceErrand farJob = new(farBody);
+Check(!farJob.TryStart(out string parked) && farJob.Resuming && farBody.Plans == 1 && farBody.Leg == null && parked.Contains("one plan a frame"),
+    "a second plan in the same frame waits");
+Time.frameCount++;
+Time.time += 0.3f;
+Check(farJob.TryStart(out _) && farBody.Plans == 2 && farBody.Leg != null && farBody.Leg.Name == "resource cell",
+    "the resumed try reuses the loader's reach and plans the cell");
+farJob.Cancel("check done");
 GameManager.Instance.PlayerShip = null;
 Check(BuddyResourceDebug.Drain(["fuel"]).Contains("No player ship"), "no ship handled");
 Console.WriteLine($"{checks} resource job/debug checks passed.");

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using FMODUnity;
+using NPC.Core;
 using NPC.Core.Navigation;
 using NPC.Core.World;
 using Space;
@@ -62,11 +63,11 @@ namespace YourBuddy
         private static int CollectSuits()
         {
             SuitBuffer.Clear();
-            foreach (Suit suit in UnityEngine.Object.FindObjectsOfType<Suit>())
+            foreach (Suit suit in SceneScan.ThisFrame<Suit>())
             {
                 if (suit != null && suit.Isolated) SuitBuffer.Add(suit);
             }
-            foreach (EquipmentHolder holder in UnityEngine.Object.FindObjectsOfType<EquipmentHolder>(true))
+            foreach (EquipmentHolder holder in SceneSweeps.WithInactive<EquipmentHolder>())
             {
                 // Not a locker on a station you are not docked at. docs/eva.md
                 if (holder != null && holder.Item is Suit { Isolated: true } displayed && Items.Loadable(holder)) SuitBuffer.Add(displayed);
@@ -91,10 +92,14 @@ namespace YourBuddy
         {
             if (!target.gameObject.activeSelf && !ReleaseFromDisplay(target)) return "the suit is gone";
 
-            string? blocker = Items.TakeBlocker(target, null);
-            if (blocker == null && body.TakenByAnother(target.transform)) blocker = "another buddy is on it";
-            return blocker;
+            return HeldBlocker(target);
         }
+
+        /// <summary>
+        /// Why a suit lying free may not be taken: in hands, held down, or another buddy's.
+        /// </summary>
+        private string? HeldBlocker(Suit suit) =>
+            Items.TakeBlocker(suit, null) ?? (body.TakenByAnother(suit.transform) ? "another buddy is on it" : null);
 
         /// <summary>
         /// Gives a locker-displayed suit back to the world, the holder's own way. False when the
@@ -102,7 +107,7 @@ namespace YourBuddy
         /// </summary>
         private bool ReleaseFromDisplay(Suit suit)
         {
-            foreach (EquipmentHolder holder in UnityEngine.Object.FindObjectsOfType<EquipmentHolder>(true))
+            foreach (EquipmentHolder holder in SceneSweeps.WithInactive<EquipmentHolder>())
             {
                 if (holder == null || holder.Item != suit) continue;
 
@@ -142,12 +147,7 @@ namespace YourBuddy
             foreach (Suit suit in SuitBuffer)
             {
                 // A displayed suit is free; the release happens at the leg, in reach of the locker.
-                if (suit.gameObject.activeSelf)
-                {
-                    string? blocker = Items.TakeBlocker(suit, null);
-                    if (blocker == null && body.TakenByAnother(suit.transform)) blocker = "another buddy is on it";
-                    if (blocker != null) continue;
-                }
+                if (suit.gameObject.activeSelf && HeldBlocker(suit) != null) continue;
 
                 free++;
                 float sqr = Items.FlatDistanceSq(suit.transform.position, here);
@@ -368,7 +368,7 @@ namespace YourBuddy
 
             Vector3 here = body.Transform.position;
             AirlockBuffer.Clear();
-            foreach (Airlock airlock in UnityEngine.Object.FindObjectsOfType<Airlock>())
+            foreach (Airlock airlock in SceneScan.ThisFrame<Airlock>())
             {
                 if (airlock != null && OpensOutside(airlock)) AirlockBuffer.Add(airlock);
             }

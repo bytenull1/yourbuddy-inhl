@@ -340,19 +340,19 @@ namespace YourBuddy
 
             public override float Reach => Leg switch
             {
-                SellLeg.Box => SnackReachDist,
+                SellLeg.Box => ItemReachDist,
                 SellLeg.Load => SellLoadReach,
                 _ => ReachDist,
             };
 
             public override float[] StandOffs => Leg switch
             {
-                SellLeg.Box => SnackStandOffs,
+                SellLeg.Box => ItemStandOffs,
                 SellLeg.Load => SellLoadStandOffs,
                 _ => ReachStandOffs,
             };
 
-            public override float ReachBelow => Leg == SellLeg.Box ? SnackReachBelow : 0f;
+            public override float ReachBelow => Leg == SellLeg.Box ? ItemReachBelow : 0f;
 
             // docs/invariants.md#the-buddy-sells-only-trash-boxes. Its own pen is exempt, since these
             // legs are what the station is for, but another station's still bars a stand point.
@@ -562,7 +562,7 @@ namespace YourBuddy
                 SellStationParts? parts = station != null ? SellStationParts.Read(station) : null;
                 if (parts != null && (parts.Usable || parts.Loadable)) SellStations.Add(parts);
             }
-            CollectContainerContents(here, SellSearchRadius + SnackContainerMargin);
+            CollectContainerContents(here, SellSearchRadius + ContainerMargin);
             foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>())
             {
                 if (SellStationOf(detector) == null) PutAwayItems.UnionWith(detector.Items);
@@ -573,9 +573,7 @@ namespace YourBuddy
                 if (item.Signature != TrashBoxSignature || !item.CanSell || PutAwayItems.Contains(item) || TakeBlocker(item) != null) continue;
 
                 Vector3 point = ItemTop(item);
-                if (FlatDistanceSq(point, here) > SellSearchRadius * SellSearchRadius ||
-                    point.y < floorY - SnackReachBelow || point.y > floorY + ReachTask.ReachHeight ||
-                    !Body.OnMyVessel(item.transform)) continue;
+                if (!InReachBand(point, here, floorY, SellSearchRadius) || !Body.OnMyVessel(item.transform)) continue;
 
                 if (Skips.Has(item.transform))
                 {
@@ -595,14 +593,7 @@ namespace YourBuddy
             ShuffleNearest(SellCandidates);
         }
 
-        private static SellStation[] AllStations()
-        {
-            if ((_allStationsAt > 0f && Time.time < _allStationsAt) || !SceneScan.MayRescan(_allStationsAt <= 0f)) return _allStations;
-
-            _allStationsAt = Time.time + SellStationRescan;
-            _allStations = UnityEngine.Object.FindObjectsOfType<SellStation>(true);
-            return _allStations;
-        }
+        private static SellStation[] AllStations() => SceneSweeps.Cached(ref _allStations, ref _allStationsAt, SellStationRescan);
 
         private static SellStationParts? SellStationOf(ItemDetector detector)
         {
@@ -685,7 +676,7 @@ namespace YourBuddy
                     if (!Body.StepIntoReach(task, out Vector3 move, out wantMove)) return move;
 
                     task.Phase = SellPhase.Handle;
-                    task.PhaseUntil = Time.time + (task.Leg == SellLeg.Box ? TidyReachSeconds : TidyAimSeconds);
+                    task.PhaseUntil = Time.time + (task.Leg == SellLeg.Box ? ItemReachSeconds : ItemAimSeconds);
                     break;
                 case SellPhase.Handle:
                     // In reach of a box whose room the player walked out of. docs/invariants.md#a-selling-run-keeps-its-boxes
@@ -1135,10 +1126,6 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The next box of the run, saying why any it leaves out cannot be fetched. False when the zone is
-        /// full or none is left, and the run should go and press the button. docs/items.md §4
-        /// </summary>
-        /// <summary>
         /// Boxes the run did not know of start a new run from here. A parked try goes on from Approach next frame.
         /// </summary>
         private void NextTrip(SellTask task, string result)
@@ -1159,6 +1146,10 @@ namespace YourBuddy
             Body.FinishRoute();
         }
 
+        /// <summary>
+        /// The next box of the run, saying why any it leaves out cannot be fetched. False when the zone is
+        /// full or none is left, and the run should go and press the button. docs/items.md §4
+        /// </summary>
         private bool TryNextBox(SellTask task)
         {
             SellRun run = task.Run;
@@ -1237,7 +1228,7 @@ namespace YourBuddy
             {
                 next.Node = next.StandPoint = Here;
                 next.Phase = SellPhase.Handle;
-                next.PhaseUntil = Time.time + TidyAimSeconds;
+                next.PhaseUntil = Time.time + ItemAimSeconds;
                 Body.Walk(next, null);
                 Last = next.Describe();
                 return true;

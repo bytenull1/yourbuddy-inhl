@@ -16,8 +16,8 @@ namespace YourBuddy
             ResourceDutySettings s = ResourceDuty.Settings;
             List<string> labels = [];
             void Add(string label, string action) { labels.Add(label); buttons[label] = action; }
-            for (int i = 0; i < 3; i++)
-                Add($"{ResourceDutySettings.Label(i)}: {(s.Rule(i).Enabled ? "on" : "off")}", i.ToString());
+            for (int i = 0; i < ResourceKinds.Count; i++)
+                Add($"{ResourceKinds.Label(i)}: {(s.Rule(i).Enabled ? "on" : "off")}", i.ToString());
             Add($"Buying: {(s.Buying ? "on" : "off")}", "buying");
             Add($"Limit: {s.Budget}", "budget");
             Add("Orders", "back");
@@ -41,7 +41,7 @@ namespace YourBuddy
             int kind = int.Parse(action);
             ResourceRule rule = s.Rule(kind);
             rule.Enabled = !rule.Enabled;
-            return $"{ResourceDutySettings.Label(kind)} duty {(rule.Enabled ? "on" : "off")}.";
+            return $"{ResourceKinds.Label(kind)} duty {(rule.Enabled ? "on" : "off")}.";
         }
 
         internal void Reset() { Open = KeepPage = false; buttons.Clear(); }

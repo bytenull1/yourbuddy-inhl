@@ -384,10 +384,7 @@ namespace YourBuddy
             {
                 text.Append("\nFear: ").Append(DescribeFear());
                 if (DescribeHudMind() is { } mind) text.Append('\n').Append(mind);
-                text.Append("\nAir: ").Append(lifeSupport.Describe()).Append("\nSnack: ").Append(snacks.Describe())
-                    .Append("\nTidy: ").Append(tidying.Describe()).Append("\nSell: ").Append(selling.Describe())
-                    .Append("\nPlay: ").Append(play.Describe()).Append("\nFetch suit: ").Append(suitFetch.Describe())
-                    .Append("\nOdd: ").Append(DescribeAnomaly());
+                AppendErrands(text);
             }
             if (agent.MoveTarget is { } target)
             {
@@ -398,6 +395,15 @@ namespace YourBuddy
             statusText = text.ToString();
             return statusText;
         }
+
+        /// <summary>
+        /// One line per errand and the anomaly, for the HUD and buddy_dev mind.
+        /// </summary>
+        private StringBuilder AppendErrands(StringBuilder text) =>
+            text.Append("\nAir: ").Append(lifeSupport.Describe()).Append("\nSnack: ").Append(snacks.Describe())
+                .Append("\nTidy: ").Append(tidying.Describe()).Append("\nSell: ").Append(selling.Describe())
+                .Append("\nPlay: ").Append(play.Describe()).Append("\nFetch suit: ").Append(suitFetch.Describe())
+                .Append("\nResources: ").Append(resources.Describe()).Append("\nOdd: ").Append(DescribeAnomaly());
 
         /// <summary>
         /// One line of buddy_list, e.g. "#2 Buddy 2 * - Follow (tidying up), on ShipyardStation, 4.1 m away".

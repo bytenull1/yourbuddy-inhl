@@ -204,9 +204,9 @@ namespace YourBuddy
             }
 
             public override string Name => ToSpot ? "the spot to put it down" : $"'{ItemLabel}'";
-            public override float Reach => SnackReachDist;
-            public override float[] StandOffs => SnackStandOffs;
-            public override float ReachBelow => SnackReachBelow;
+            public override float Reach => ItemReachDist;
+            public override float[] StandOffs => ItemStandOffs;
+            public override float ReachBelow => ItemReachBelow;
 
             public override void Defer(float seconds) => errand.Defer(Own, seconds);
 
@@ -371,7 +371,7 @@ namespace YourBuddy
             Vector3 here = Here;
             float floorY = Body.FloorUnderBuddy().y;
 
-            CollectContainerContents(here, PlaySearchRadius + SnackContainerMargin);
+            CollectContainerContents(here, PlaySearchRadius + ContainerMargin);
             foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>()) PutAwayItems.UnionWith(detector.Items);
             CollectMachineZones();
 
@@ -380,9 +380,7 @@ namespace YourBuddy
                 if (PutAwayItems.Contains(item) || TakeBlocker(item) != null || !IsPlaything(item)) continue;
 
                 Vector3 point = ItemTop(item);
-                if (FlatDistanceSq(point, here) > PlaySearchRadius * PlaySearchRadius ||
-                    point.y < floorY - SnackReachBelow || point.y > floorY + ReachTask.ReachHeight ||
-                    NearMachine(point) || !Body.OnMyVessel(item.transform)) continue;
+                if (!InReachBand(point, here, floorY, PlaySearchRadius) || NearMachine(point) || !Body.OnMyVessel(item.transform)) continue;
 
                 if (Skips.Has(item.transform)) skipped++;
                 else PlayItems.Add(item);
@@ -492,7 +490,7 @@ namespace YourBuddy
                     if (!Body.StepIntoReach(task, out Vector3 move, out wantMove)) return move;
 
                     task.Phase = PlayPhase.Lift;
-                    task.PhaseUntil = Time.time + (task.ToSpot ? TidyAimSeconds : TidyReachSeconds);
+                    task.PhaseUntil = Time.time + (task.ToSpot ? ItemAimSeconds : ItemReachSeconds);
                     break;
                 case PlayPhase.Lift:
                     if (Time.time < task.PhaseUntil) break;
@@ -576,7 +574,7 @@ namespace YourBuddy
             {
                 toSpot.Node = toSpot.StandPoint = Here;
                 toSpot.Phase = PlayPhase.Lift;
-                toSpot.PhaseUntil = Time.time + TidyLiftSeconds;
+                toSpot.PhaseUntil = Time.time + ItemLiftSeconds;
                 Body.Walk(toSpot, null);
                 return Vector3.zero;
             }

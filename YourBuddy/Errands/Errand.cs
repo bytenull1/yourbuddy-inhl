@@ -223,7 +223,7 @@ namespace YourBuddy
         protected Vector3 Here => Body.Transform.position;
 
         protected float NextInterval() =>
-            Interval * Random.Range(1f - Items.SnackIntervalJitter, 1f + Items.SnackIntervalJitter);
+            Interval * Random.Range(1f - Items.IntervalJitter, 1f + Items.IntervalJitter);
 
         protected bool Failed(string report)
         {
@@ -257,7 +257,7 @@ namespace YourBuddy
                 return SetOffResult.InReach;
             }
             if (plans >= maxPlans) return SetOffResult.NoPlansLeft;
-            if (onePlanPerFrame && !planAtOnce && Body.PlannedThisFrame) return SetOffResult.Later;
+            if (onePlanPerFrame && !MayPlanNow) return SetOffResult.Later;
 
             plans++;
 
@@ -278,6 +278,11 @@ namespace YourBuddy
         protected SetOffResult SetOff<T, TItem>(T task, System.Action<T, NavPath?> begin, TryCursor<TItem> cursor, int maxPlans)
             where T : ErrandLeg =>
             SetOff(task, begin, ref cursor.Plans, maxPlans, ref cursor.Failure, onePlanPerFrame: true);
+
+        /// <summary>
+        /// No reach was planned this frame yet, or a console command plans at once. docs/behaviour.md §3
+        /// </summary>
+        protected bool MayPlanNow => planAtOnce || !Body.PlannedThisFrame;
 
         /// <summary>
         /// Whether TryStart goes on with the candidates `cursor` parked, rather than collecting afresh.

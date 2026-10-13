@@ -3,6 +3,7 @@
   <ItemGroup>
     <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceErrand.cs" Link="ResourceErrand.cs" />
     <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceDutySettings.cs" Link="ResourceDutySettings.cs" />
+    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceKinds.cs" Link="ResourceKinds.cs" />
     <Compile Include="../../YourBuddy/Commands/BuddyResourceDebug.cs" Link="BuddyResourceDebug.cs" />
   </ItemGroup>
 </Project>

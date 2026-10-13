@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using NPC.Core;
-using NPC.Core.Agents;
 using NPC.Core.Navigation;
 using UnityEngine;
 using static YourBuddy.Items;
@@ -130,9 +129,9 @@ namespace YourBuddy
             }
 
             public override string Name => ToBin ? "the trash can" : From != null ? From.Name : $"'{ItemLabel}'";
-            public override float Reach => SnackReachDist;
-            public override float[] StandOffs => SnackStandOffs;
-            public override float ReachBelow => SnackReachBelow;
+            public override float Reach => ItemReachDist;
+            public override float[] StandOffs => ItemStandOffs;
+            public override float ReachBelow => ItemReachBelow;
 
             public override void Defer(float seconds) => errand.Defer(Own, seconds);
 
@@ -245,36 +244,24 @@ namespace YourBuddy
             skipped = 0;
             Vector3 here = Here;
             float floorY = Body.FloorUnderBuddy().y;
-            float margin = TidySearchRadius + SnackContainerMargin;
+            float margin = TidySearchRadius + ContainerMargin;
 
-            foreach (Door door in SceneScan.ThisFrame<Door>())
+            foreach (ContainerSpot spot in ContainersNear(here, margin))
             {
-                Transform? root = ContainerOf(door, out InstantItemDetector? contents);
-                // A closet has two doors; the first found brings both.
-                if (root == null || !CheckedContainers.Add(root)) continue;
-
-                Door[] doors = root.GetComponentsInChildren<Door>();
-                Vector3 point = DoorFacePoint(doors);
-                if (FlatDistanceSq(point, here) > margin * margin) continue;
-
-                // Both were found together. What it holds is never loose, even out of bounds.
-                List<Grabbable> inside = contents!.GetItemsInZone();
+                // What it holds is never loose, even out of bounds.
+                List<Grabbable> inside = spot.Contents.GetItemsInZone();
                 ContainedItems.UnionWith(inside);
-                if (!InBounds(point, here, floorY, root)) continue;
+                if (!InBounds(spot.Face, here, floorY, spot.Root)) continue;
 
                 Grabbable? trash = inside.Find(item => IsTrash(item) && TakeBlocker(item) == null);
-                if (trash == null) continue;
+                if (trash == null || spot.StructureOff()) continue;
 
-                CustomRoom room = root.GetComponentInParent<CustomRoom>(true);
-                if (room != null && !room.EnabledStructure) continue;
-
-                TrashContainer container = new(root, doors, contents, root.GetComponent<HidingSpot>());
+                TrashContainer container = new(spot.Root, spot.Doors, spot.Contents, spot.Root.GetComponent<HidingSpot>());
                 if (ContainerBlocker(container) != null) continue;
 
-                if (Skips.Has(root)) skipped++;
-                else TidySpots.Add(new TidySpot(trash, container, point));
+                if (Skips.Has(spot.Root)) skipped++;
+                else TidySpots.Add(new TidySpot(trash, container, spot.Face));
             }
-            CheckedContainers.Clear();
             // Loaded into a sell station, furnace or airlock, so the player put it there. docs/items.md §3
             foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>()) ContainedItems.UnionWith(detector.Items);
 
@@ -295,8 +282,7 @@ namespace YourBuddy
         }
 
         private bool InBounds(Vector3 point, Vector3 here, float floorY, Transform what) =>
-            FlatDistanceSq(point, here) <= TidySearchRadius * TidySearchRadius &&
-            point.y >= floorY - SnackReachBelow && point.y <= floorY + ReachTask.ReachHeight && Body.OnMyVessel(what);
+            InReachBand(point, here, floorY, TidySearchRadius) && Body.OnMyVessel(what);
 
         /// <summary>
         /// The trash can nearest the item, within TidyBinRadius, with its slot.
@@ -376,7 +362,7 @@ namespace YourBuddy
 
                     if (task.From != null) OpenContainerDoors(task.From.Doors, task.OpenedDoors, task.Name);
                     task.Phase = TidyPhase.Handle;
-                    task.PhaseUntil = Time.time + (task.ToBin ? TidyAimSeconds : task.From != null ? SnackOpenSeconds : TidyReachSeconds);
+                    task.PhaseUntil = Time.time + (task.ToBin ? ItemAimSeconds : task.From != null ? DoorOpenSeconds : ItemReachSeconds);
                     break;
                 case TidyPhase.Handle:
                     if (Time.time < task.PhaseUntil) break;
@@ -440,7 +426,7 @@ namespace YourBuddy
             {
                 toBin.Node = toBin.StandPoint = Here;
                 toBin.Phase = TidyPhase.Handle;
-                toBin.PhaseUntil = Time.time + TidyLiftSeconds;
+                toBin.PhaseUntil = Time.time + ItemLiftSeconds;
                 Body.Walk(toBin, null);
                 return Vector3.zero;
             }
@@ -474,7 +460,7 @@ namespace YourBuddy
             {
                 YourBuddyPlugin.Log.LogInfo($"[ai] '{task.ItemLabel}' did not go into the trash can ({why}) - trying again");
                 task.Phase = TidyPhase.Handle;
-                task.PhaseUntil = Time.time + TidyAimSeconds;
+                task.PhaseUntil = Time.time + ItemAimSeconds;
                 return;
             }
             Skips.Skip(task.Item.transform, TidySkipSeconds);

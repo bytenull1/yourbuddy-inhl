@@ -280,14 +280,14 @@ namespace YourBuddy
                 s.Paused = false;
                 return s.Buying ? "Buying allowed within the limit." : "Buying off.";
             }
-            for (int kind = 0; kind < 3; kind++)
+            for (int kind = 0; kind < ResourceKinds.Count; kind++)
             {
-                if (what != ResourceDutySettings.Label(kind)) continue;
+                if (what != ResourceKinds.Label(kind)) continue;
 
                 ResourceRule rule = s.Rule(kind);
                 rule.Enabled = NpcConsole.Toggle(args, 1, rule.Enabled);
                 s.Paused = false;
-                return $"{ResourceDutySettings.Label(kind)} duty {OnOff(rule.Enabled)}.";
+                return $"{ResourceKinds.Label(kind)} duty {OnOff(rule.Enabled)}.";
             }
             return ResourcesUsage;
         }

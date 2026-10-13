@@ -14,28 +14,28 @@ namespace YourBuddy
         /// <summary>
         /// Up close, unlike a terminal. The flat distance from the buddy to a door's face or an item's top.
         /// </summary>
-        public const float SnackReachDist = 0.9f;
-        public static readonly float[] SnackStandOffs = [0.55f, 0.7f, 0.85f];
-        public const float SnackReachBelow = 0.3f;
+        public const float ItemReachDist = 0.9f;
+        public static readonly float[] ItemStandOffs = [0.55f, 0.7f, 0.85f];
+        public const float ItemReachBelow = 0.3f;
         /// <summary>
         /// Loose food further than this from where it was chosen has been moved; the walk ends.
         /// </summary>
-        public const float SnackItemMovedDist = 0.5f;
+        public const float ItemMovedDist = 0.5f;
         /// <summary>
         /// The door opens over about 2 s (Door.openSpeed 0.5); the buddy looks in meanwhile.
         /// </summary>
-        public const float SnackOpenSeconds = 1.5f;
+        public const float DoorOpenSeconds = 1.5f;
         /// <summary>
         /// A container this far beyond a search radius still has its contents kept out of the loose items.
         /// </summary>
-        public const float SnackContainerMargin = 2f;
+        public const float ContainerMargin = 2f;
         /// <summary>
         /// Each interval is the configured one, this much either way at random.
         /// </summary>
-        public const float SnackIntervalJitter = 0.25f;
-        public const float TidyReachSeconds = 0.5f;
-        public const float TidyLiftSeconds = 0.5f;
-        public const float TidyAimSeconds = 0.4f;
+        public const float IntervalJitter = 0.25f;
+        public const float ItemReachSeconds = 0.5f;
+        public const float ItemLiftSeconds = 0.5f;
+        public const float ItemAimSeconds = 0.4f;
         /// <summary>
         /// How many of the nearest candidates a task picks between at random, instead of always the
         /// first. docs/items.md
@@ -49,8 +49,9 @@ namespace YourBuddy
         /// <summary>
         /// Borrowed by one collector at a time, and left empty.
         /// </summary>
-        public static readonly HashSet<Transform> CheckedContainers = [];
+        private static readonly HashSet<Transform> CheckedContainers = [];
         public static readonly HashSet<Grabbable> PutAwayItems = [];
+        private static readonly List<ContainerSpot> NearbyContainers = [];
 
         public static float FlatDistanceSq(Vector3 a, Vector3 b)
         {
@@ -63,11 +64,22 @@ namespace YourBuddy
         /// Why an item at `now` is no longer the one planned for at `planned`, or null.
         /// </summary>
         public static string? MovedBlocker(Vector3 now, Vector3 planned) =>
-            FlatDistanceSq(now, planned) > SnackItemMovedDist * SnackItemMovedDist ? "it has been moved" : null;
+            FlatDistanceSq(now, planned) > ItemMovedDist * ItemMovedDist ? "it has been moved" : null;
 
         public static bool ColliderBounds(GameObject root, out Bounds bounds) => NpcHands.ColliderBounds(root, out bounds);
 
-        public static Vector3 ItemTop(Grabbable item)
+        /// <summary>
+        /// Within `radius` of `here`, flat, and at a height reached from `floorY`: an item's top at most
+        /// ItemReachBelow under the floor, at most ReachTask.ReachHeight over it. Whose vessel is the caller's question.
+        /// </summary>
+        public static bool InReachBand(Vector3 point, Vector3 here, float floorY, float radius) =>
+            FlatDistanceSq(point, here) <= radius * radius &&
+            point.y >= floorY - ItemReachBelow && point.y <= floorY + ReachTask.ReachHeight;
+
+        /// <summary>
+        /// The top of the item's colliders, the part visible on a floor or a shelf.
+        /// </summary>
+        public static Vector3 ItemTop(Component item)
         {
             if (!ColliderBounds(item.gameObject, out Bounds bounds)) return item.transform.position;
 
@@ -179,6 +191,49 @@ namespace YourBuddy
                 PutAwayItems.UnionWith(contents!.GetItemsInZone());
             }
             CheckedContainers.Clear();
+        }
+
+        /// <summary>
+        /// A fridge, cabinet, closet, chest or locker near the buddy: what holds its contents, its doors,
+        /// and the face between them it is walked up to.
+        /// </summary>
+        public readonly struct ContainerSpot(Transform root, InstantItemDetector contents, Door[] doors, Vector3 face)
+        {
+            public readonly Transform Root = root;
+            public readonly InstantItemDetector Contents = contents;
+            public readonly Door[] Doors = doors;
+            public readonly Vector3 Face = face;
+
+            /// <summary>
+            /// In a custom room whose structure is switched off.
+            /// </summary>
+            public bool StructureOff()
+            {
+                CustomRoom room = Root.GetComponentInParent<CustomRoom>(true);
+                return room != null && !room.EnabledStructure;
+            }
+        }
+
+        /// <summary>
+        /// Every container whose doors' face is within `radius` of `here`, flat, once each (a closet has two
+        /// doors). The list is shared, so one collector at a time. docs/snacks.md §1
+        /// </summary>
+        public static List<ContainerSpot> ContainersNear(Vector3 here, float radius)
+        {
+            NearbyContainers.Clear();
+            CheckedContainers.Clear();
+            foreach (Door door in SceneScan.ThisFrame<Door>())
+            {
+                Transform? root = ContainerOf(door, out InstantItemDetector? contents);
+                if (root == null || !CheckedContainers.Add(root)) continue;
+
+                Door[] doors = root.GetComponentsInChildren<Door>();
+                Vector3 face = DoorFacePoint(doors);
+                // Both were found together.
+                if (FlatDistanceSq(face, here) <= radius * radius) NearbyContainers.Add(new ContainerSpot(root, contents!, doors, face));
+            }
+            CheckedContainers.Clear();
+            return NearbyContainers;
         }
 
         /// <summary>

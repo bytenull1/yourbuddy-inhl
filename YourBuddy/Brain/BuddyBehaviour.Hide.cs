@@ -104,9 +104,9 @@ namespace YourBuddy
             public readonly HidingSpot Spot = spot;
 
             public override string Name => "the " + ContainerKind(Spot.transform);
-            public override float Reach => SnackReachDist;
-            public override float[] StandOffs => SnackStandOffs;
-            public override float ReachBelow => SnackReachBelow;
+            public override float Reach => ItemReachDist;
+            public override float[] StandOffs => ItemStandOffs;
+            public override float ReachBelow => ItemReachBelow;
 
             public override void Defer(float seconds) => skips.Skip(Own, HideSkipSeconds);
         }
@@ -144,7 +144,7 @@ namespace YourBuddy
             string? failure = null;
             int plans = 0;
             HideCandidates.Clear();
-            foreach (HidingSpot spot in FindObjectsOfType<HidingSpot>())
+            foreach (HidingSpot spot in SceneScan.ThisFrame<HidingSpot>())
             {
                 if (spot == null || !spot.gameObject.activeInHierarchy) continue;
 
@@ -353,11 +353,11 @@ namespace YourBuddy
 
             Vector3 toFace = hideFace - transform.position;
             toFace.y = 0f;
-            if (toFace.sqrMagnitude <= SnackReachDist * SnackReachDist)
+            if (toFace.sqrMagnitude <= ItemReachDist * ItemReachDist)
             {
                 OpenContainerDoors(hideSpot!.GetComponentsInChildren<Door>(), hideOpened, hideName);
                 hideState = HideState.Entering;
-                hidePhaseUntil = Time.time + SnackOpenSeconds;
+                hidePhaseUntil = Time.time + DoorOpenSeconds;
                 return Vector3.zero;
             }
 
@@ -527,7 +527,7 @@ namespace YourBuddy
             hideLast = "left " + hideName + " - " + why;
             OpenContainerDoors(hideSpot!.GetComponentsInChildren<Door>(), hideOpened, hideName);
             hideState = HideState.Leaving;
-            hidePhaseUntil = Time.time + SnackOpenSeconds;
+            hidePhaseUntil = Time.time + DoorOpenSeconds;
         }
 
         /// <summary>

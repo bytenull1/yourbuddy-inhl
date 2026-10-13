@@ -38,12 +38,13 @@ the buddy through a few `internal` members, never its fields.
 | `BuddyBehaviour.Modes.cs` | `UpdateFollow` (on the agent's `Pursue`), `UpdateRoute` (on `SimpleAdvance`), `FinishRoute`, `StartRoute`, `SetMode`, the reach task in hand | `NpcAgent` | [behaviour](behaviour.md) |
 | `BuddyBehaviour.Fear.cs` | seeing the Breathless, stress, `FearState`, `HoldBackFromMonster`, the `Flee` mode | `NavProbe`, `NavGraph`, `GameInternals` | [fear](fear.md) |
 | `BuddyBehaviour.Hide.cs` | hiding in a closet or locker: walk, teleport in/out, doors, who ends it | `NpcAgent` | [fear](fear.md) |
-| `BuddyBehaviour.Anomaly.cs` | acting out an anomaly: starting one (`TryStartAnomaly`), the per-frame update, holds while watched, `EndAnomaly`, `Speak`; each set piece's own fields, constants and steps are in `BuddyBehaviour.Anomaly.<Name>.cs` (Sleeper, Shipyard, Doors, Stare, Vanish, Pipe, Move, Flicker, Nodes) | `PlayerView`, `BuddyGore`, `ScareSounds`, NPC.Core's `NpcInteraction` | [anomalies](anomalies.md) |
+| `BuddyBehaviour.Anomaly.cs` | acting out an anomaly: starting one (`TryStartAnomaly`), the per-frame update, holds while watched, `EndAnomaly`, `Speak`; each set piece's own fields, constants and steps are in `BuddyBehaviour.Anomaly.<Name>.cs` (Sleeper, Shipyard, Doors, Stare, Vanish, Pipe, Move, Flicker, Nodes, Later) | `PlayerView`, `BuddyGore`, `ScareSounds`, NPC.Core's `NpcInteraction` | [anomalies](anomalies.md) |
 | `AnomalyDirector.cs` | when an anomaly happens and how far it may go: difficulty, the game's event tier, the roll, cooldown, the draw; the player's stress | `BuddyBehaviour`, `GameManager.EventSystem` | [anomalies](anomalies.md#1-how-often-and-how-far) |
 | `Anomaly.cs`, `AnomalyLines.cs` | the catalogue (`AnomalyKind`, severity, weight, once only) and what the buddy says | - | [anomalies](anomalies.md#2-the-anomalies) |
 | `AnomalyMemory.cs` | the kinds a save has had and the lines said, kept in the sidecar | `BuddySaveFile` | [anomalies](anomalies.md#once-per-save) |
 | `BuddyDouble.cs` | a copy of the buddy's body with nothing else: the sleeper | - | [anomalies](anomalies.md#sleeper) |
 | `AnomalyProps.cs`, `BbModel.cs` | the meat and blood an anomaly leaves, never saved; a Blockbench model read from the dll | `GameInternals`, Newtonsoft | [anomalies](anomalies.md#the-mess-and-the-meat-model) |
+| `ModSounds.cs`, `MeatSounds.cs` | the mod's own embedded sounds, played through FMOD; the meat's squelches | - | [anomalies](anomalies.md#5-sounds) |
 | `PlayerView.cs`, `ScareSounds.cs`, `BuddyGore.cs` | what the player sees; the game's FMOD events borrowed; the bloody texture and the flickers' overlays | `NavProbe`, `GameInternals`, `BuddySkin` | [anomalies](anomalies.md#4-being-seen) |
 | `BuddyBehaviour.Autonomy.cs` | orders (`ApplyOrder`, `ApplyRouteOrder`, `RevokeOrder`), persistence, expiry, stand-down, bouts | `NavGraph` | [behaviour](behaviour.md) |
 | `BuddyBehaviour.Mind.cs` | the utility decider: scores urges, draws one, starts its errand | `Errand`, `LifeSupport` | [behaviour](behaviour.md#3-the-decider) |
@@ -58,13 +59,19 @@ the buddy through a few `internal` members, never its fields.
 | `TidyErrand.cs` | a tidying round: several pieces of trash to a trash can | `IErrandBody`, `Items`, `GameInternals` | [items](items.md) |
 | `SellErrand.cs` | a selling run: nearby trash boxes into one sell station, one press per load | `IErrandBody`, `Items`, NPC.Core's `SellPens`, `GameInternals` | [items](items.md) |
 | `PlayErrand.cs` | a play session: carry near, carry far, or throw and fetch | `IErrandBody`, `Items`, `NavProbe` | [items](items.md) |
-| `Items.cs` | item rules every errand shares: `IsTrash`, `IsPlaything`, `TakeBlocker`, containers and their doors, `ShuffleNearest`, the item-reach constants | `GameInternals` | [items](items.md) |
+| `Items.cs` | item rules every errand shares: `IsTrash`, `IsPlaything`, `TakeBlocker`, `InReachBand`, `ContainersNear` and their doors, `ShuffleNearest`, the item-reach constants | `GameInternals` | [items](items.md) |
+| `ResourceErrand.cs` | resource duties: refilling the loader, restocking, storing a spare; one buddy owns the loader at a time | `IErrandBody`, `ResourceDuty`, `ResourceStorage`, `GameInternals` | [resources](resources.md) |
+| `ResourceDuty.cs`, `ResourceDutySettings.cs`, `ResourceKinds.cs`, `ResourceDutyMenu.cs` | the shared owner and status, the save's settings, the oxygen/fuel/energy table, the talk window's Resources page | `BuddyConversation` | [resources](resources.md) |
+| `ResourceScan.cs`, `ResourceStorage.cs`, `ResourceProbeBudget.cs` | shops and cells, switched-off rooms included; clear floor for a spare; four floor probes a frame | `SceneSweeps`, `NavProbe` | [resources](resources.md#scans-and-storage) |
 | `SkipList.cs` | what a task leaves out for a while, per object: `Skip`, `Has`, `Prune` | - | [items](items.md) |
+| `SceneSweeps.cs` | scene sweeps with inactive objects: once per frame, or cached behind `SceneScan.MayRescan` | `SceneScan` | §4 |
+| `BuddySkin.cs` | swapping the body's texture and putting the original back (the suit, the blood, `buddy_dev skin`) | - | [reference](reference.md#2-debug-commands) |
 | `GameInternals.cs` | **every** reflection accessor YourBuddy needs into game types (NPC.Core has its own) | - | [game-model](game-model.md) |
 | `BuddyConversation.cs` | the buddy's side of NPC.Core's talk window: when it can talk, its title, commands and answers | `BuddyDialogCommands`, `BuddyManager` | [dialog](dialog.md) |
 | `BuddyBehaviour.Conversation.cs` | player-facing status for greetings and the Status command | `BuddyConversation`, `BuddyDialogCommands` | [dialog](dialog.md) |
 | `BuddyDialogCommands.cs` | keyword-matching typed text to an order, for one buddy or everyone | `BuddyCommands`, `BuddyRooms` | [dialog](dialog.md) |
 | `BuddyRooms.cs` | the buddy's words for NPC.Core's `StationRooms` (the docked station's rooms by name) | `StationRooms` | [dialog](dialog.md#goto-by-room) |
+| `BuddyResourceDebug.cs` | `buddy_dev drain`: a ship resource down to 20 % | `ResourceKinds` | [reference](reference.md#2-debug-commands) |
 | `BuddyCommands.cs` | the orders, shared by dialog and console, each for the buddy the caller chose; the only caller of `ApplyOrder` / `ApplyRouteOrder` / `RevokeOrder` | `BuddyBehaviour`, `NavGraph` | [behaviour](behaviour.md) |
 | `BuddyCryoSpawn.cs` | a new game's buddy asleep in a prop cryo capsule until after the player's pod opens | `YourBuddyPlugin`, `BuddyManager`, `GameInternals` | [game-model](game-model.md#the-cryo-room) |
 | `BuddyMode.cs`, `BuddySaveFile.cs` | enums (`BuddyMode`, `FearState`, `OrderPersistence`) and the save DTOs (`BuddySaveFile`, `BuddyState`) | - | - |
@@ -133,6 +140,9 @@ The planning loop behind Follow is the agent's `Pursue`
 |---|---|---|
 | Every sell station, switched off or not | `SellErrand._allStations` | swept again every `SellStationRescan` (30 s) |
 | Scene arrays for the collectors | `SceneScan.ThisFrame` | every frame |
+| Suits and equipment holders, inactive included | `SceneSweeps.WithInactive` | every frame |
+| Resource shops and cells, switched off or not | `ResourceScan` | swept again every 5 s |
+| Reaches a resource try already planned | `ResourceErrand` | `ReachMemoSeconds` (10 s) |
 
 NPC.Core's own caches (gates, graph edges, probes, doorway sensors, airlocks, pin panels, sell pens,
 and each agent's environments and footstep doorways) are in
@@ -223,7 +233,7 @@ gravity ([eva.md §7](eva.md#7-floating)).
 |---|---|
 | `FindPath` signature or `NavPath` | NPC.Core's agent, and here `UpdateFlee` / `TryPlanRetreat` / `PlanKeepsClear` / `EndFlee`, `WalkToHide`, `BuddyCommands.GoToNode`. Every construction must fill `WaypointFloorY`. `==` on a `NavPath` compares list references |
 | an order the player can give | `BuddyCommands.cs`, via `ApplyOrder` / `ApplyRouteOrder`, never `SetMode` ([an-order-is-not-a-mode](invariants.md#an-order-is-not-a-mode)); and `BuddyDialogCommands.Names` **and its match order** |
-| an urge the buddy can choose | `Mind.cs`: the `Urge` enum, `ScoreUrges` (its weight), `ActOn`, `ErrandOf`, `UrgeName`; a new errand is an `Errand` subclass created in `BuddyBehaviour.Errands.cs` |
+| an urge the buddy can choose | `Mind.cs`: the `Urge` enum, `ScoreUrges` (its weight), `ActOn`, `ErrandOf`, `UrgeName`; a new errand is an `Errand` subclass created in `BuddyBehaviour.Errands.cs`, with its line in `AppendErrands` (the HUD and `buddy_dev mind`) |
 | the buddy and the outside (space, airlocks, the suit) | `BuddySuit` / `EvaRun` / `SuitFetchErrand` ([eva.md](eva.md)); NPC.Core reads the suit through `BuddyAgentSettings.Suited` / `MayGoOutside`, and owns the side of the airlocks (`NpcAgent.IsOutside`, `Gravity`) and flight (`Floating`, `FlyFollow`, `FlyTo`) |
 | what an errand may do to the buddy | only through `IErrandBody` (`Errand.cs`); a new need is a new member there, never a buddy field made internal |
 | a search radius | its owner filter, the agent's `OnMyVessel` ([behaviour.md §3](behaviour.md#range)) |

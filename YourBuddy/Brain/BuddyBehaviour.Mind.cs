@@ -16,7 +16,7 @@ namespace YourBuddy
         // What the buddy might want, and how much. docs/behaviour.md §3
         private enum Urge { None, Terminal, Suit, SuitFetch, Snack, Sell, Tidy, Play, Wander, Follow, Resources }
 
-        private const int UrgeCount = 11;
+        private static readonly int UrgeCount = System.Enum.GetValues(typeof(Urge)).Length;
 
         /// <summary>
         /// What a collector last found for one urge, as a candidate count and the nearest distance.
@@ -100,8 +100,8 @@ namespace YourBuddy
         private int pickAttempt;
 
         /// <summary>
-        /// Weighs everything the buddy might want and acts on one of them. True when something started.
-        /// Called from UpdateAutonomy once the stand-down reasons have passed.
+        /// Weighs everything the buddy might want and acts on one of them. Called from UpdateAutonomy once
+        /// the stand-down reasons have passed.
         /// </summary>
         private void ChooseAndAct(Player player)
         {
@@ -321,7 +321,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The four fetch-and-carry urges. They differ only in which collector answers "is there anything,
+        /// The fetch-and-carry urges (Errands). They differ only in which collector answers "is there anything,
         /// and how far", which the scan budget decides whether to ask at all.
         /// </summary>
         private void ScoreErrand(Urge urge, Errand errand, float weight, ref int scans)

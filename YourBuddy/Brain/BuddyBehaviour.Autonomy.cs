@@ -343,10 +343,8 @@ namespace YourBuddy
         /// The [mind] lines, shared by the HUD and buddy_dev mind. Test commands: buddy_dev bout, buddy_order terminal, buddy_order snack, buddy_order tidy, buddy_order sell, buddy_order play, buddy_order fetchsuit.
         /// </summary>
         internal string DescribeTimers() =>
-            "Mind: " + DescribeMind() + "\nWhy: " + DescribeUrges() + "\nAir: " + lifeSupport.Describe() +
-            "\nSnack: " + snacks.Describe() + "\nTidy: " + tidying.Describe() + "\nSell: " + selling.Describe() +
-            "\nPlay: " + play.Describe() + "\nFetch suit: " + suitFetch.Describe() + "\nOdd: " + DescribeAnomaly() +
-            "\nAnomalies: " + AnomalyDirector.Describe();
+            AppendErrands(new System.Text.StringBuilder("Mind: ").Append(DescribeMind()).Append("\nWhy: ").Append(DescribeUrges()))
+                .Append("\nAnomalies: ").Append(AnomalyDirector.Describe()).ToString();
 
         /// <summary>
         /// The HUD's Mind and Why lines, minus what the Mode and Orders lines already say. A stand-down
