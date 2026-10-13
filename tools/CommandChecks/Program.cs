@@ -58,6 +58,9 @@ Check(!BuddyDialogCommands.NamesFor(buddy).Contains("Oxygen on") &&
 buddy.SetState(BuddyMode.Stay);
 string status = BuddyDialogCommands.Run(buddy, "what are you doing?");
 Check(status.Contains("wait here", StringComparison.Ordinal), "status reflects stay");
+buddy.Lingering = true;
+Check(buddy.ConversationStatus.Contains("having a look", StringComparison.Ordinal), "lingering stay has its own status");
+buddy.Lingering = false;
 Check(buddy.LastOrder == "follow", "status does not issue an order");
 buddy.SetState(BuddyMode.Stay, FearState.Scared);
 Check(buddy.ConversationStatus.Contains("safe", StringComparison.Ordinal), "fear outranks stay greeting");

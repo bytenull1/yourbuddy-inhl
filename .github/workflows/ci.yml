@@ -2,6 +2,7 @@ name: checks
 
 # The plugin itself is not built here: it compiles against the game's own assemblies,
 # which can't be redistributed (YourBuddy/lib/README.md). Build Debug and Release locally.
+# The check harnesses in tools/ link production files with stubs, so they need no game assemblies.
 # NPC.Core is checked out beside it, so links into its docs are checked too.
 
 on:
@@ -26,3 +27,11 @@ jobs:
           python-version: "3.x"
       - name: Doc links and reference constants
         run: python yourbuddy-inhl/tools/doccheck.py --verbose
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: yourbuddy-inhl/global.json
+      - name: Check harnesses
+        run: |
+          for p in CommandChecks ResourceChecks ResourceJobChecks; do
+            dotnet run --project "yourbuddy-inhl/tools/$p/$p.csproj" -c Release
+          done

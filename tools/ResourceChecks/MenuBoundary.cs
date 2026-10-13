@@ -1,5 +1,15 @@
 using System;
 namespace UnityEngine { internal static class Time { internal static float time = 1; } }
+namespace Space.Enums { internal enum ResourceType { Oxygen, Fuel, Energy } }
+internal sealed class OxygenController { internal int Capacity = 0, RemainingOxygen = 0; internal bool TryReduceOxygen(int n) => true; }
+internal sealed class FuelController { internal int Capacity = 0, Fuel = 0; internal bool TryConsumeFuel(int n) => true; }
+internal sealed class ElectricityController { internal int Capacity = 0, Energy = 0; internal bool TryReduceEnergy(int n) => true; }
+internal sealed class SpaceShip
+{
+    internal OxygenController OxygenController = new();
+    internal FuelController FuelController = new();
+    internal ElectricityController ElectricityController = new();
+}
 namespace NPC.Core
 {
     internal static class NpcEvents

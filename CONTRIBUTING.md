@@ -65,7 +65,7 @@ The decompile and exports are the game developer's work and must never be commit
 - **Build clean.** Debug and Release must both build; every warning is an error. The SDK is pinned
   in `global.json` and the language version in the project file.
 - **Run the checks** CI runs: `python tools/doccheck.py` (doc links, anchors, `reference.md`
-  constants).
+  constants) and the [check harnesses](#check-harnesses).
 - **Test in the game.** Say in the pull request what you tried. For navigation, test stairs and doorways
   on both the ship and a station - they are where regressions show up.
 - **Follow the code style** in [AGENTS.md §3](AGENTS.md#3-code-conventions): short comments that
@@ -111,20 +111,23 @@ The graph ships with NPC.Core; see [its CONTRIBUTING](https://github.com/bytenul
 Never write mod state into the game's own save - use the `.buddy` sidecar, which NPC.Core writes. Uninstalling the mod must
 leave saves intact ([NPC.Core's invariants](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#mod-state-never-enters-the-vanilla-save)).
 
+### Check harnesses
+
+Console programs in `tools/` that compile production files against hand-written engine stubs. They
+need no game assemblies. Run each with `dotnet run --project tools/<Name>/<Name>.csproj -c Release`.
+
+| Harness | Covers |
+|---|---|
+| `CommandChecks` | Dialog command parsing, group orders, conversation status, command lists |
+| `ResourceChecks` | Resource settings across save, new game and scene reset; spending rules; the Resources page |
+| `ResourceJobChecks` | Loader eligibility, cell fetch, eject and store, buying, one plan a frame, HUD states, the drain command |
+
+They do not exercise Unity physics, navigation or game events; those still need a check in the game.
+When production code gains a member a linked file uses, add it to the harness's stub file.
+
 ---
 
 ## Using an AI assistant
 
 Fine, and the docs are written to help one. Point it at [AGENTS.md](AGENTS.md) first. Review what it
 writes into docs: remove status notes, dates and long narratives before committing.
-
-### Resource policy checks
-
-Run `dotnet run --project tools/ResourceChecks/ResourceChecks.csproj` after changing resource
-settings or spending rules. This links the production policy code and uses the same Newtonsoft
-serializer as the sidecar. It requires the local references described in [lib/README.md](YourBuddy/lib/README.md).
-The game's navigation, pickup and insertion physics still require a gameplay check.
-
-Run `dotnet run --project tools/ResourceJobChecks/ResourceJobChecks.csproj` for loader eligibility,
-resource HUD states and the drain command. It runs the production resource job against engine
-stubs; it does not exercise Unity physics or game-save event dispatch.

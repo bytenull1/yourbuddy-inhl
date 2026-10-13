@@ -9,12 +9,13 @@
   <ItemGroup>
     <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceDutySettings.cs" Link="ResourceDutySettings.cs" />
     <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceDutyMenu.cs" Link="ResourceDutyMenu.cs" />
+    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceKinds.cs" Link="ResourceKinds.cs" />
     <Compile Include="../../YourBuddy/Commands/BuddyDialogCommands.cs" Link="BuddyDialogCommands.cs" />
     <Compile Include="../../YourBuddy/Brain/BuddyBehaviour.Conversation.cs" Link="BuddyBehaviour.Conversation.cs" />
     <Compile Include="../../YourBuddy/Brain/BuddyMode.cs" Link="BuddyMode.cs" />
     <Compile Include="../CommandChecks/Stubs.cs" Link="CommandStubs.cs" />
     <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceDuty.cs" Link="ResourceDuty.cs" />
     <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceProbeBudget.cs" Link="ResourceProbeBudget.cs" />
-    <Reference Include="Newtonsoft.Json"><HintPath>../../YourBuddy/lib/Newtonsoft.Json.dll</HintPath></Reference>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 </Project>

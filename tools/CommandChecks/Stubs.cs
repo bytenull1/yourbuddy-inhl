@@ -19,6 +19,7 @@ namespace YourBuddy
     public sealed partial class BuddyBehaviour
     {
         internal bool IsOutside, Floating, SuitSuited, IsDead, Asleep, Hiding;
+        internal bool Lingering = false;
         internal string Name = "Buddy";
         internal object Agent = new();
         internal string LastOrder = "unchanged";
