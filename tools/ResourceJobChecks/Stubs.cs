@@ -50,7 +50,12 @@ namespace UnityEngine
         public static float Cos(float x) => MathF.Cos(x);
         public static float Sin(float x) => MathF.Sin(x);
     }
-    public struct Bounds { public Vector3 center, size, extents; }
+    public struct Bounds
+    {
+        public Vector3 center, size, extents;
+        public bool Contains(Vector3 p) =>
+            MathF.Abs(p.x - center.x) <= extents.x && MathF.Abs(p.y - center.y) <= extents.y && MathF.Abs(p.z - center.z) <= extents.z;
+    }
     public class BoxCollider : Component { public Bounds bounds; }
     public struct RaycastHit { public BoxCollider collider; public Vector3 point; }
 }

@@ -8,7 +8,7 @@ using Space.Enums;
 int checks = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); checks++; }
 ItemDetector slot = new() { transform = new() };
-slot.Components[typeof(BoxCollider)] = new BoxCollider();
+slot.Components[typeof(BoxCollider)] = new BoxCollider { bounds = new Bounds { extents = Vector3.one * .5f } };
 ResourceController loader = new() { transform = new(), Slot = slot };
 SpaceShip ship = new() { CellController = loader };
 GameManager.Instance.PlayerShip = ship;
@@ -290,6 +290,23 @@ ResourceDuty.Settings.Buying = false;
 ResourceStorage.Spots = [];
 ResourceStorage.Floor = p => null;
 ResourceStorage.IsClear = false;
+// The slot keeps listing a cell it ejected (inserting deactivates it): only a cell in its box is queued there.
+Grabbable ejectedItem = new() { transform = new() { position = new(5, 0, 0) } };
+ResourceContainer ejectedCell = new() { transform = ejectedItem.transform };
+ejectedCell.Components[typeof(Grabbable)] = ejectedItem;
+slot.Items.Add(ejectedItem);
+SceneScan.Snapshot<ResourceContainer>.Items = [ejectedCell];
+SceneScan.Snapshot<ItemDetector>.Items = [slot];
+loader.Current = null;
+ship.OxygenController.Value = 20;
+IErrandBody ejectedBody = new();
+ResourceErrand ejectedJob = new(ejectedBody);
+Check(ejectedJob.TryStart(out _) && ejectedBody.Leg?.Name == "resource cell", "a cell the slot still lists after ejecting it is a candidate");
+ejectedBody.Leg!.Approach(out _); // The preceding check established the fetch leg.
+Check(ejectedBody.Hands.Item == ejectedItem, "a cell the slot still lists after ejecting it is picked up");
+ejectedJob.Cancel("check done");
+ResourceDuty.Settings.Paused = false;
+slot.Items.Clear();
 GameManager.Instance.PlayerShip = null;
 Check(BuddyResourceDebug.Drain(["fuel"]).Contains("No player ship"), "no ship handled");
 Console.WriteLine($"{checks} resource job/debug checks passed.");

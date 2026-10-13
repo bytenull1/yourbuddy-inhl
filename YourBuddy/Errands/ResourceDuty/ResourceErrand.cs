@@ -147,6 +147,12 @@ namespace YourBuddy
         private bool IsChamber(ItemDetector detector) =>
             detector != slot && loaderAirlock != null && detector.GetComponentInParent<Airlock>() == loaderAirlock;
 
+        // Whether `item` is placed in another slot. The loader deactivates a cell it takes, so no trigger exit
+        // follows and its slot keeps listing every cell it ever ejected: only one lying in its box counts.
+        private bool Staged(ItemDetector detector, Grabbable item) =>
+            !IsChamber(detector) && detector.Items.Contains(item) &&
+            (detector != slot || (slot.TryGetComponent(out BoxCollider box) && box.bounds.Contains(item.transform.position)));
+
         private Vector3 SlotPoint() =>
             slot == null ? Here : slot.TryGetComponent(out BoxCollider box) ? box.bounds.center : slot.transform.position;
 
@@ -349,7 +355,11 @@ namespace YourBuddy
                 stagedItems.Clear();
                 foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>())
                 {
-                    if (detector != null && !IsChamber(detector)) stagedItems.UnionWith(detector.Items);
+                    if (detector == null || IsChamber(detector)) continue;
+                    foreach (Grabbable listed in detector.Items)
+                    {
+                        if (listed != null && Staged(detector, listed)) stagedItems.Add(listed);
+                    }
                 }
                 stagedRefresh = Time.time + StagedRescanSeconds;
             }
@@ -642,7 +652,7 @@ namespace YourBuddy
             {
                 foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>())
                 {
-                    if (detector != null && !IsChamber(detector) && detector.Items.Contains(item)) return Stop("cell was placed in another slot");
+                    if (detector != null && Staged(detector, item)) return Stop("cell was placed in another slot");
                 }
                 if (Items.TakeBlocker(item, Body.Hands.Item) != null || Body.TakenByAnother(item.transform) ||
                     (Items.ItemTop(item) - leg.TargetPoint).sqrMagnitude > MovedSqr) return Stop("cell moved or was taken");

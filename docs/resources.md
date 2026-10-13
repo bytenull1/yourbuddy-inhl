@@ -69,7 +69,9 @@ Resource and shop searches include switched-off rooms, like the sell and suit er
 is loaded before Buddy plans to it. Active objects come from `SceneScan.ThisFrame`; switched-off ones
 from a 5 s cache (`ResourceScan`).
 Cell candidates reuse a list; staged-item membership refreshes twice per second, immediately
-before buying, and is checked live before pickup.
+before buying, and is checked live before pickup. The loader's own slot counts a cell as staged only
+while it lies in the slot's box: the game deactivates a cell it loads, so no trigger exit follows and
+the slot keeps listing every cell it ever ejected.
 After buying, verification waits for the next frame's snapshot instead of forcing a new scan.
 Storage uses active ship nodes and the carried item's footprint. A shared budget permits at
 most four candidate probes per frame, and the route to a spot is one reach plan; a pending search
