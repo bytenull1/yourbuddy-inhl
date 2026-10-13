@@ -23,6 +23,8 @@ namespace YourBuddy
         private void Awake()
         {
             cc = GetComponent<CharacterController>();
+            // Draw-only HUD, no GUILayout: npc-core:docs/invariants.md#read-only-panels-build-on-repaint
+            useGUILayout = false;
             nearMonster = node => (node - lastMonsterPos).sqrMagnitude < FearRestraintDist * FearRestraintDist;
             inDockCorridor = InDockCorridor;
             nearMonsterOrCorridor = node => nearMonster(node) || InDockCorridor(node);

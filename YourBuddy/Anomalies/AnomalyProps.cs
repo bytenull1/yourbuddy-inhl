@@ -235,8 +235,12 @@ namespace YourBuddy
 
             _messCheckAt = Time.time + MessCheckSeconds;
             Transform? eyes = PlayerView.Camera();
-            if (eyes == null) return;
+            if (eyes != null) CheckMesses(eyes);
+        }
 
+        // Apart from Tick: the lambdas capture `eyes`, and a captured local allocates on every entry.
+        private static void CheckMesses(Transform eyes)
+        {
             Fleeting.RemoveAll(p =>
             {
                 if (p == null) return true;
