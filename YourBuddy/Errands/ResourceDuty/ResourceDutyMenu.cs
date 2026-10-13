@@ -30,7 +30,7 @@ namespace YourBuddy
             if (text.Equals("resources", StringComparison.OrdinalIgnoreCase))
             {
                 Open = KeepPage = true;
-                return "Resource duties run when Buddy is free.";
+                return "Enable duties, then choose Orders > Decide to let Buddy work.";
             }
             if (!Open || !buttons.TryGetValue(text, out string? action)) { Reset(); return null; }
             ResourceDutySettings s = ResourceDuty.Settings;

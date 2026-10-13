@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using NPC.Core;
 using NPC.Core.Navigation;
 using NPC.Core.World;
@@ -14,9 +14,9 @@ namespace YourBuddy
     public sealed partial class BuddyBehaviour
     {
         // What the buddy might want, and how much. docs/behaviour.md §3
-        private enum Urge { None, Terminal, Suit, SuitFetch, Snack, Sell, Tidy, Play, Wander, Follow, Resources }
+        private enum Urge { None, Terminal, Suit, SuitFetch, Snack, Sell, Tidy, Play, Wander, Follow, Resources, Store }
 
-        private const int UrgeCount = 11;
+        private const int UrgeCount = 12;
 
         /// <summary>
         /// What a collector last found for one urge, as a candidate count and the nearest distance.
@@ -90,7 +90,7 @@ namespace YourBuddy
         /// <summary>
         /// The fetch-and-carry urges, in the order the scan budget rotates through them.
         /// </summary>
-        private static readonly Urge[] Errands = [Urge.Sell, Urge.Tidy, Urge.Snack, Urge.Play, Urge.SuitFetch, Urge.Resources];
+        private static readonly Urge[] Errands = [Urge.Sell, Urge.Tidy, Urge.Snack, Urge.Play, Urge.SuitFetch, Urge.Resources, Urge.Store];
 
         /// <summary>
         /// Weighs everything the buddy might want and acts on one of them. True when something started.
@@ -168,6 +168,8 @@ namespace YourBuddy
                     return TryErrand(tidying, "Thought of tidying up, but ");
                 case Urge.Play:
                     return TryErrand(play, "Thought of playing with something, but ");
+                case Urge.Store:
+                    return TryErrand(storing, "Looked for storage, but ");
                 case Urge.Resources:
                     return TryErrand(resources, "Considered resource duties, but ");
                 case Urge.SuitFetch:
@@ -245,6 +247,7 @@ namespace YourBuddy
                 {
                     Urge.Sell => 0.75f,
                     Urge.Tidy => 0.65f,
+                    Urge.Store => 0.6f,
                     Urge.Snack => 0.55f,
                     Urge.SuitFetch => 0.5f,
                     Urge.Resources => 0.7f,
@@ -404,6 +407,7 @@ namespace YourBuddy
         {
             Urge.Sell => selling,
             Urge.Tidy => tidying,
+            Urge.Store => storing,
             Urge.Snack => snacks,
             Urge.SuitFetch => suitFetch,
             Urge.Resources => resources,
@@ -421,6 +425,7 @@ namespace YourBuddy
             Urge.Snack => "a snack",
             Urge.Sell => "selling",
             Urge.Tidy => "tidying up",
+            Urge.Store => "storing items",
             Urge.Play => "playing",
             Urge.Wander => "wandering off",
             _ => "following you",

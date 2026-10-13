@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable><LangVersion>12</LangVersion><TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="../../YourBuddy/Errands/TidyErrand.cs" Link="TidyErrand.cs" />
+    <Compile Include="../../YourBuddy/Errands/StoreErrand.cs" Link="StoreErrand.cs" />
+    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceProbeBudget.cs" Link="ResourceProbeBudget.cs" />
+      <Compile Include="../../YourBuddy/Errands/StoragePolicy.cs" Link="StoragePolicy.cs" />
+  <Compile Include="../../YourBuddy/Errands/StorageItems.cs" Link="StorageItems.cs" />
+  <Compile Include="../../YourBuddy/Errands/StorageAccess.cs" Link="StorageAccess.cs" />
+    <Compile Include="../../YourBuddy/Errands/StoreErrand.Repacking.cs" Link="StoreErrand.Repacking.cs" />
+    <Compile Include="../../YourBuddy/Errands/StorageRepackPlan.cs" Link="StorageRepackPlan.cs" />
+  <Compile Include="../../YourBuddy/Errands/StoreErrand.Diagnostics.cs" Link="StoreErrand.Diagnostics.cs" />
+  <Compile Include="../../YourBuddy/Errands/SkipList.cs" Link="SkipList.cs" />
+  <Compile Include="../../YourBuddy/Errands/StoreErrand.Doors.cs" Link="StoreErrand.Doors.cs" />
+  <Compile Include="../../YourBuddy/Errands/StorageOverflowLayout.cs" Link="StorageOverflowLayout.cs" />
+    <Compile Include="../../YourBuddy/Errands/StoreErrand.PlacementRetry.cs" Link="PlacementRetry.cs" />
+  </ItemGroup>
+</Project>

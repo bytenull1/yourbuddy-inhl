@@ -49,6 +49,8 @@ namespace YourBuddy
 
         private Suit? wornSuit;
         private EvaRun? run;
+        private readonly SkipList unreachableSuits = new();
+        internal void DeferUnreachableSuit(Suit target) => unreachableSuits.Skip(target.transform, 30f);
 
         // Finding and wearing a suit
 
@@ -138,6 +140,7 @@ namespace YourBuddy
             int free = 0;
             Suit? nearest = null;
             float nearestSqr = float.MaxValue;
+            unreachableSuits.Prune();
             Vector3 here = body.Transform.position;
             foreach (Suit suit in SuitBuffer)
             {
@@ -150,6 +153,7 @@ namespace YourBuddy
                 }
 
                 free++;
+                if (!playerOrdered && unreachableSuits.Has(suit.transform)) continue;
                 float sqr = Items.FlatDistanceSq(suit.transform.position, here);
                 if (sqr < nearestSqr)
                 {
@@ -160,7 +164,7 @@ namespace YourBuddy
 
             if (nearest == null)
             {
-                why = free == 0 ? "no isolated suit is free to take" : "every free suit is spoken for";
+                why = free == 0 ? "no isolated suit is free to take" : "free suits could not be reached recently; I will check again";
                 return null;
             }
             if (!playerSuited && free < 2 && !playerOrdered)

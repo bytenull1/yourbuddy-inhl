@@ -29,7 +29,7 @@ buddy walks back at the monster. Flee is its own mode because `FinishRoute` forc
 ### an-order-is-not-a-mode
 
 **Rule.** What the player ordered (`orderedMode`) and what the buddy does (`mode`) are separate
-fields. `orderedMode` is written only through `BuddyCommands` → `ApplyOrder` / `ApplyRouteOrder` /
+fields. `orderedMode` is written only through `BuddyCommands` â†’ `ApplyOrder` / `ApplyRouteOrder` /
 `RevokeOrder`, and cleared otherwise only by expiry, an arrived goto, or a goto a flee cannot
 resume.
 
@@ -254,7 +254,9 @@ interruption; one the duty brought is ejected. A refill that ends with charge le
 Purchases need an enabled resource rule, explicit purchase permission, enough shared remaining
 allowance and enough cash. These conditions are checked
 again immediately before spending. An uncertain purchase pauses the duties.
-Spare-cell delivery targets reachable floor storage independently of the insertion slot.
+Spare-cell delivery targets designated floor storage in an enabled ship room, independently
+of the insertion slot. Room content is loaded before testing a candidate; a disabled or moved
+destination is replanned before delivery.
 Its footprint must have level support and clear space immediately before release; a failed
 delivery must not substitute an unchecked forward drop.
 
@@ -264,3 +266,53 @@ the player's work in progress.
 
 **Enforced in.** `ResourceDuty`, `ResourceErrand`, `ResourceDutySettings.CanBuy`,
 `ResourceErrand.Leg.Holds`.
+
+### storing-checks-space-before-pickup
+
+**Rule.** Storing accepts only recognised usable supplies, rechecks eligibility before pickup,
+and claims the item, source container and destination. Correctly stored items,
+machine contents, held items, suits and rubbish are excluded. Misplaced container contents
+need a clear extraction path and an identified destination before pickup. A stored item may
+move to its category's better home or be realigned within its current container; it never
+shuffles between equal-quality containers. Rotation needs a clear swept volume before insertion. Overflow accepts loose
+items or items in incompatible containers; it only stages useful contents from a suitable container within a bounded repacking sequence.
+Overflow items move only to normal storage, preventing rearrangement loops. A candidate needs support and
+clearance inside a built room's furniture detector, and an approach route, before pickup.
+Placement rechecks clearance with the doors open and checks the item's path through the
+opening. A released item must settle fully inside the detector before success is reported.
+Full or blocked destinations advance the bounded search, without an unchecked carry-ending
+drop. It closes only doors it opened, respecting an occupied hiding spot.
+
+**Why.** A detector describes contents, not free space. Treating its whole volume as an empty
+slot would put items through shelves, doors or other items.
+
+**Enforced in.** `StoreErrand`, `FurnitureStorage`.
+
+Support measurements ignore the moved item's own colliders, but never other contents.
+Packing uses bounded item-sized rows; neighbours keep a clearance gap without distributing
+unused width between them. Nearby eligible items are considered first; failed items retain their skip cooldown.
+
+### storage-handover-clears-reach
+
+**Rule.** Before a storage retry walks to a new target, clear the old world-space hand
+reach. Carrying and insertion cannot own the item simultaneously. Storage owns its opened
+doors across all retry legs and closes them on job end. Cancellation always releases the
+item, using a checked floor destination when available, otherwise restoring physics in place.
+
+### continuing-storage-yields-to-orders
+
+**Rule.** A continuing Store command retains item skips, waits between attempts and yields
+to survival, fear, dialogue and active tasks. A replacement order cancels the loop and ends
+only its own storage leg; querying status does not cancel it. It never turns Autonomy on.
+
+**Enforced in.** `BuddyBehaviour.StorageOrder`, `UpdateAutonomy`, `BuddyCommands`.
+
+### repacking-stages-before-clearing
+
+**Rule.** Repacking first stages the incoming item in checked overflow, then evacuates at
+most three eligible contents. Every removal needs its own checked destination and extraction
+path. Refill uses normal category rules. No nested repacking; five-minute deadline and target
+cooldown. Failed/cancelled sequences leave staged supplies available rather than forcing a
+return. Player-moved items invalidate the sequence. Protected contents are never selected.
+
+**Enforced in.** `StorageRepackPlan`, `StoreErrand.Repacking`, ordinary storage leg cleanup.

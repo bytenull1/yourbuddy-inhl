@@ -139,6 +139,7 @@ Walking up to an item uses the `Snack*` reach constants. `TidyReachSeconds`, `Ti
 | `TidySearchRadius` / `TidyBinRadius` | 30 m / 40 m | trash from the buddy; a can from the trash |
 | `TidyRoundMin` / `TidyRoundMax` / `TidyRoundSeconds` | 2 / 5 / 180 s | pieces per round, and the round's time limit |
 | `TidyMaxPlans` | 3 | items tried with a plan |
+| `TidyMaxBinPlans` | 3 | bin routes tried per tidy selection |
 | `TidyReachSeconds` / `TidyLiftSeconds` / `TidyAimSeconds` | 0.5 / 0.5 / 0.4 s | before pick-up; after, if the can is in reach; before the slot |
 | `TidyInsertSeconds` / `TidyMaxInserts` | 1.5 s / 2 | time in the slot; attempts |
 
@@ -356,3 +357,9 @@ marks the focus. `buddy_spawn N` replaces every buddy with N.
 `ai_disable` stops; `CatchRoutine` restores the aggressor flag it borrowed only while
 `NpcMonster.PlayerIgnored` is false, so a catch never re-arms a monster the player switched off
 ([the-ai-overrides-have-one-owner](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#the-ai-overrides-have-one-owner)).
+
+### Sorting overflow - `StoragePolicy.cs`
+
+| Constant | Value | Purpose |
+|---|---|---|
+| `OverflowSpacing` | 0.65 m | spacing between centres of the fixed 3-by-3 overflow grid |

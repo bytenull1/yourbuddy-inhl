@@ -16,7 +16,7 @@ namespace YourBuddy
         /// The list shown on the commands page, in the order it is drawn.
         /// </summary>
         internal static readonly string[] Names =
-            ["Status", "Follow", "Wander", "Stay", "Hide", "Outside", "Inside", "Unsuit", "Fetch suit", "Tidy", "Sell", "Play", "Snack", "Goto", "Decide", "Password"];
+            ["Status", "Follow", "Wander", "Stay", "Hide", "Outside", "Inside", "Unsuit", "Fetch suit", "Tidy", "Store items", "Sell", "Play", "Snack", "Goto", "Decide", "Password"];
 
         /// <summary>
         /// Orders that only make sense outside. Every other job is inside. docs/eva.md
@@ -109,6 +109,8 @@ namespace YourBuddy
                     ? ForAll(targets, b => BuddyCommands.GoToRoom(b, room))
                     : "Which one? " + BuddyRooms.Join(several!); // several is set when room is not
             }
+
+            if (Has(lower, "store items", "put away", "organise", "organize")) return ForAll(targets, BuddyCommands.Store);
 
             // Before Follow, so "come and hide" is not a follow order.
             if (Has(lower, "hide", "closet", "locker", "conceal")) return ForAll(targets, BuddyCommands.Hide);

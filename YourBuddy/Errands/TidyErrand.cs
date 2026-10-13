@@ -20,6 +20,7 @@ namespace YourBuddy
         /// </summary>
         private const float TidyBinRadius = 40f;
         private const int TidyMaxPlans = 3;
+        private const int TidyMaxBinPlans = 3;
         private const float TidyMinInterval = 60f;
         private const float TidyRetryDelay = 120f;
         /// <summary>
@@ -144,6 +145,8 @@ namespace YourBuddy
             }
 
             public override string Describe() => ToBin ? $"carrying '{ItemLabel}' to the trash can" : $"tidying up '{ItemLabel}'";
+            public override bool Holds(Transform t) => base.Holds(t) ||
+                (Item != null && t == Item.transform) || (Bin != null && t == Bin.transform);
         }
 
         public override bool TryStart(out string report) => TryStart(out report, null);
@@ -164,25 +167,14 @@ namespace YourBuddy
 
             string? failure = null;
             int plans = 0;
+            int binPlans = 0;
             foreach (TidySpot spot in TidySpots)
             {
                 Grabbable item = spot.Item;
-                if (!NearestBin(item.transform.position, out TrashCan? bin, out ItemDestroyer? slot))
-                {
-                    failure = $"no trash can within {TidyBinRadius:0}m of '{ItemLabelOf(item)}'";
-                    continue;
-                }
-                TidyTask toBin = new(this, run, item, null, bin!, slot!, SlotPoint(slot!), true);
-                // Only the item's leg is walked now, but a trash can with no way to it is not set off for.
-                if (!Body.HasReachNode(toBin))
-                {
-                    Skips.Skip(bin!.transform, TidySkipSeconds);
-                    failure = "no nav node near the trash can has a clear walk to it";
-                    Trace($"not the trash can at {toBin.TargetPoint:0.0}: {failure} - skipping it for {TidySkipSeconds:0}s");
-                    continue;
-                }
+                TidyTask? toBin = FindBin(run, item, ref binPlans, ref failure);
+                if (toBin == null) continue;
 
-                TidyTask task = new(this, run, item, spot.From, bin!, slot!, spot.Point, false);
+                TidyTask task = new(this, run, item, spot.From, toBin.Bin, toBin.Slot, spot.Point, false);
                 SetOffResult set = SetOff(task, Begin, ref plans, TidyMaxPlans, ref failure);
                 if (set == SetOffResult.NoPlansLeft) break;
                 if (set == SetOffResult.NoPlan) continue;
@@ -278,29 +270,33 @@ namespace YourBuddy
             point.y >= floorY - SnackReachBelow && point.y <= floorY + ReachTask.ReachHeight && Body.OnMyVessel(what);
 
         /// <summary>
-        /// The trash can nearest the item, within TidyBinRadius, with its slot.
+        /// Nearest reachable bin first, with a bounded number of complete route searches.
         /// </summary>
-        private bool NearestBin(Vector3 from, out TrashCan? best, out ItemDestroyer? bestSlot)
+        private TidyTask? FindBin(TidyRun run, Grabbable item, ref int plans, ref string? failure)
         {
-            best = null;
-            bestSlot = null;
-            float bestSq = TidyBinRadius * TidyBinRadius;
+            Vector3 from = item.transform.position;
             TidyBins.Clear();
             TidyBins.AddRange(SceneScan.ThisFrame<TrashCan>());
+            TidyBins.RemoveAll(bin => bin == null || !bin.isActiveAndEnabled ||
+                (bin.transform.position - from).sqrMagnitude > TidyBinRadius * TidyBinRadius ||
+                Skips.Has(bin.transform) || Body.TakenByAnother(bin.transform) || !Body.OnMyVessel(bin.transform));
+            TidyBins.Sort((a, b) => (a.transform.position - from).sqrMagnitude.CompareTo((b.transform.position - from).sqrMagnitude));
             foreach (TrashCan bin in TidyBins)
             {
-                float distSq = (bin.transform.position - from).sqrMagnitude;
-                if (distSq > bestSq || Skips.Has(bin.transform)) continue;
-
                 ItemDestroyer? slot = GameInternals.TrashCanAccess.GetItemDestroyer(bin);
                 if (slot == null || !slot.isActiveAndEnabled) continue;
-
-                best = bin;
-                bestSlot = slot;
-                bestSq = distSq;
+                TidyTask task = new(this, run, item, null, bin, slot, SlotPoint(slot), true);
+                if (Body.InReach(task)) return task;
+                if (plans >= TidyMaxBinPlans) break;
+                plans++;
+                string? why = Body.PlanReach(task, out _);
+                if (why == null) return task;
+                failure = why;
+                Skips.Skip(bin.transform, TidySkipSeconds);
+                Trace($"not the trash can at {task.TargetPoint:0.0}: {why} - trying another bin");
             }
-            TidyBins.Clear();
-            return best != null;
+            failure ??= "no available reachable trash can nearby";
+            return null;
         }
 
         private static Vector3 SlotPoint(ItemDestroyer slot) =>
@@ -379,7 +375,8 @@ namespace YourBuddy
         {
             if (task.ToBin)
             {
-                if (task.Bin == null || !task.Bin.gameObject.activeInHierarchy) return "the trash can is gone";
+                if (task.Bin == null || !task.Bin.isActiveAndEnabled || task.Slot == null || !task.Slot.isActiveAndEnabled)
+                    return "the trash can is unavailable";
 
                 return NotInHands(task.Item);
             }
@@ -396,9 +393,20 @@ namespace YourBuddy
         /// </summary>
         private Vector3 PickUp(TidyTask task)
         {
+            if (task.Bin == null || task.Slot == null || !task.Bin.isActiveAndEnabled || !task.Slot.isActiveAndEnabled)
+                return Leave($"'{task.ItemLabel}'", "the trash can is unavailable");
+            TidyTask toBin = new(this, task.Run, task.Item, null, task.Bin, task.Slot, SlotPoint(task.Slot), true) { Inserts = task.Inserts };
+            bool inReach = Body.InReach(toBin);
+            NavPath? route = null;
             string? failure = null;
             if (task.From != null && !task.From.Contents.GetItemsInZone().Contains(task.Item)) failure = $"it is no longer in {task.Name}";
-            else if (Body.Hands.Item != task.Item && !Body.Hands.PickUp(task.Item)) failure = "I could not pick it up";
+            else if (!inReach)
+            {
+                failure = Body.PlanReach(toBin, out NavPath plan);
+                if (failure == null) route = plan;
+                else Skips.Skip(task.Bin.transform, TidySkipSeconds);
+            }
+            if (failure == null && Body.Hands.Item != task.Item && !Body.Hands.PickUp(task.Item)) failure = "I could not pick it up";
             if (failure != null)
             {
                 Skips.Skip(task.Own, TidySkipSeconds);
@@ -409,8 +417,7 @@ namespace YourBuddy
             // The next leg replaces this one without ending it, so the doors close here.
             if (task.From != null) CloseOpenedDoors(task.OpenedDoors, task.From.Hideout, task.Name);
 
-            TidyTask toBin = new(this, task.Run, task.Item, null, task.Bin, task.Slot, SlotPoint(task.Slot), true) { Inserts = task.Inserts };
-            if (Body.InReach(toBin))
+            if (inReach)
             {
                 toBin.Node = toBin.StandPoint = Here;
                 toBin.Phase = TidyPhase.Handle;
@@ -418,18 +425,8 @@ namespace YourBuddy
                 Body.Walk(toBin, null);
                 return Vector3.zero;
             }
-            failure = Body.PlanReach(toBin, out NavPath plan);
-            if (failure != null)
-            {
-                Skips.Skip(task.Bin.transform, TidySkipSeconds);
-                Last = $"could not carry '{task.ItemLabel}' to the trash can - {failure}";
-                YourBuddyPlugin.Log.LogInfo($"[ai] Cannot carry '{task.ItemLabel}' to the trash can - {failure}");
-                // FinishRoute ends the task, and that puts the item down.
-                Body.FinishRoute();
-                return Vector3.zero;
-            }
             // Straight from leg to leg, since ending this one would put the item down.
-            Body.Walk(toBin, plan);
+            Body.Walk(toBin, route);
             Last = $"carrying '{task.ItemLabel}' to the trash can";
             return Vector3.zero;
         }

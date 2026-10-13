@@ -22,6 +22,7 @@ and the rules several NPC mods share are
 | [eva.md](eva.md) | the EVA suit, going outside and back in through a station airlock, fetching a forgotten suit home |
 | [anomalies.md](anomalies.md) | strange and frightening moments: when, how far, each one |
 | [snacks.md](snacks.md) | eating from containers and loose food |
+| [storing.md](storing.md) | putting loose ship items into furniture storage |
 | [items.md](items.md) | carrying, tidying, selling trash boxes, idle play |
 | [lifecare.md](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/lifecare.md) (NPC.Core) | the scanner terminal and the game's player-icon bug |
 | [game-model.md](game-model.md) | how the *game* works where only the buddy needs it: the cryo room; the rest, atmosphere and footsteps included, is [NPC.Core's](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/game-model.md) |

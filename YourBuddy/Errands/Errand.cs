@@ -120,6 +120,7 @@ namespace YourBuddy
         /// When the decider next weighs it; below zero until its first round schedules one.
         /// </summary>
         public float DueAt = -1f;
+        internal float DeferredUntil { get; private set; }
         /// <summary>
         /// How the last one went, or why there was none; for the HUD and buddy_dev mind.
         /// </summary>
@@ -169,7 +170,8 @@ namespace YourBuddy
         protected void Defer(Transform target, float seconds)
         {
             Skips.Skip(target, DeferSkipSeconds);
-            DueAt = Mathf.Max(DueAt, Time.time + Mathf.Max(seconds, RetryDelay));
+            DeferredUntil = Mathf.Max(DeferredUntil, Time.time + Mathf.Max(seconds, RetryDelay));
+            DueAt = Mathf.Max(DueAt, DeferredUntil);
         }
 
         /// <summary>

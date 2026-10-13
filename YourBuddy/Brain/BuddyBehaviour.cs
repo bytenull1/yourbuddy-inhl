@@ -153,6 +153,7 @@ namespace YourBuddy
                     UpdateFear();
                     break;
                 case 3:
+                    storing.MaintainStorageDoors();
                     UpdateAutonomy(player);
                     lifeSupport.Update();
                     if (!IsDead) suit.Update();
@@ -285,7 +286,9 @@ namespace YourBuddy
 
         void INpcBrain.OnInterrupted(string why)
         {
+            InterruptStoreJob();
             resources.Cancel(why);
+            InterruptCurrentErrand();
             EndAnomaly(why);
             ForceLeaveHidingSpot(why);
         }
@@ -386,7 +389,7 @@ namespace YourBuddy
                 if (DescribeHudMind() is { } mind) text.Append('\n').Append(mind);
                 text.Append("\nAir: ").Append(lifeSupport.Describe()).Append("\nSnack: ").Append(snacks.Describe())
                     .Append("\nTidy: ").Append(tidying.Describe()).Append("\nSell: ").Append(selling.Describe())
-                    .Append("\nPlay: ").Append(play.Describe()).Append("\nFetch suit: ").Append(suitFetch.Describe())
+                    .Append("\nStore: ").Append(storing.Describe()).Append("\nPlay: ").Append(play.Describe()).Append("\nFetch suit: ").Append(suitFetch.Describe())
                     .Append("\nOdd: ").Append(DescribeAnomaly());
             }
             if (agent.MoveTarget is { } target)
@@ -418,6 +421,7 @@ namespace YourBuddy
         private void OnDestroy()
         {
             // A double lives outside the buddy. docs/invariants.md#an-anomaly-puts-back-what-it-changed
+            if (storing != null) storing.CloseStorageDoors();
             RemoveSleeper();
             BuddyManager.Unregister(this);
         }

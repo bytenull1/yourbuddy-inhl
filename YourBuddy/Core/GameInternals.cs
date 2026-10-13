@@ -188,8 +188,37 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The Furniture detector for what moves with it, which is what a container holds. docs/snacks.md §1
+        /// Physical item-zone dimensions for furniture placement. docs/storing.md
         /// </summary>
+        internal static class StorageZoneAccess
+        {
+            private const string Feature = "storing loose items";
+            private static readonly FieldInfo? Size = Field<Vector3>(typeof(InstantItemDetector), "boxSize", Feature);
+            private static readonly FieldInfo? Offset = Field<Vector3>(typeof(InstantItemDetector), "boxCenterOffset", Feature);
+            internal static bool TryRead(InstantItemDetector zone, out Vector3 size, out Vector3 center)
+            {
+                size = GetValue<Vector3>(Size, zone) ?? Vector3.zero;
+                center = zone.transform.position + zone.transform.TransformDirection(GetValue<Vector3>(Offset, zone) ?? Vector3.zero);
+                return Size != null && Offset != null && size.x > 0 && size.y > 0 && size.z > 0;
+            }
+        }
+
+        internal static class StorageDoorAccess
+        {
+            private const string Feature = "storage door clearance";
+            private static readonly FieldInfo? Anchor = Field<Transform>(typeof(Door), "doorAnchor", Feature);
+            private static readonly FieldInfo? Elapsed = Field<float>(typeof(Door), "elapsed", Feature);
+            internal static bool Ready(Door door) => door.Opened && (GetValue<float>(Elapsed, door) ?? 0f) >= .999f;
+            internal static Vector3 ClosedCenter(Door door)
+            {
+                Vector3 center = Items.ColliderBounds(door.gameObject, out Bounds bounds) ? bounds.center : door.transform.position;
+                Transform? anchor = Get<Transform>(Anchor, door);
+                if (anchor == null) return center;
+                Vector3 closed = anchor.localPosition + Vector3.Scale(anchor.InverseTransformPoint(center), anchor.localScale);
+                return anchor.parent == null ? closed : anchor.parent.TransformPoint(closed);
+            }
+        }
+
         internal static class FurnitureAccess
         {
             private static readonly FieldInfo? ItemMover = Field<InstantItemDetector>(typeof(Furniture), "itemMover",

@@ -13,7 +13,10 @@ namespace YourBuddy
     // One slot, one owner; each handoff remains a normal reach/carry leg. docs/resources.md
     internal sealed class ResourceErrand(IErrandBody body) : Errand(body)
     {
-        private readonly List<Vector3> storagePoints = [];
+        private readonly List<ResourceStorage.Place> storagePoints = [];
+        private SpaceShip? storageShip;
+        private int storageLayout;
+        private int storageKind = -1;
         private int storageAttempts;
         private int storageCursor;
         private float storageRefresh;
@@ -300,20 +303,23 @@ namespace YourBuddy
 
         private int ShipStock()
         {
-            int count = 0;
+            ResourceContainer? inserted = loader != null ? GameInternals.ResourceAccess.Current(loader) : null;
+            int count = inserted != null && inserted.Data != null && inserted.Type == TypeOf(kind) && inserted.Value > 0 ? 1 : 0;
             foreach (ResourceContainer candidate in ResourceScan.Cells())
             {
+                if (candidate == inserted) continue;
                 if (candidate == null || candidate.Data == null || candidate.Type != TypeOf(kind) || candidate.Value <= 0) continue;
                 if (NpcVessels.OwnerOfTransform(candidate.transform) != NavGraph.ShipOwner) continue;
                 // A cell Buddy failed to reach lately is no stock: it must not stop a purchase.
                 if (Skips.Has(candidate.transform)) continue;
-                if (Items.Loadable(candidate) || (loader != null && GameInternals.ResourceAccess.Current(loader) == candidate)) count++;
+                if (Items.Loadable(candidate)) count++;
             }
             return count;
         }
 
         private bool FindCell()
         {
+            if (ship == null) return false;
             if (Time.time >= stagedRefresh)
             {
                 stagedItems.Clear();
@@ -334,7 +340,7 @@ namespace YourBuddy
                 if (item == null || stagedItems.Contains(item) || item.IsGrabbed || item.restrictGrab || Body.TakenByAnother(item.transform)) continue;
                 candidates.Add(candidate);
             }
-            // Use partially spent cells first, preserving full cells when possible.
+            // Prefer onboard supplies, then partially spent cells within each group.
             candidates.Sort(candidateOrder ??= CompareCells);
             int attempts = 0;
             foreach (ResourceContainer candidate in candidates)
@@ -352,9 +358,14 @@ namespace YourBuddy
             return false;
         }
 
-        private int CompareCells(ResourceContainer a, ResourceContainer b) =>
-            a.Value != b.Value ? a.Value.CompareTo(b.Value) :
+        private int CompareCells(ResourceContainer a, ResourceContainer b)
+        {
+            bool aHome = NpcVessels.OwnerOfTransform(a.transform) == NavGraph.ShipOwner;
+            bool bHome = NpcVessels.OwnerOfTransform(b.transform) == NavGraph.ShipOwner;
+            if (aHome != bHome) return aHome ? -1 : 1;
+            return a.Value != b.Value ? a.Value.CompareTo(b.Value) :
                 (a.transform.position - Here).sqrMagnitude.CompareTo((b.transform.position - Here).sqrMagnitude);
+        }
 
         private bool FindShop()
         {
@@ -399,18 +410,23 @@ namespace YourBuddy
 
         private bool PlanStorage(bool walk, Grabbable? prospective = null)
         {
-            if (loader == null || storageAttempts >= 3) return false;
+            if (loader == null || ship == null || storageAttempts >= 3) return false;
+            int layout = ResourceStorage.Layout(ship);
+            bool changed = storageShip != ship || storageLayout != layout || storageKind != kind;
             Vector3 size = Body.Hands.Item != null ? Body.Hands.Extents : Vector3.one * .15f;
             if (prospective != null && NpcHands.ColliderBounds(prospective.gameObject, out Bounds bounds) && bounds.size.sqrMagnitude > .001f)
                 size = bounds.extents;
             Vector3 half = ResourceStorage.Clearance(size);
             // Finish a pending footprint before considering a differently sized shop product.
-            if (storagePending && (half - storageHalf).sqrMagnitude > .0001f && Time.time < storageRefresh)
+            if (!changed && storagePending && (half - storageHalf).sqrMagnitude > .0001f && Time.time < storageRefresh)
                 return false;
             storagePending = false;
-            if (storagePoints.Count == 0 || (half - storageHalf).sqrMagnitude > .0001f || Time.time >= storageRefresh)
+            if (changed || storagePoints.Count == 0 || (half - storageHalf).sqrMagnitude > .0001f || Time.time >= storageRefresh)
             {
-                ResourceStorage.Candidates(loader.transform.position, storagePoints);
+                ResourceStorage.Candidates(ship, kind, storagePoints);
+                storageShip = ship;
+                storageLayout = layout;
+                storageKind = kind;
                 storageCursor = 0;
                 storageBest = null;
                 storageFound = 0;
@@ -419,15 +435,18 @@ namespace YourBuddy
             }
             int plans = 0;
             int floors = 0, clear = 0;
-            string blocker = "no supported ship floor near active nodes";
+            string blocker = "no supported floor in designated storage areas";
             while (storageCursor < storagePoints.Count)
             {
                 if (!ResourceStorage.MayProbe()) { storagePending = true; return false; }
-                Vector3 candidate = storagePoints[storageCursor++];
+                ResourceStorage.Place place = storagePoints[storageCursor++];
+                if (place.Room == null || !place.Room.EnabledStructure) continue;
+                Body.LoadRoomOf(place.Room.ContentParent);
+                Vector3 candidate = place.WorldPoint;
                 if (!ResourceStorage.FindFloor(candidate, out RaycastHit floor)) continue;
                 floors++;
                 Room? room = floor.collider.GetComponentInParent<Room>();
-                if (room != null) Body.LoadRoomOf(room.ContentParent);
+                if (room != place.Room) continue;
                 Vector3 point = floor.point + Vector3.up * (half.y + .03f);
                 if (rejectedStorage.Exists(p => (p - point).sqrMagnitude < .36f)) continue;
                 Transform? carried = Body.Hands.Item != null ? Body.Hands.Item.transform : prospective != null ? prospective.transform : null;
@@ -436,7 +455,8 @@ namespace YourBuddy
                 Leg leg = new(this, point, loader.transform, Phase.Deliver)
                 {
                     Floor = floor.collider.transform,
-                    FloorPoint = floor.collider.transform.InverseTransformPoint(point)
+                    FloorPoint = floor.collider.transform.InverseTransformPoint(point),
+                    StorageRoom = place.Room
                 };
                 if (++plans > 12) break;
                 NavPath? route = null;
@@ -466,7 +486,7 @@ namespace YourBuddy
                 return PlanStorage(true);
             }
             storageFailure = clear > 0 ? "Waiting: clear storage exists, but Buddy cannot reach it. Check the ship's doors and approach." :
-                "Waiting: no clear floor storage found aboard. Make room for a spare cell.";
+                "Waiting: designated storage is full or blocked. Clear a resource storage area.";
             ResourceDuty.Trace($"Storage scan: {floors} supported, {clear} clear, {plans} route checks; half-size {half}; {blocker}.", "storage scan");
             ResourceDuty.Report(storageFailure, "storage");
             return false;
@@ -673,7 +693,7 @@ namespace YourBuddy
                 return Vector3.zero;
             }
             if (leg.Stage != Phase.Buy && (cell == null || !cell.gameObject.activeInHierarchy)) return Stop("cell unavailable");
-            if (leg.Stage == Phase.Deliver && (leg.Floor == null ||
+            if (leg.Stage == Phase.Deliver && (leg.Floor == null || leg.StorageRoom == null || !leg.StorageRoom.EnabledStructure ||
                 (leg.Floor.TransformPoint(leg.FloorPoint) - leg.TargetPoint).sqrMagnitude > .04f))
             {
                 if (!PlanDelivery()) return Stop("ship storage moved or became unavailable");
@@ -881,6 +901,7 @@ namespace YourBuddy
             internal int Product;
             internal float InsertUntil;
             internal Transform? Floor;
+            internal CustomRoom? StorageRoom;
             internal Vector3 FloorPoint;
             public override string Name => Stage == Phase.Buy ? "resource shop" : Stage == Phase.Fetch ? "resource cell" : Stage == Phase.Deliver ? "ship storage" : "ship loader";
             public override float ReachBelow => 0.5f;

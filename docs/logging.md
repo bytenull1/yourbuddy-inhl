@@ -30,6 +30,8 @@ every NPC mod ([NPC.Core logging](https://github.com/bytenull1/npc-core-inhl/blo
 | `[ai]` | NPC.Core's `NpcAgent`; `BuddyBehaviour.*` | the agent: replans, doors, rooms loaded, stuck recovery, step-offs, blockers, riding and parking, death; the brain: routes finished or given up |
 | `[fear]` | `BuddyBehaviour.Fear.cs` | fear state, stress trace, holding back, retreats |
 | `[mind]` | `Autonomy.cs`, `Mind.cs` | decisions, orders revoked or expired, why the decider stood down |
+| `[store]` | `StoreErrand` | storage searches, deliveries and reasons for refusing placement |
+| `[store-detail]` | `StoreErrand.Diagnostics`, repacking | eligibility, ranked destinations, timed stage snapshots and repack refusal/cancellation reasons |
 | `[resources]` | `ResourceDuty`, `ResourceErrand` | refill targets, blocked duties, purchases and remaining allowance |
 | `[suit]` | `BuddySuit.cs`, `EvaRun.cs`, `SuitFetchErrand.cs` | suiting up and down, the airlock trips, waiting for your cycle, a lost EVA skin, the suit fetch |
 | `[nav]` | NPC.Core `NavGraph` | seeding, route chains, path failures |
@@ -99,3 +101,24 @@ replans is a livelock; one that swings is a ping-pong.
 - Fear: [fear.md §8](fear.md#8-reading-a-capture)
 - Decider: [behaviour.md §6](behaviour.md#6-reading-a-capture)
 - Gate-frame audits: [probes.md](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/probes.md#the-gate-frame-rule)
+
+## Storage diagnostics
+
+`[store-detail]` is emitted at Info level, alongside ordinary storage outcomes. Startup records
+its revision and module build ID so captures can be tied to the installed binary.
+Each job has a per-buddy sequence number. State transitions and a five-second heartbeat record
+item and buddy positions, source and destination, hand distance, probe/orientation, movement
+phase, timeout and last swept blocker. Collision failures include collider bounds and sweep
+endpoints; the last blocker is historical, not proof that it still obstructs the current phase.
+
+Selection traces explain cooldowns, unsuitable items, home rankings and tidiness, at most once
+per relevant item every 30 seconds. Ineligible supplies and items on other vessels are
+counted in the scan summary instead of repeated individually. Repack refusals are throttled per target to five seconds. Queue
+cancellation names the failed condition, and successful moves name the next queued move.
+These traces inspect the existing decision inputs; they do not run additional scene scans or
+per-frame physics sweeps. Keep the complete startup and reproduction log before another launch
+replaces it. A completed job is distinct from an ended/interrupted leg.
+
+Overflow placement refusals include the last probe reason and position: blocked space, missing ship floor, wrong room or area bounds. A last-probe reason describes that candidate, not every slot. Continuing Tidy, Sell and Play assignments use `[work]` lines for batch starts and retry delays.
+
+`[store-probe]` records every rejected overflow candidate with job, room, orientation, slot, footprint and reason. Probing shares the four-per-frame budget; retries of unchanged failed placements wait for the cache.
