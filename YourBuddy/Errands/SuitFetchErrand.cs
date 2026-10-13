@@ -63,7 +63,7 @@ namespace YourBuddy
 
             // Switched-off ones too. While you are aboard, the station rooms you are not in have their
             // content off, and a suit lying there with it. Worn and locker-held suits are off themselves.
-            foreach (Suit suit in UnityEngine.Object.FindObjectsOfType<Suit>(true))
+            foreach (Suit suit in ThisFrame<Suit>.All())
             {
                 if (suit == null || !suit.Isolated || !suit.gameObject.activeSelf) continue;
 
@@ -130,11 +130,11 @@ namespace YourBuddy
                 }
             }
 
-            foreach (Suit suit in UnityEngine.Object.FindObjectsOfType<Suit>(true))
+            foreach (Suit suit in ThisFrame<Suit>.All())
             {
                 if (suit != null && suit.gameObject.activeSelf && IsAboard(suit.transform)) AddHome(suit);
             }
-            foreach (EquipmentHolder holder in UnityEngine.Object.FindObjectsOfType<EquipmentHolder>(true))
+            foreach (EquipmentHolder holder in ThisFrame<EquipmentHolder>.All())
             {
                 if (holder != null && holder.Item is Suit shown && IsAboard(holder.transform)) AddHome(shown);
             }
@@ -145,6 +145,25 @@ namespace YourBuddy
             int count = HomeSuits.Count;
             HomeSuits.Clear();
             return count;
+        }
+
+        /// <summary>
+        /// FindObjectsOfType(true), swept once per frame: Count, TryStart and the home count share it.
+        /// npc-core:docs/invariants.md#scene-sweeps-are-budgeted
+        /// </summary>
+        private static class ThisFrame<T> where T : Object
+        {
+            private static T[] _items = [];
+            private static int _frame = -1;
+
+            internal static T[] All()
+            {
+                if (_frame == Time.frameCount) return _items;
+
+                _items = Object.FindObjectsOfType<T>(true);
+                _frame = Time.frameCount;
+                return _items;
+            }
         }
 
         private static void AddHome(Grabbable? item)
