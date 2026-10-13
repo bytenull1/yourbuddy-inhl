@@ -121,7 +121,14 @@ namespace YourBuddy
         }
 
         bool IErrandBody.InReach(ReachTask task) => agent.InReach(task);
-        string? IErrandBody.PlanReach(ReachTask task, out NavPath plan) => agent.PlanReach(task, out plan);
+        string? IErrandBody.PlanReach(ReachTask task, out NavPath plan)
+        {
+            errandPlanFrame = Time.frameCount;
+            return agent.PlanReach(task, out plan);
+        }
+
+        bool IErrandBody.PlannedThisFrame => errandPlanFrame == Time.frameCount;
+        private int errandPlanFrame = -1;
 
         string? IErrandBody.PlanRoute(Vector3 target, bool mayGoOutside, out NavPath plan)
         {

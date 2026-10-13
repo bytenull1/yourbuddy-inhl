@@ -293,6 +293,10 @@ namespace YourBuddy
             public SellPhase Phase = SellPhase.Walk;
             public float PhaseUntil;
             /// <summary>
+            /// The sale that ended, while Approach goes on looking for another trip.
+            /// </summary>
+            public string? ChainedAfter;
+            /// <summary>
             /// Since when it waits for the gate to open or the player to step out; below zero when not waiting.
             /// </summary>
             public float WaitingSince = -1f;
@@ -390,6 +394,10 @@ namespace YourBuddy
             };
         }
 
+        public override bool Resuming => sellTry.Resuming;
+
+        private readonly TryCursor<SellCandidate> sellTry = new();
+
         /// <summary>
         /// The nearest trash box with a sell station it can take it to. `report` finishes a sentence.
         /// </summary>
@@ -397,48 +405,55 @@ namespace YourBuddy
         {
             if (NpcPlayer.Pilot == null)
             {
+                sellTry.Stop();
                 report = "there is nobody to pay";
                 return Failed(report);
             }
-            CollectSellCandidates(out int skipped);
-            if (SellCandidates.Count == 0)
+            if (!Resumes(sellTry))
             {
-                report = $"there is no trash box within {SellSearchRadius:0}m" + (skipped > 0 ? $" ({skipped} I could not deal with lately)" : "");
-                return Failed(report);
+                CollectSellCandidates(out int skipped);
+                if (SellCandidates.Count == 0)
+                {
+                    report = $"there is no trash box within {SellSearchRadius:0}m" + (skipped > 0 ? $" ({skipped} I could not deal with lately)" : "");
+                    return Failed(report);
+                }
+                sellTry.Start(SellCandidates);
             }
 
-            string? failure = null;
-            int plans = 0;
-            foreach (SellCandidate candidate in SellCandidates)
+            for (; sellTry.Next < sellTry.Items.Count; sellTry.Next++)
             {
-                SellStationParts? parts = candidate.LoadedIn ?? NearestSellStation(candidate.Box.transform.position, out failure);
+                SellCandidate candidate = sellTry.Items[sellTry.Next];
+                // Collected on an earlier frame when resumed: gone or taken since.
+                if (candidate.Box == null || TakeBlocker(candidate.Box) != null) continue;
+
+                SellStationParts? parts = candidate.LoadedIn ?? NearestSellStation(candidate.Box.transform.position, out sellTry.Failure);
                 if (parts == null) continue;
 
                 if (Body.TakenByAnother(parts.Station.transform))
                 {
-                    failure = "another buddy is selling there";
+                    sellTry.Failure = "another buddy is selling there";
                     continue;
                 }
 
                 Grabbable? other = parts.OtherSellable();
                 if (other != null)
                 {
-                    failure = $"your '{ItemLabelOf(other)}' is in the sell station - I would sell it too";
+                    sellTry.Failure = $"your '{ItemLabelOf(other)}' is in the sell station - I would sell it too";
                     continue;
                 }
                 // Every box this station can take in one trip, since one press sells the lot. docs/items.md §4
-                SellRun run = BuildSellRun(parts, candidate.Box);
+                SellRun run = BuildSellRun(parts, candidate.Box, sellTry.Items);
                 // Its zone is already as full as the buddy will make it, and nothing of ours is in it.
                 if (run.Current == null && run.Loaded.Count == 0)
                 {
-                    failure = "the sell station is already full";
+                    sellTry.Failure = "the sell station is already full";
                     continue;
                 }
                 // Its walls, fences and button take part in the checks below.
                 string? blocked = StationBlocker(parts);
                 if (blocked != null)
                 {
-                    failure = blocked;
+                    sellTry.Failure = blocked;
                     continue;
                 }
                 // Every leg's end is checked before setting off; only the first is walked now.
@@ -446,15 +461,18 @@ namespace YourBuddy
                     (run.Current != null && !Body.HasReachNode(new SellTask(this, run, SellLeg.Load))))
                 {
                     Skips.Skip(parts.Station.transform, SellSkipSeconds);
-                    failure = "no nav node near the sell station has a clear walk to it from outside its gate";
-                    Trace($"not the sell station at {parts.LoadPoint:0.0}: {failure} - skipping it for {SellSkipSeconds:0}s");
+                    sellTry.Failure = "no nav node near the sell station has a clear walk to it from outside its gate";
+                    Trace($"not the sell station at {parts.LoadPoint:0.0}: {sellTry.Failure} - skipping it for {SellSkipSeconds:0}s");
                     continue;
                 }
 
                 SellTask task = new(this, run, run.Current != null ? SellLeg.Box : SellLeg.Button);
-                SetOffResult set = SetOff(task, Begin, ref plans, SellMaxPlans, ref failure);
+                SetOffResult set = SetOff(task, Begin, sellTry, SellMaxPlans);
+                if (set == SetOffResult.Later) return Park(sellTry, out report);
                 if (set == SetOffResult.NoPlansLeft) break;
                 if (set == SetOffResult.NoPlan) continue;
+
+                sellTry.Stop();
 
                 string what = DescribeSellRun(run);
                 string far = HowFar(set, task);
@@ -463,7 +481,8 @@ namespace YourBuddy
                                                 : $", via node {task.Node:0.0}, at the sell station at {parts.LoadPoint:0.0}"));
                 return true;
             }
-            report = $"none of the {SellCandidates.Count} trash box(es) nearby can be sold ({failure})";
+            report = $"none of the {sellTry.Items.Count} trash box(es) nearby can be sold ({sellTry.Failure})";
+            sellTry.Stop();
             return Failed(report);
         }
 
@@ -478,10 +497,10 @@ namespace YourBuddy
         /// `first` and every other candidate box for this station. The first load is capped by the room
         /// its zone has left; the rest wait for the next. Already-loaded boxes need no trip. docs/items.md §4
         /// </summary>
-        private static SellRun BuildSellRun(SellStationParts parts, Grabbable first)
+        private static SellRun BuildSellRun(SellStationParts parts, Grabbable first, List<SellCandidate> candidates)
         {
             SellRun run = new(parts);
-            foreach (SellCandidate other in SellCandidates)
+            foreach (SellCandidate other in candidates)
             {
                 if (other.Box == null) continue;
 
@@ -640,6 +659,11 @@ namespace YourBuddy
         private Vector3 Approach(SellTask task, out bool wantMove)
         {
             wantMove = false;
+            if (task.ChainedAfter != null)
+            {
+                NextTrip(task, task.ChainedAfter);
+                return Vector3.zero;
+            }
             if (task.Phase == SellPhase.Pressed)
             {
                 ConfirmSale(task);
@@ -975,15 +999,7 @@ namespace YourBuddy
                         return;
                     }
                 }
-                // Boxes the run did not know of start a new run from here.
-                if (TryStart(out string next))
-                {
-                    YourBuddyPlugin.Log.LogInfo("[ai] Selling: more trash boxes about - another trip");
-                    return;
-                }
-                Trace($"no further trip: {next}");
-                Last = result;
-                Body.FinishRoute();
+                NextTrip(task, result);
                 return;
             }
             if (Time.time - run.PressedAt > SellReopenedAfter && task.Parts.Gate.FullyOpened)
@@ -1122,6 +1138,27 @@ namespace YourBuddy
         /// The next box of the run, saying why any it leaves out cannot be fetched. False when the zone is
         /// full or none is left, and the run should go and press the button. docs/items.md §4
         /// </summary>
+        /// <summary>
+        /// Boxes the run did not know of start a new run from here. A parked try goes on from Approach next frame.
+        /// </summary>
+        private void NextTrip(SellTask task, string result)
+        {
+            task.ChainedAfter = null;
+            if (TryStart(out string next))
+            {
+                YourBuddyPlugin.Log.LogInfo("[ai] Selling: more trash boxes about - another trip");
+                return;
+            }
+            if (Resuming)
+            {
+                task.ChainedAfter = result;
+                return;
+            }
+            Trace($"no further trip: {next}");
+            Last = result;
+            Body.FinishRoute();
+        }
+
         private bool TryNextBox(SellTask task)
         {
             SellRun run = task.Run;

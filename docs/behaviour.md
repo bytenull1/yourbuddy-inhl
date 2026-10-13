@@ -125,6 +125,13 @@ and is **sampled**, so the same situation can lead to different choices.
 An urge that turns out impossible (no route, no usable station) is dropped and the draw repeated, up
 to three times per round.
 
+A buddy plans at most one reach a frame for an errand (`IErrandBody.PlannedThisFrame`). A candidate
+loop that needs another plans it later: its `TryCursor` keeps its own copy of the candidates and where
+it stopped, and the errand reports `Resuming`. The decider resumes it on its next slow tick, ahead of
+the decide throttle, then goes on with the round's next pick if it fails. A chained piece, game or
+trip resumes from the leg's `Approach`. A try left more than `ResumeSeconds` collects afresh; console
+commands plan every candidate at once. Why: up to three plans in one frame made a 45-100 ms frame.
+
 ### Keeping the scan cheap
 
 Collectors sweep every `Grabbable` in the scene, so:
@@ -132,7 +139,10 @@ Collectors sweep every `Grabbable` in the scene, so:
 1. **Readiness floor** - an urge below `UrgeScanFloor` is not looked for at all.
 2. **Budget** - at most `UrgeScansPerDecision` collectors per round; first claim rotates
    (`urgeScanCursor`) so none starves.
-3. **Cache** - results stand for `UrgeOpportunityTtl`.
+3. **Cache** - results stand for `UrgeOpportunityTtl`, long enough for the rotation to reach every
+   errand urge before its count goes stale. A stale count only weighs the urge; `TryStart` collects
+   again. An errand that fails counts nothing until its next scan, so it is not picked again on a stale
+   count.
 
 Collectors share static buffers (`PutAwayItems`, `CheckedContainers`, `ContainedItems`), so only one
 runs at a time and its summary is taken before the next. The winner's `StartX` collects again, so no

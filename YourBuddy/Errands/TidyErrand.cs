@@ -107,6 +107,10 @@ namespace YourBuddy
             public float PhaseUntil;
             public int Inserts;
             /// <summary>
+            /// The piece went in; Approach goes on choosing the next one until a try ends.
+            /// </summary>
+            public bool Chained;
+            /// <summary>
             /// Only these are closed again. A door found open stays open.
             /// </summary>
             public readonly List<Door> OpenedDoors = [];
@@ -148,28 +152,41 @@ namespace YourBuddy
 
         public override bool TryStart(out string report) => TryStart(out report, null);
 
+        public override bool Resuming => tidyTry.Resuming;
+
+        private readonly TryCursor<TidySpot> tidyTry = new();
+        // The round a parked try belongs to.
+        private TidyRun? tryRun;
+
         /// <summary>
         /// The nearest trash it can reach, and a trash can it can carry that to. `report` finishes a sentence.
         /// </summary>
         private bool TryStart(out string report, TidyRun? round)
         {
-            TidyRun run = round ?? new TidyRun();
-            CollectTidySpots(out int skipped);
-            if (TidySpots.Count == 0)
+            if (!Resumes(tidyTry))
             {
-                report = $"there is no trash within {TidySearchRadius:0}m, lying about or in a container" +
-                         (skipped > 0 ? $" ({skipped} I could not deal with lately)" : "");
-                return Failed(report);
+                CollectTidySpots(out int skipped);
+                if (TidySpots.Count == 0)
+                {
+                    report = $"there is no trash within {TidySearchRadius:0}m, lying about or in a container" +
+                             (skipped > 0 ? $" ({skipped} I could not deal with lately)" : "");
+                    return Failed(report);
+                }
+                tidyTry.Start(TidySpots);
+                tryRun = round ?? new TidyRun();
             }
+            TidyRun run = tryRun!; // set with the cursor's Start, which Resumes needs
 
-            string? failure = null;
-            int plans = 0;
-            foreach (TidySpot spot in TidySpots)
+            for (; tidyTry.Next < tidyTry.Items.Count; tidyTry.Next++)
             {
+                TidySpot spot = tidyTry.Items[tidyTry.Next];
                 Grabbable item = spot.Item;
+                // Collected on an earlier frame when resumed: gone or taken since.
+                if (item == null || TakeBlocker(item) != null) continue;
+
                 if (!NearestBin(item.transform.position, out TrashCan? bin, out ItemDestroyer? slot))
                 {
-                    failure = $"no trash can within {TidyBinRadius:0}m of '{ItemLabelOf(item)}'";
+                    tidyTry.Failure = $"no trash can within {TidyBinRadius:0}m of '{ItemLabelOf(item)}'";
                     continue;
                 }
                 TidyTask toBin = new(this, run, item, null, bin!, slot!, SlotPoint(slot!), true);
@@ -177,15 +194,18 @@ namespace YourBuddy
                 if (!Body.HasReachNode(toBin))
                 {
                     Skips.Skip(bin!.transform, TidySkipSeconds);
-                    failure = "no nav node near the trash can has a clear walk to it";
-                    Trace($"not the trash can at {toBin.TargetPoint:0.0}: {failure} - skipping it for {TidySkipSeconds:0}s");
+                    tidyTry.Failure = "no nav node near the trash can has a clear walk to it";
+                    Trace($"not the trash can at {toBin.TargetPoint:0.0}: {tidyTry.Failure} - skipping it for {TidySkipSeconds:0}s");
                     continue;
                 }
 
                 TidyTask task = new(this, run, item, spot.From, bin!, slot!, spot.Point, false);
-                SetOffResult set = SetOff(task, Begin, ref plans, TidyMaxPlans, ref failure);
+                SetOffResult set = SetOff(task, Begin, tidyTry, TidyMaxPlans);
+                if (set == SetOffResult.Later) return Park(tidyTry, out report);
                 if (set == SetOffResult.NoPlansLeft) break;
                 if (set == SetOffResult.NoPlan) continue;
+
+                tidyTry.Stop();
 
                 string where = task.From != null ? "in " + task.From.Name : "lying about";
                 string far = HowFar(set, task);
@@ -195,7 +215,8 @@ namespace YourBuddy
                                                 : $"via node {task.Node:0.0}, then to the trash can at {toBin.TargetPoint:0.0}"));
                 return true;
             }
-            report = $"none of the {TidySpots.Count} piece(s) of trash nearby can be taken to a trash can ({failure})";
+            report = $"none of the {tidyTry.Items.Count} piece(s) of trash nearby can be taken to a trash can ({tidyTry.Failure})";
+            tidyTry.Stop();
             return Failed(report);
         }
 
@@ -328,14 +349,19 @@ namespace YourBuddy
             // ItemDestroyer hides what it takes, in the physics step the item touches the slot.
             if (task.Phase == TidyPhase.Insert && (task.Item == null || !task.Item.gameObject.activeInHierarchy))
             {
-                // Release, never Drop. The can already took it, and the hands must be empty
-                // before the round chains into the next piece.
-                if (Body.Hands.Item == task.Item) Body.Hands.Release();
-                task.Run.Done++;
-                YourBuddyPlugin.Log.LogInfo($"[ai] Put '{task.ItemLabel}' into the trash can " +
-                                            $"({task.Run.Done} of {task.Run.Budget} this round)");
+                if (!task.Chained)
+                {
+                    // Release, never Drop. The can already took it, and the hands must be empty
+                    // before the round chains into the next piece.
+                    if (Body.Hands.Item == task.Item) Body.Hands.Release();
+                    task.Run.Done++;
+                    task.Chained = true;
+                    YourBuddyPlugin.Log.LogInfo($"[ai] Put '{task.ItemLabel}' into the trash can " +
+                                                $"({task.Run.Done} of {task.Run.Budget} this round)");
+                }
                 // Straight on to the next piece, since FinishRoute would end the round and put nothing down.
-                if (task.Run.WantsMore && TryStart(out _, task.Run)) return Vector3.zero;
+                // A parked try goes on from here next frame.
+                if (task.Run.WantsMore && (TryStart(out _, task.Run) || Resuming)) return Vector3.zero;
 
                 EndRound(task.Run);
                 return Vector3.zero;

@@ -77,8 +77,9 @@ See [behaviour.md §3](behaviour.md#3-the-decider).
 | `UrgeFloor` | 0.05 | below this, not worth doing |
 | `UrgeRepeatPenalty` / `UrgeNoise` | 0.35 / ±15 % | last urge is worth less; every score jittered |
 | `UrgeScanFloor` | 0.5 | an urge less ready than this is not searched for |
-| `UrgeScansPerDecision` | 2 | collectors run per round |
-| `UrgeOpportunityTtl` | 10 s | how long a search result stands |
+| `UrgeScansPerDecision` | 1 | collectors run per round |
+| `UrgeOpportunityTtl` | 20 s | how long a search result stands; covers all six errand urges in rotation |
+| `ResumeSeconds` | 1 s | a try parked by the one-plan-a-frame budget resumes within this, else starts afresh; the decider's slow tick is 0.24-0.4 s |
 | `PickNearest` | 3 | nearest candidates shuffled between |
 
 ### Life-support terminals - `LifeSupport.cs`

@@ -79,8 +79,8 @@ namespace YourBuddy
         /// whenever it is the only one on the table.
         /// </summary>
         private const float UrgeFloor = 0.05f;
-        private const int UrgeScansPerDecision = 2;
-        private const float UrgeOpportunityTtl = 10f;
+        private const int UrgeScansPerDecision = 1;
+        private const float UrgeOpportunityTtl = 20f;
         /// <summary>
         /// Caught up means this near on the player's deck. A Follow that cannot get there
         /// starts its clock anyway after DecideCatchUpSeconds.
@@ -93,11 +93,19 @@ namespace YourBuddy
         private static readonly Urge[] Errands = [Urge.Sell, Urge.Tidy, Urge.Snack, Urge.Play, Urge.SuitFetch, Urge.Resources];
 
         /// <summary>
+        /// The urge whose errand parked its try (one plan a frame), resumed on the next slow tick, and how
+        /// many of the round's three tries are spent. docs/behaviour.md §3
+        /// </summary>
+        private Urge resumeUrge = Urge.None;
+        private int pickAttempt;
+
+        /// <summary>
         /// Weighs everything the buddy might want and acts on one of them. True when something started.
         /// Called from UpdateAutonomy once the stand-down reasons have passed.
         /// </summary>
         private void ChooseAndAct(Player player)
         {
+            resumeUrge = Urge.None;
             ScoreUrges(player);
             if (urgeScores.Count == 0)
             {
@@ -107,9 +115,17 @@ namespace YourBuddy
             urgeScores.Sort((a, b) => b.Score.CompareTo(a.Score));
             BuildUrgeReport();
             TraceDecider("weighing: " + urgeReport);
+            pickAttempt = 0;
+            PickAndAct();
+        }
 
-            // Three tries, so an urge that turns out to be impossible does not cost the whole round.
-            for (int attempt = 0; attempt < 3 && urgeScores.Count > 0; attempt++)
+        /// <summary>
+        /// Three tries, so an urge that turns out to be impossible does not cost the whole round. A try its
+        /// errand parked ends this tick; ResumeChoice goes on with it.
+        /// </summary>
+        private void PickAndAct()
+        {
+            for (; pickAttempt < 3 && urgeScores.Count > 0; pickAttempt++)
             {
                 int index = urgeScores[0].Score >= UrgeDecisive ? 0 : SampleUrge();
                 Weighed pick = urgeScores[index];
@@ -120,12 +136,59 @@ namespace YourBuddy
                     YourBuddyPlugin.Log.LogInfo($"[mind] Chose {UrgeName(pick.Urge)} ({pick.Score:0.00}) - {pick.Why}" +
                                                 (beaten.Length > 0 ? " - over " + beaten : ""));
                 }
-                if (!ActOn(pick.Urge)) continue;
-
-                lastUrge = pick.Urge;
+                if (ActOn(pick.Urge))
+                {
+                    lastUrge = pick.Urge;
+                    return;
+                }
+                if (!Parked(pick.Urge))
+                {
+                    ForgetChance(pick.Urge);
+                    continue;
+                }
+                resumeUrge = pick.Urge;
                 return;
             }
         }
+
+        /// <summary>
+        /// Goes on with the try an errand parked, ahead of the decide throttle; once it fails, with the
+        /// round's next pick. True while that took this tick.
+        /// </summary>
+        private bool ResumeChoice(Player player)
+        {
+            if (resumeUrge == Urge.None) return false;
+
+            Urge urge = resumeUrge;
+            resumeUrge = Urge.None;
+            if (!Parked(urge) || StandDownReason(player) != null) return false;
+
+            if (ActOn(urge))
+            {
+                lastUrge = urge;
+                return true;
+            }
+            if (Parked(urge))
+            {
+                resumeUrge = urge;
+                return true;
+            }
+            ForgetChance(urge);
+            pickAttempt++;
+            PickAndAct();
+            return true;
+        }
+
+        /// <summary>
+        /// An errand that just failed counts nothing until its next scan, so a stale count does not pick it
+        /// again for the rest of UrgeOpportunityTtl.
+        /// </summary>
+        private void ForgetChance(Urge urge)
+        {
+            if (System.Array.IndexOf(Errands, urge) >= 0) urgeChance[(int)urge] = new Chance(0, 0f);
+        }
+
+        private bool Parked(Urge urge) => System.Array.IndexOf(Errands, urge) >= 0 && ErrandOf(urge).Resuming;
 
         /// <summary>
         /// One of the best UrgePickTop, drawn with weight score^UrgeSharpness. This is where two identical
@@ -194,6 +257,8 @@ namespace YourBuddy
         private static bool TryErrand(Errand errand, string lead)
         {
             if (errand.TryStart(out string report)) return true;
+            // One plan a frame: the decider resumes it.
+            if (errand.Resuming) return false;
 
             errand.DueAt = Time.time + errand.RetryDelay;
             if (NpcLog.Level >= 2)

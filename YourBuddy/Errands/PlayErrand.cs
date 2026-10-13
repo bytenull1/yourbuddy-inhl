@@ -159,6 +159,10 @@ namespace YourBuddy
             public Vector3 ThrowDir;
             public float ThrowAfter;
             /// <summary>
+            /// The game that ended, while Approach goes on choosing the session's next one.
+            /// </summary>
+            public string? ChainedAfter;
+            /// <summary>
             /// Throws already made and how many this game has. The buddy fetches what it threw until the
             /// last one, which it picks up and puts down. docs/items.md §5
             /// </summary>
@@ -221,24 +225,37 @@ namespace YourBuddy
 
         public override bool TryStart(out string report) => TryStart(out report, null);
 
+        public override bool Resuming => playTry.Resuming;
+
+        private readonly TryCursor<Grabbable> playTry = new();
+        // The session a parked try belongs to.
+        private PlaySession? trySession;
+
         /// <summary>
         /// The nearest loose trash it can walk to, with a game picked at random. `report` finishes a sentence.
         /// </summary>
         private bool TryStart(out string report, PlaySession? bout)
         {
-            PlaySession session = bout ?? new PlaySession();
-            CollectPlayItems(out int skipped);
-            if (PlayItems.Count == 0)
+            if (!Resumes(playTry))
             {
-                report = $"there is nothing loose to play with within {PlaySearchRadius:0}m" +
-                         (skipped > 0 ? $" ({skipped} I could not get to lately)" : "");
-                return Failed(report);
+                CollectPlayItems(out int skipped);
+                if (PlayItems.Count == 0)
+                {
+                    report = $"there is nothing loose to play with within {PlaySearchRadius:0}m" +
+                             (skipped > 0 ? $" ({skipped} I could not get to lately)" : "");
+                    return Failed(report);
+                }
+                playTry.Start(PlayItems);
+                trySession = bout ?? new PlaySession();
             }
+            PlaySession session = trySession!; // set with the cursor's Start, which Resumes needs
 
-            string? failure = null;
-            int plans = 0;
-            foreach (Grabbable item in PlayItems)
+            for (; playTry.Next < playTry.Items.Count; playTry.Next++)
             {
+                Grabbable item = playTry.Items[playTry.Next];
+                // Collected on an earlier frame when resumed: gone or taken since.
+                if (item == null || TakeBlocker(item) != null) continue;
+
                 PlayKind kind = PickPlayKind();
                 Vector3 dropAt = Vector3.zero, dropNode = Vector3.zero;
                 if (kind != PlayKind.Throw)
@@ -255,10 +272,12 @@ namespace YourBuddy
                 }
                 PlayTask task = new(this, session, item, kind, dropAt, dropNode)
                     { MaxThrows = Random.Range(PlayThrowsMin, PlayThrowsMax + 1) };
-                SetOffResult set = SetOff(task, Begin, ref plans, PlayMaxPlans, ref failure);
+                SetOffResult set = SetOff(task, Begin, playTry, PlayMaxPlans);
+                if (set == SetOffResult.Later) return Park(playTry, out report);
                 if (set == SetOffResult.NoPlansLeft) break;
                 if (set == SetOffResult.NoPlan) continue;
 
+                playTry.Stop();
                 string away = HowFar(set, task);
                 report = $"is {task.Describe()}, {away}";
                 YourBuddyPlugin.Log.LogInfo($"[mind] Decided: play with '{task.ItemLabel}' - {PlayKindName(kind)}, {away}" +
@@ -266,7 +285,8 @@ namespace YourBuddy
                                                 (kind != PlayKind.Throw ? $", to put it down at {dropAt:0.0}" : "")));
                 return true;
             }
-            report = $"none of the {PlayItems.Count} loose item(s) nearby can be walked to ({failure})";
+            report = $"none of the {playTry.Items.Count} loose item(s) nearby can be walked to ({playTry.Failure})";
+            playTry.Stop();
             return Failed(report);
         }
 
@@ -458,6 +478,11 @@ namespace YourBuddy
         private Vector3 Approach(PlayTask task, out bool wantMove)
         {
             wantMove = false;
+            if (task.ChainedAfter != null)
+            {
+                Chain(task, task.ChainedAfter);
+                return Vector3.zero;
+            }
             string? blocker = LegBlocker(task);
             if (blocker != null) return Leave($"'{task.ItemLabel}'", blocker);
 
@@ -677,8 +702,23 @@ namespace YourBuddy
             session.Games++;
             Last = what;
             YourBuddyPlugin.Log.LogInfo($"[ai] Playing: {what} (game {session.Games} of {session.MaxGames})");
+            Chain(task, what);
+        }
+
+        /// <summary>
+        /// The session's next game, or its end. A parked try goes on from Approach next frame.
+        /// </summary>
+        private void Chain(PlayTask task, string what)
+        {
+            PlaySession session = task.Session;
+            task.ChainedAfter = null;
             if (session.WantsMore && TryStart(out _, session)) return;
 
+            if (session.WantsMore && Resuming)
+            {
+                task.ChainedAfter = what;
+                return;
+            }
             DueAt = Time.time + NextInterval();
             Last = session.Games > 1 ? $"{what} - {session.Games} games" : what;
             Body.FinishRoute();

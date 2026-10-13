@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NPC.Core;
 using NPC.Core.Agents;
 using NPC.Core.Navigation;
@@ -38,6 +39,10 @@ namespace YourBuddy
 
         bool InReach(ReachTask task);
         string? PlanReach(ReachTask task, out NavPath plan);
+        /// <summary>
+        /// An errand planned a reach this frame already; a candidate loop plans its next one on a later frame.
+        /// </summary>
+        bool PlannedThisFrame { get; }
         /// <summary>
         /// Plans a raw route to a world point, with Outdoor nodes when asked. It may end short, at the
         /// node nearest the point. Null with the plan, else why there is none.
@@ -158,6 +163,14 @@ namespace YourBuddy
         public abstract bool TryStart(out string report);
 
         /// <summary>
+        /// The last TryStart ran out of this frame's plan and goes on when called again shortly. docs/behaviour.md §3
+        /// </summary>
+        public virtual bool Resuming => false;
+
+        // A console command plans every candidate at once: nothing would resume it.
+        private bool planAtOnce;
+
+        /// <summary>
         /// How many candidates there are now, and how far the nearest is, flat. The collectors share
         /// static buffers, so exactly one runs per call. docs/behaviour.md §3
         /// </summary>
@@ -182,6 +195,7 @@ namespace YourBuddy
 
             // An order is not held back by what failed or was skipped earlier.
             Skips.Ignore = true;
+            planAtOnce = true;
             try
             {
                 return TryStart(out string report) ? Body.Name + " " + report : refused + report;
@@ -189,6 +203,7 @@ namespace YourBuddy
             finally
             {
                 Skips.Ignore = false;
+                planAtOnce = false;
             }
         }
 
@@ -223,15 +238,16 @@ namespace YourBuddy
         protected string? NotInHands(Grabbable item) => Body.Hands.Item != item ? "it is no longer in my hands" : null;
 
         /// <summary>
-        /// How <see cref="SetOff"/> went.
+        /// How SetOff went. Later: a reach was planned this frame already, so this one waits.
         /// </summary>
-        protected enum SetOffResult { InReach, Walking, NoPlan, NoPlansLeft }
+        protected enum SetOffResult { InReach, Walking, NoPlan, NoPlansLeft, Later }
 
         /// <summary>
         /// Sets off for `task`, at once when it is in reach, else along a plan while fewer than `maxPlans` were
         /// tried. A target it cannot plan to is left out for SkipSeconds, and `failure` says why.
         /// </summary>
-        protected SetOffResult SetOff<T>(T task, System.Action<T, NavPath?> begin, ref int plans, int maxPlans, ref string? failure)
+        protected SetOffResult SetOff<T>(T task, System.Action<T, NavPath?> begin, ref int plans, int maxPlans, ref string? failure,
+            bool onePlanPerFrame = false)
             where T : ErrandLeg
         {
             if (Body.InReach(task))
@@ -240,7 +256,10 @@ namespace YourBuddy
                 begin(task, null);
                 return SetOffResult.InReach;
             }
-            if (plans++ >= maxPlans) return SetOffResult.NoPlansLeft;
+            if (plans >= maxPlans) return SetOffResult.NoPlansLeft;
+            if (onePlanPerFrame && !planAtOnce && Body.PlannedThisFrame) return SetOffResult.Later;
+
+            plans++;
 
             failure = Body.PlanReach(task, out NavPath plan);
             if (failure != null)
@@ -254,7 +273,30 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// "right here", or how far off `task` is, for the report of a <see cref="SetOff"/>.
+        /// SetOff for a candidate loop: at most one plan a frame. docs/behaviour.md §3
+        /// </summary>
+        protected SetOffResult SetOff<T, TItem>(T task, System.Action<T, NavPath?> begin, TryCursor<TItem> cursor, int maxPlans)
+            where T : ErrandLeg =>
+            SetOff(task, begin, ref cursor.Plans, maxPlans, ref cursor.Failure, onePlanPerFrame: true);
+
+        /// <summary>
+        /// Whether TryStart goes on with the candidates `cursor` parked, rather than collecting afresh.
+        /// </summary>
+        protected bool Resumes<TItem>(TryCursor<TItem> cursor) => !planAtOnce && cursor.Resuming;
+
+        /// <summary>
+        /// Ends this frame's share of a try whose plan is spent. False, with Resuming set.
+        /// </summary>
+        protected bool Park<TItem>(TryCursor<TItem> cursor, out string report)
+        {
+            cursor.Park();
+            report = "still looking - one plan a frame";
+            Trace($"planned once this frame - candidate {cursor.Next + 1} of {cursor.Items.Count} waits for the next");
+            return false;
+        }
+
+        /// <summary>
+        /// "right here", or how far off `task` is, for the report of a SetOff.
         /// </summary>
         protected string HowFar(SetOffResult set, ReachTask task) =>
             set == SetOffResult.InReach ? "right here" : $"{Vector3.Distance(Here, task.TargetPoint):0.0}m away";
@@ -299,6 +341,45 @@ namespace YourBuddy
             for (int i = 0; i < count; i++) nearest = Mathf.Min(nearest, Items.FlatDistanceSq(pointAt(i), Here));
 
             return count > 0 ? Mathf.Sqrt(nearest) : 0f;
+        }
+    }
+
+    /// <summary>
+    /// A candidate loop spread over frames: its own copy of the candidates, where it stopped, what it spent.
+    /// docs/behaviour.md §3
+    /// </summary>
+    internal sealed class TryCursor<TItem>
+    {
+        /// <summary>
+        /// A try parked longer ago starts afresh. The decider runs every fourth slow tick of 0.06 s or more,
+        /// so 0.24-0.4 s apart.
+        /// </summary>
+        private const float ResumeSeconds = 1f;
+
+        public readonly List<TItem> Items = [];
+        public int Next;
+        public int Plans;
+        public string? Failure;
+        private float parkedAt = -1f;
+
+        public bool Resuming => parkedAt >= 0f && Time.time - parkedAt <= ResumeSeconds;
+
+        public void Start(List<TItem> collected)
+        {
+            Items.Clear();
+            Items.AddRange(collected);
+            Next = 0;
+            Plans = 0;
+            Failure = null;
+            parkedAt = -1f;
+        }
+
+        public void Park() => parkedAt = Time.time;
+
+        public void Stop()
+        {
+            parkedAt = -1f;
+            Items.Clear();
         }
     }
 }

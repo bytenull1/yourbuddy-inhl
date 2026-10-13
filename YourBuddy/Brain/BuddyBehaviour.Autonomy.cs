@@ -168,6 +168,7 @@ namespace YourBuddy
             if (anomaly.HasValue && !vanished && !AnomalyInBackground && lifeSupport.AirIsDangerous()) EndAnomaly("the air is dangerous");
             if (!suit.Suited && lifeSupport.AirIsDangerous()) resources.Cancel("the air needs attention");
             if (TrySaveOwnLife()) return;
+            if (ResumeChoice(player)) return;
             if (Time.time < decideAt) return;
 
             decideAt = Time.time + DecideInterval;

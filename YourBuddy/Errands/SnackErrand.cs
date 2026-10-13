@@ -103,30 +103,44 @@ namespace YourBuddy
             public override string Describe() => "getting a snack from " + Name;
         }
 
+        public override bool Resuming => snackTry.Resuming;
+
+        private readonly TryCursor<SnackTask> snackTry = new();
+
         public override bool TryStart(out string report)
         {
             if (PlayerIsHungry(out int satiety))
             {
+                snackTry.Stop();
                 report = $"you are hungry (satiety {satiety}) - the food is yours";
                 return Failed(report);
             }
 
-            CollectSnackSpots(out int emptyContainers, out int skipped);
-            if (SnackSpots.Count == 0)
+            if (!Resumes(snackTry))
             {
-                report = $"there is no food within {SnackSearchRadius:0}m" +
-                         (emptyContainers > 0 ? $" ({emptyContainers} empty container(s) left shut)" : "") +
-                         (skipped > 0 ? $" ({skipped} I could not reach lately)" : "");
-                return Failed(report);
+                CollectSnackSpots(out int emptyContainers, out int skipped);
+                if (SnackSpots.Count == 0)
+                {
+                    report = $"there is no food within {SnackSearchRadius:0}m" +
+                             (emptyContainers > 0 ? $" ({emptyContainers} empty container(s) left shut)" : "") +
+                             (skipped > 0 ? $" ({skipped} I could not reach lately)" : "");
+                    return Failed(report);
+                }
+                snackTry.Start(SnackSpots);
             }
 
-            string? failure = null;
-            int plans = 0;
-            foreach (SnackTask task in SnackSpots)
+            for (; snackTry.Next < snackTry.Items.Count; snackTry.Next++)
             {
-                SetOffResult set = SetOff(task, Begin, ref plans, SnackMaxPlans, ref failure);
+                SnackTask task = snackTry.Items[snackTry.Next];
+                // Collected on an earlier frame when resumed: gone, taken or in use since.
+                if (SnackBlocker(task) != null) continue;
+
+                SetOffResult set = SetOff(task, Begin, snackTry, SnackMaxPlans);
+                if (set == SetOffResult.Later) return Park(snackTry, out report);
                 if (set == SetOffResult.NoPlansLeft) break;
                 if (set == SetOffResult.NoPlan) continue;
+
+                snackTry.Stop();
 
                 string what = task.Item != null ? "lying about" : $"{task.FoodCount} thing(s) to eat in it";
                 report = $"is getting a snack: {task.Name}, {what}, {HowFar(set, task)}";
@@ -134,7 +148,8 @@ namespace YourBuddy
                                             (set == SetOffResult.InReach ? "right here" : $"via node {task.Node:0.0}, then {task.StandPoint:0.0}"));
                 return true;
             }
-            report = $"none of the {SnackSpots.Count} snack(s) nearby can be reached ({failure})";
+            report = $"none of the {snackTry.Items.Count} snack(s) nearby can be reached ({snackTry.Failure})";
+            snackTry.Stop();
             return Failed(report);
         }
 
