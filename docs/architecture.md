@@ -60,7 +60,7 @@ the buddy through a few `internal` members, never its fields.
 | `SellErrand.cs` | a selling run: nearby trash boxes into one sell station, one press per load | `IErrandBody`, `Items`, NPC.Core's `SellPens`, `GameInternals` | [items](items.md) |
 | `PlayErrand.cs` | a play session: carry near, carry far, or throw and fetch | `IErrandBody`, `Items`, `NavProbe` | [items](items.md) |
 | `Items.cs` | item rules every errand shares: `IsTrash`, `IsPlaything`, `TakeBlocker`, `InReachBand`, `ContainersNear` and their doors, `ShuffleNearest`, the item-reach constants | `GameInternals` | [items](items.md) |
-| `ResourceErrand.cs` | resource duties: refilling the loader, restocking, storing a spare; one buddy owns the loader at a time | `IErrandBody`, `ResourceDuty`, `ResourceStorage`, `GameInternals` | [resources](resources.md) |
+| `ResourceErrand.cs`, `ResourceErrand.Storage.cs` | resource duties: refilling the loader, restocking, storing a spare; one buddy owns the loader at a time. `StorageSearch` finds the spare's spot over several frames | `IErrandBody`, `ResourceDuty`, `ResourceStorage`, `GameInternals` | [resources](resources.md) |
 | `ResourceDuty.cs`, `ResourceDutySettings.cs`, `ResourceKinds.cs`, `ResourceDutyMenu.cs` | the shared owner and status, the save's settings, the oxygen/fuel/energy table, the talk window's Resources page | `BuddyConversation` | [resources](resources.md) |
 | `ResourceScan.cs`, `ResourceStorage.cs`, `ResourceProbeBudget.cs` | shops and cells, switched-off rooms included; clear floor for a spare; four floor probes a frame | `SceneSweeps`, `NavProbe` | [resources](resources.md#scans-and-storage) |
 | `SkipList.cs` | what a task leaves out for a while, per object: `Skip`, `Has`, `Prune` | - | [items](items.md) |

@@ -10,7 +10,7 @@ using UnityEngine;
 namespace YourBuddy
 {
     // One slot, one owner; each handoff remains a normal reach/carry leg. docs/resources.md
-    internal sealed class ResourceErrand(IErrandBody body) : Errand(body)
+    internal sealed partial class ResourceErrand(IErrandBody body) : Errand(body)
     {
         // Tuning. docs/reference.md#resource-duties---resourceerrandcs
         private const float CheckSeconds = 30f;
@@ -33,22 +33,8 @@ namespace YourBuddy
         private const float RejectedStorageSqr = 0.36f;
         private const float FloorMovedSqr = 0.04f;
 
-        private readonly List<Vector3> storagePoints = [];
-        private int storageAttempts;
-        private int storageCursor;
-        private float storageRefresh;
-        private Vector3 storageHalf;
-        private bool storagePending;
-        private string? storageFailure;
-        private readonly List<Vector3> rejectedStorage = [];
-        // The shortest walk among the first few reachable spots, kept while a search spans frames.
-        private Leg? storageBest;
-        private NavPath? storageBestRoute;
-        private float storageBestLength;
-        private int storageBestIndex, storageFound;
-        private bool storageChosen;
-        // The chosen spot's route loaded switched-off rooms; it is checked again before the walk.
-        private bool storageRecheck;
+        private StorageSearch? storage;
+        private StorageSearch Storage => storage ??= new StorageSearch(this);
         private Grabbable? awaitingSafeDrop;
         private bool endReported;
 
@@ -239,39 +225,38 @@ namespace YourBuddy
                 if (!Rule.Enabled) continue;
                 needed[kind] = Rule.NeedsRefill(Percent(kind), needed[kind]);
                 ResetRun();
-                bool insert = needed[kind] && blocked == null && Plan(LoaderLeg(Phase.Insert), false);
+                if (TryKind(blocked, out int stock)) return true;
+                // Plan, FindCell and FindShop return at once while the frame's plan is spent.
                 if (planLater) return Park();
-                if (insert && UseInserted()) return true;
-                if (planLater) return Park();
-                if (insert && FindCell())
-                {
-                    Start();
-                    return true;
-                }
-                if (planLater) return Park();
-                int stock = ShipStock(kind);
-                if (ResourceDuty.Settings.Buying && stock < ResourceRule.MinCells)
-                {
-                    restocking = true;
-                    insertAfter = insert;
-                    stockGoal = stock + ResourceRule.BuyQuantity;
-                    if (FindCell() || FindShop())
-                    {
-                        Start();
-                        return true;
-                    }
-                    if (planLater) return Park();
-                    if (BeginSearch())
-                    {
-                        Start();
-                        return true;
-                    }
-                }
                 if (needed[kind] && blocked != null) Waiting(blocked);
                 else if (needed[kind] || (ResourceDuty.Settings.Buying && stock < ResourceRule.MinCells))
-                    ResourceDuty.Report(storageFailure ?? OverLimit() ?? $"Waiting: no reachable {Label} supply or affordable shop; {stock} usable cells aboard{(ResourceDuty.Settings.Buying ? "" : "; Buying is off")}.", Label);
+                    ResourceDuty.Report(Storage.Failure ?? OverLimit() ?? $"Waiting: no reachable {Label} supply or affordable shop; {stock} usable cells aboard{(ResourceDuty.Settings.Buying ? "" : "; Buying is off")}.", Label);
             }
             return false;
+        }
+
+        // Starts a run for `kind`: a refill, else a restock.
+        private bool TryKind(string? blocked, out int stock)
+        {
+            stock = 0;
+            bool insert = needed[kind] && blocked == null && Plan(LoaderLeg(Phase.Insert), false);
+            if (insert && UseInserted()) return true;
+            if (insert && FindCell())
+            {
+                Start();
+                return true;
+            }
+            stock = ShipStock(kind);
+            if (!ResourceDuty.Settings.Buying || stock >= ResourceRule.MinCells) return false;
+
+            restocking = true;
+            insertAfter = insert;
+            stockGoal = stock + ResourceRule.BuyQuantity;
+            // A spent plan parks the try rather than waiting on a Search leg.
+            if (!FindCell() && !FindShop() && (planLater || !BeginSearch())) return false;
+
+            Start();
+            return true;
         }
 
         // This frame's plan is spent. The decider resumes at its next slow tick; reaches already
@@ -293,25 +278,7 @@ namespace YourBuddy
             borrowed = false;
             cheapestOverLimit = 0;
             purchasesMade = 0;
-            ResetStorage();
-        }
-
-        private void ResetStorage()
-        {
-            storageAttempts = 0;
-            rejectedStorage.Clear();
-            storageFailure = null;
-            storagePending = false;
-            ResetStorageChoice();
-        }
-
-        private void ResetStorageChoice()
-        {
-            storageBest = null;
-            storageBestRoute = null;
-            storageFound = 0;
-            storageChosen = false;
-            storageRecheck = false;
+            Storage.Reset();
         }
 
         // An idle charged cell in the loader: loaded if it is the due kind, else taken out and stored first.
@@ -406,11 +373,12 @@ namespace YourBuddy
                 Body.LoadRoomOf(candidate.transform);
                 Grabbable item = candidate.GetComponent<Grabbable>();
                 if (Items.TakeBlocker(item, Body.Hands.Item) != null) continue;
-                if (NeedsStorage && !PlanStorage(false, item))
+                if (NeedsStorage)
                 {
+                    StorageResult room = Storage.Check(item);
                     // The storage scan goes on next frame; another cell would not get further.
-                    if (storagePending) return false;
-                    continue;
+                    if (room == StorageResult.Pending) return false;
+                    if (room == StorageResult.None) continue;
                 }
                 if (Plan(new Leg(this, Items.ItemTop(item), candidate.transform, Phase.Fetch), true))
                 {
@@ -448,10 +416,11 @@ namespace YourBuddy
                         continue;
                     }
                     Body.LoadRoomOf(shop.transform);
-                    if (NeedsStorage && !PlanStorage(false, product))
+                    if (NeedsStorage)
                     {
-                        if (storagePending) return false;
-                        continue;
+                        StorageResult room = Storage.Check(product);
+                        if (room == StorageResult.Pending) return false;
+                        if (room == StorageResult.None) continue;
                     }
                     if (Plan(new Leg(this, shop.transform.position, shop.transform, Phase.Buy) { Shop = shop, Product = i }, true)) return true;
                     if (planLater) return false;
@@ -501,204 +470,12 @@ namespace YourBuddy
         private void Remember(Leg leg, bool reachable) =>
             reachMemo.Add(new ReachMemo(leg.Own, leg.Stage, leg.TargetPoint, reachable, Time.time + ReachMemoSeconds));
 
-        private bool PlanStorage(bool walk, Grabbable? prospective = null)
-        {
-            if (loader == null || storageAttempts >= MaxStorageWalks) return false;
-            Vector3 size = Body.Hands.Item != null ? Body.Hands.Extents : Vector3.one * .15f;
-            if (prospective != null && NpcHands.ColliderBounds(prospective.gameObject, out Bounds bounds) && bounds.size.sqrMagnitude > .001f)
-                size = bounds.extents;
-            Vector3 half = ResourceStorage.Clearance(size);
-            bool resized = (half - storageHalf).sqrMagnitude > .0001f;
-            // Finish a pending footprint before considering a differently sized shop product.
-            if (storagePending && resized && Time.time < storageRefresh) return false;
-            storagePending = false;
-            // A walk's choice waiting for its re-check is no answer to a prospective check.
-            if (!walk && storageChosen) ResetStorageChoice();
-            if (storagePoints.Count == 0 || resized || Time.time >= storageRefresh)
-            {
-                ResourceStorage.Candidates(loader.transform.position, storagePoints);
-                storageCursor = 0;
-                ResetStorageChoice();
-                storageHalf = half;
-                storageRefresh = Time.time + StorageRescanSeconds;
-            }
-            int plans = 0;
-            int floors = 0, clear = 0;
-            string blocker = "no supported ship floor near active nodes";
-            while (!storageChosen && storageCursor < storagePoints.Count)
-            {
-                if (!ResourceStorage.MayProbe())
-                {
-                    storagePending = true;
-                    return false;
-                }
-                Vector3 candidate = storagePoints[storageCursor++];
-                if (!ResourceStorage.FindFloor(candidate, out RaycastHit floor)) continue;
-                floors++;
-                Room? room = floor.collider.GetComponentInParent<Room>();
-                if (room != null) Body.LoadRoomOf(room.ContentParent);
-                Vector3 point = floor.point + Vector3.up * (half.y + .03f);
-                if (rejectedStorage.Exists(p => (p - point).sqrMagnitude < RejectedStorageSqr)) continue;
-                Transform? carried = Body.Hands.Item != null ? Body.Hands.Item.transform : prospective != null ? prospective.transform : null;
-                if (!ResourceStorage.Clear(point, half, carried))
-                {
-                    blocker = ResourceStorage.LastBlocker;
-                    continue;
-                }
-                clear++;
-                Leg leg = new(this, point, loader.transform, Phase.Deliver)
-                {
-                    Floor = floor.collider.transform,
-                    FloorPoint = floor.collider.transform.InverseTransformPoint(point)
-                };
-                NavPath? route = null;
-                float length = 0f;
-                if (Body.InReach(leg))
-                {
-                    leg.Node = leg.StandPoint = Body.Transform.position;
-                }
-                else
-                {
-                    bool? known = Remembered(leg);
-                    if (known == false)
-                    {
-                        blocker = "no way to it, found lately";
-                        continue;
-                    }
-                    if (known == true && !walk)
-                    {
-                        storageCursor--;
-                        return true;
-                    }
-                    // One plan a frame: this spot is planned next frame.
-                    if (!MayPlanNow)
-                    {
-                        storageCursor--;
-                        storagePending = true;
-                        return false;
-                    }
-                    plans++;
-                    string? failure = Body.PlanReach(leg, out NavPath planned);
-                    Remember(leg, failure == null);
-                    if (failure != null)
-                    {
-                        blocker = failure;
-                        continue;
-                    }
-                    route = planned;
-                    length = RouteLength(planned, point);
-                }
-                // A prospective check needs only one reachable spot.
-                if (!walk)
-                {
-                    storageCursor--;
-                    return true;
-                }
-                if (storageBest == null || length < storageBestLength)
-                {
-                    storageBest = leg;
-                    storageBestRoute = route;
-                    storageBestLength = length;
-                    storageBestIndex = storageCursor - 1;
-                }
-                if (++storageFound >= StorageChoices || length <= 0f) storageChosen = true;
-            }
-            if (walk && storageBest != null)
-            {
-                storageChosen = true;
-                bool? walked = WalkToStorage(half);
-                if (walked == true) return true;
-                if (walked == null)
-                {
-                    storagePending = true;
-                    return false;
-                }
-                return PlanStorage(true);
-            }
-            storageFailure = clear > 0 ? "Waiting: clear storage exists, but Buddy cannot reach it. Check the ship's doors and approach." :
-                "Waiting: no clear floor storage found aboard. Make room for a spare cell.";
-            ResourceDuty.Trace($"Storage scan: {floors} supported, {clear} clear, {plans} route checks; half-size {half}; {blocker}.", "storage scan");
-            ResourceDuty.Report(storageFailure, "storage");
-            return false;
-        }
-
-        // Walks to the chosen spot; false after rejecting it, null while its re-check waits for the next
-        // frame's plan. The route's switched-off rooms are loaded first, so their furniture is in the
-        // checks. docs/resources.md#scans-and-storage
-        private bool? WalkToStorage(Vector3 half)
-        {
-            // Only called with a chosen spot.
-            Leg leg = storageBest!;
-            NavPath? route = storageBestRoute;
-            if (route.HasValue && LoadRouteRooms(route.Value, leg.TargetPoint)) storageRecheck = true;
-            if (storageRecheck)
-            {
-                if (!MayPlanNow) return null;
-
-                storageRecheck = false;
-                Transform? carried = Body.Hands.Item != null ? Body.Hands.Item.transform : null;
-                NavPath replanned = default;
-                string? failure = ResourceStorage.Clear(leg.TargetPoint, half, carried)
-                    ? Body.PlanReach(leg, out replanned) : ResourceStorage.LastBlocker;
-                if (failure != null)
-                {
-                    ResourceDuty.Trace($"Storage at {leg.TargetPoint} dropped once its route's rooms loaded: {failure}.", "storage scan");
-                    rejectedStorage.Add(leg.TargetPoint);
-                    ResetStorageChoice();
-                    storageCursor = 0;
-                    return false;
-                }
-                route = replanned;
-            }
-            storageCursor = storageBestIndex;
-            ResetStorageChoice();
-            Body.Walk(leg, route);
-            storageAttempts++;
-            YourBuddyPlugin.Log.LogInfo($"[resources] Carrying cell to clear ship storage at {leg.TargetPoint}");
-            return true;
-        }
-
-        private float RouteLength(NavPath route, Vector3 end)
-        {
-            float length = 0f;
-            Vector3 from = Here;
-            for (int i = 0; i <= route.Count; i++)
-            {
-                Vector3 to = i < route.Count ? route[i] : end;
-                length += Mathf.Sqrt((to - from).sqrMagnitude);
-                from = to;
-            }
-            return length;
-        }
-
-        // Ship rooms under the route, sampled every metre; true when one was switched on.
-        private bool LoadRouteRooms(NavPath route, Vector3 end)
-        {
-            bool loaded = false;
-            Vector3 from = Here;
-            for (int i = 0; i <= route.Count; i++)
-            {
-                Vector3 to = i < route.Count ? route[i] : end;
-                int steps = Mathf.CeilToInt(Mathf.Sqrt((to - from).sqrMagnitude));
-                for (int k = 1; k <= steps; k++)
-                {
-                    if (!ResourceStorage.FindFloor(from + (to - from) * ((float)k / steps), out RaycastHit floor)) continue;
-                    Room? room = floor.collider.GetComponentInParent<Room>();
-                    if (room == null || room.ContentEnabled) continue;
-                    Body.LoadRoomOf(room.ContentParent);
-                    loaded |= room.ContentEnabled;
-                }
-                from = to;
-            }
-            return loaded;
-        }
-
-        private bool PlanDelivery() => PlanStorage(true) || BeginSearch();
+        private bool PlanDelivery() => Storage.Walk() == StorageResult.Found || BeginSearch();
 
         // Waits where it stands while a search spans frames: the storage probes, or one plan a frame.
         private bool BeginSearch()
         {
-            if ((!storagePending && !planLater) || loader == null) return false;
+            if ((!Storage.Pending && !planLater) || loader == null) return false;
             Leg wait = new(this, Here, loader.transform, Phase.Search);
             wait.Node = wait.StandPoint = Here;
             Body.Walk(wait, null);
@@ -789,7 +566,7 @@ namespace YourBuddy
                 startedLoading = false;
                 puttingAway = false;
                 borrowed = false;
-                ResetStorage();
+                Storage.Reset();
                 if (ResourceDuty.Owner == this) ResourceDuty.Owner = null;
                 DueAt = Time.time + CheckSeconds;
                 finishing = false;
@@ -806,8 +583,8 @@ namespace YourBuddy
             if (loader == null || slot == null) return Stop("loader unavailable");
             if (leg.Stage == Phase.Search)
             {
-                bool ready = Body.Hands.Item != null ? PlanStorage(true) : FindCell() || FindShop();
-                if (ready || storagePending || planLater) return Vector3.zero;
+                bool ready = Body.Hands.Item != null ? Storage.Walk() == StorageResult.Found : FindCell() || FindShop();
+                if (ready || Storage.Pending || planLater) return Vector3.zero;
                 return Stop("no reachable supply or clear storage");
             }
             if (leg.Stage == Phase.Settle)
@@ -870,7 +647,7 @@ namespace YourBuddy
                 if (Items.TakeBlocker(item, Body.Hands.Item) != null || Body.TakenByAnother(item.transform) ||
                     (Items.ItemTop(item) - leg.TargetPoint).sqrMagnitude > MovedSqr) return Stop("cell moved or was taken");
                 if (!Body.Hands.PickUp(item)) return Stop("could not pick up the cell");
-                ResetStorage();
+                Storage.Reset();
                 if ((restocking || puttingAway) && !InsertBought())
                 {
                     if (!PlanDelivery()) return Stop("no reachable clear ship storage space");
@@ -884,7 +661,7 @@ namespace YourBuddy
                 if (Body.Hands.Item != item || !Body.IsAboardPlayerShip()) return Stop("cannot deliver the cell aboard");
                 if (!ResourceStorage.Clear(leg.TargetPoint, ResourceStorage.Clearance(Body.Hands.Extents), item.transform))
                 {
-                    rejectedStorage.Add(leg.TargetPoint);
+                    Storage.Rejected.Add(leg.TargetPoint);
                     if (!PlanDelivery()) return Stop("ship storage became blocked");
                     return Vector3.zero;
                 }
@@ -965,7 +742,7 @@ namespace YourBuddy
             borrowed = false;
             insertAfter = false;
             deadline = Time.time + RunSeconds;
-            ResetStorage();
+            Storage.Reset();
             ResourceDuty.Report($"{Label}: {why}; storing the cell as a spare.", Label);
             // The eject pushes the cell out; it is fetched once it has come to rest.
             Leg settle = new(this, Here, loader.transform, Phase.Settle);
@@ -995,7 +772,7 @@ namespace YourBuddy
             if (planLater) return Vector3.zero;
             if (!ResourceDuty.Settings.CanBuy(Rule, product.BuyPrice, player.CashSystem.Cash))
                 return Stop("no more cells affordable within your limits");
-            if (NeedsStorage && !PlanStorage(false, product))
+            if (NeedsStorage && Storage.Check(product) != StorageResult.Found)
             {
                 if (BeginSearch()) return Vector3.zero;
                 return Stop("no clear storage route; purchase cancelled before spending");
@@ -1093,7 +870,7 @@ namespace YourBuddy
             {
                 if (Stage == Phase.Deliver && job.cell != null)
                 {
-                    job.rejectedStorage.Add(TargetPoint);
+                    job.Storage.Rejected.Add(TargetPoint);
                     if (job.PlanDelivery()) return true;
                 }
                 if (job.purchasesMade > 0 && job.cell != null)
