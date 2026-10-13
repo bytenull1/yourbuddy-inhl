@@ -141,8 +141,8 @@ and each agent's environments and footstep doorways) are in
 TTL caches heal themselves; don't add invalidation hooks. A static cache would outlive a scene: drop it
 on `NpcEvents.WorldReset`.
 
-A timed rescan asks `SceneScan.MayRescan` first, so at most one runs per frame; the others keep their
-list a frame longer ([scene-sweeps-are-budgeted](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#scene-sweeps-are-budgeted)).
+A timed rescan asks `SceneScan.MayRescan` first, so at most one runs per frame and none inside a path
+search; the others keep their list a frame longer ([scene-sweeps-are-budgeted](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#scene-sweeps-are-budgeted)).
 
 Owner transforms and docked state are **not** cached: `OwnerSnapshot` resolves them per graph query
 ([never-cache-node-world-positions](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#never-cache-node-world-positions)).
