@@ -158,7 +158,9 @@ namespace YourBuddy
         public bool OnRoute => Leg != null;
         public bool IsAboardPlayerShip() => true;
         public bool TakenByAnother(Transform t) => false;
-        public void LoadRoomOf(Transform t) { }
+        // Rooms whose content LoadRoomOf switches on.
+        public List<Room> Rooms = [];
+        public void LoadRoomOf(Transform t) { foreach (Room room in Rooms) if (room.ContentParent == t) room.ContentEnabled = true; }
         public void StandFacing(Vector3 p) { }
         public bool Near = true;
         public int Plans, PlannedFrame = -1;
@@ -263,10 +265,19 @@ namespace YourBuddy
     {
         internal static string LastBlocker = "blocked";
         internal static Vector3 Clearance(Vector3 size) => size;
-        internal static void Candidates(Vector3 p, List<Vector3> result) { }
+        // No storage unless a check sets spots, a floor under them and clearance.
+        internal static List<Vector3> Spots = [];
+        internal static Func<Vector3, BoxCollider?> Floor = p => null;
+        internal static bool IsClear;
+        internal static void Candidates(Vector3 p, List<Vector3> result) { result.Clear(); result.AddRange(Spots); }
         internal static bool MayProbe() => true;
-        internal static bool FindFloor(Vector3 p, out RaycastHit hit, bool shipOnly = true) { hit = new(); return false; }
-        internal static bool Clear(Vector3 p, Vector3 half, Transform? item, bool shipOnly = true) => false;
+        internal static bool FindFloor(Vector3 p, out RaycastHit hit, bool shipOnly = true)
+        {
+            BoxCollider? floor = Floor(p);
+            hit = floor != null ? new RaycastHit { collider = floor, point = p } : new();
+            return floor != null;
+        }
+        internal static bool Clear(Vector3 p, Vector3 half, Transform? item, bool shipOnly = true) => IsClear;
     }
     internal static class YourBuddyPlugin { internal static Logger Log = new(); internal static Setting ConfigAutonomy = new(); }
     internal class Logger { internal void LogInfo(string t) { } internal void LogWarning(string t) { } }

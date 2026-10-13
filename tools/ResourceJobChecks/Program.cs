@@ -245,6 +245,51 @@ Time.time += 0.3f;
 Check(farJob.TryStart(out _) && farBody.Plans == 2 && farBody.Leg != null && farBody.Leg.Name == "resource cell",
     "the resumed try reuses the loader's reach and plans the cell");
 farJob.Cancel("check done");
+// One plan a frame through the storage search: a restock parks, resumes, waits a frame for the spot's walk,
+// and re-plans once the route's switched-off room is loaded.
+Grabbable stationItem = new() { transform = new() };
+ResourceContainer stationCell = new() { transform = stationItem.transform };
+stationCell.Components[typeof(Grabbable)] = stationItem;
+NpcVessels.Owners[stationItem.transform] = "station";
+SceneScan.Snapshot<ResourceContainer>.Items = [stationCell];
+BoxCollider storageFloor = new() { transform = new() };
+BoxCollider routeFloor = new() { transform = new() };
+Room unloaded = new() { transform = new(), ContentEnabled = false };
+routeFloor.Components[typeof(Room)] = unloaded;
+ResourceStorage.Spots = [new(3, 0, 0)];
+ResourceStorage.Floor = p => p.x < 2.5f ? routeFloor : storageFloor;
+ResourceStorage.IsClear = true;
+loader.Current = null;
+ship.OxygenController.Value = 100;
+ResourceDuty.Settings.Buying = true;
+ResourceDuty.Settings.Budget = 1500;
+NpcPlayer.Pilot = new Player();
+IErrandBody storeBody = new() { Near = false, Rooms = [unloaded] };
+storeBody.Hands.Extents = Vector3.one * .15f;
+ResourceErrand storeJob = new(storeBody);
+Check(!storeJob.TryStart(out _) && storeJob.Resuming && storeBody.Plans == 1 && storeBody.Leg == null,
+    "the storage spot spends the frame's plan and the restock parks");
+Time.frameCount++;
+Time.time += 0.3f;
+Check(storeJob.TryStart(out _) && storeBody.Plans == 2 && storeBody.Leg?.Name == "resource cell",
+    "the resumed restock reuses the storage spot's reach and plans the cell");
+storeBody.PlannedFrame = Time.frameCount;
+storeBody.Leg!.Approach(out _); // Picks up; this frame's plan is already spent.
+Check(storeBody.Hands.Item == stationItem && storeBody.Plans == 2 && storeBody.Leg?.Name == "ship loader",
+    "a spent plan sends the carried cell to wait, not to fail");
+Time.frameCount++;
+storeBody.Leg!.Approach(out _); // Search: plans the spot; its route loads the room.
+Check(unloaded.ContentEnabled && storeBody.Plans == 3 && storeBody.Leg?.Name == "ship loader",
+    "the route's room loads and the re-check waits for the next frame");
+Time.frameCount++;
+storeBody.Leg!.Approach(out _); // Search: the re-check plans and walks.
+Check(storeBody.Plans == 4 && storeBody.Leg?.Name == "ship storage", "the re-checked spot is walked to");
+storeJob.Cancel("check done");
+ResourceDuty.Settings.Paused = false;
+ResourceDuty.Settings.Buying = false;
+ResourceStorage.Spots = [];
+ResourceStorage.Floor = p => null;
+ResourceStorage.IsClear = false;
 GameManager.Instance.PlayerShip = null;
 Check(BuddyResourceDebug.Drain(["fuel"]).Contains("No player ship"), "no ship handled");
 Console.WriteLine($"{checks} resource job/debug checks passed.");
