@@ -17,6 +17,7 @@ namespace YourBuddy
                 if (Hiding) return "I'm hiding here.";
                 return mode switch
                 {
+                    BuddyMode.Stay when Lingering => "Just having a look here. I'll be right with you.",
                     BuddyMode.Stay => "I'll wait here. Tell me when you're ready.",
                     BuddyMode.Wander => "I'm having a look around. Need me?",
                     BuddyMode.Route => DescribeReachTask() is { } task

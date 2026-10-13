@@ -201,7 +201,7 @@ namespace YourBuddy
                 case BuddyMode.Route:
                     return UpdateRoute(out wantMove);
                 case BuddyMode.Stay:
-                    return agent.Stay(out wantMove);
+                    return UpdateStay(player, out wantMove);
                 case BuddyMode.Flee:
                     return UpdateFlee(player, out wantMove);
             }

@@ -227,6 +227,7 @@ namespace YourBuddy
             if (fearState != FearState.Calm || mode == BuddyMode.Flee) return "fear is " + fearState;
 
             if (mode == BuddyMode.Route) return DescribeReachTask() is { } task ? task : "walking a route";
+            if (Lingering) return "looking around where you sent it";
             // Follow already waits inside for a spacewalk, so there is nothing to choose. Once
             // outside, ScoreUrges still chooses between following and wandering.
             if (!agent.IsOutside && NpcAgent.IsPlayerInSpace(player)) return "the player is outside";

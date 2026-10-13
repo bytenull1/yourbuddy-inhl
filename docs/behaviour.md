@@ -26,7 +26,9 @@ An order ends when it is:
 - **a goto during a ship rebuild** - its goal belongs to the old layout
   ([an-npc-rides-its-own-floor](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#an-npc-rides-its-own-floor)).
 
-Otherwise a goto always runs to completion; revoking one lets it finish first.
+Otherwise a goto always runs to completion; revoking one lets it finish first. An arrived goto stands
+3-4 s (Stay, `lingerUntil`) before it follows again, so it does not turn straight back to you. Any
+order, errand or flee ends that wait; a flee then resumes Follow.
 
 An order given during a flee is recorded at once but only replaces what the flee will resume
 ([fear-owns-the-buddy](invariants.md#fear-owns-the-buddy)). The reply says so.
@@ -63,6 +65,7 @@ It **stands down** (logged at level 2 every 15 s) while:
 | being caught, or talked to | `Update` holds the buddy still anyway |
 | fear above Calm, or fleeing | [fear-owns-the-buddy](invariants.md#fear-owns-the-buddy) |
 | walking a route | a goto, a resumed route, or an errand in progress |
+| standing where a goto arrived | the 3-4 s wait after it, then Follow |
 | hiding | hiding owns the buddy ([fear.md §6](fear.md#6-hiding-in-a-closet-or-locker)) |
 | acting out an anomaly | it holds the buddy until it ends ([anomalies.md](anomalies.md)) |
 | the player is on a spacewalk and the buddy is inside | Follow already waits inside ([eva.md §4](eva.md#4-through-the-airlock)) |
@@ -242,14 +245,15 @@ Check a new mode against every row.
 | `Fear.cs` `HoldBackFromMonster` | exempts `Flee` in `Retreat` | the retreat was vetted |
 | `Fear.cs` `UpdateFear`, `ResetFear`, `TraceFear`, `DescribeFear` | fear's own mode handling | owner |
 | `Autonomy.cs` `ApplyOrder`, `ApplyRouteOrder` | mid-flee, replace `modeBeforeFlee` | defers |
-| `Autonomy.cs` `StandDownReason`, `GotoUnderway`, `UpdateAutonomy` | stand down on `Flee` / `Route`; branch on `Wander` / `Follow` | stands down |
+| `Autonomy.cs` `StandDownReason`, `GotoUnderway`, `UpdateAutonomy` | stand down on `Flee` / `Route` / a goto's `Stay` (`Lingering`); branch on `Wander` / `Follow` | stands down |
 | `Mind.cs` `ScoreCompany`, `ActOn` | which of Follow / Wander is weighed | not reached |
 | `Anomaly.cs` `AnomalyReady`, `StartStatue` | none starts in `Route` or `Flee`; a statue turns `Wander` into `Follow` | not started |
 | `Hide.cs` `BeginHide`, `EndHide` | an errand's `Route` ends; a hide in a flee ends or retries it | owner |
 | `ActivityName`, `StatusText`, `ListLine` | print it | - |
+| `Modes.cs` `UpdateStay`, `Lingering`, `SetMode` | a goto's `Stay` turns into `Follow` after 3-4 s; a flee from it resumes `Follow` | `SetMode` swaps `modeBeforeFlee` |
 
 Writers of `mode`: the initialiser, `SetMode` (from `ApplyOrder`, `Decide`, `StartFlee`, `EndFlee`,
-`OnShipRebuilt`, `StartStatue`), `StartRoute`, `FinishRoute`, `IErrandBody.Walk`, `BeginHide`, `OnDied`. `SetMode`
+`OnShipRebuilt`, `StartStatue`, `UpdateStay`), `StartRoute`, `FinishRoute`, `IErrandBody.Walk`, `BeginHide`, `OnDied`. `SetMode`
 drops the agent's plan but not its step-off, wander pause, barred waypoint or sidestep; `StartFlee`
 and `EndFlee` cancel the step-off themselves (`CancelStepOff`).
 
@@ -283,7 +287,8 @@ reasons and empty searches at level 2 (every 15 s).
 [mind] Thought of tidying up, but there is no trash within 30m - trying again in 120s   <- level 2
 [mind] Order 'Stay' expired after 90s - deciding for myself again
 [mind] Order 'Follow' revoked - deciding for myself
-[ai] Route finished (the goto order is done), switching to Follow mode
+[ai] Route finished (the goto order is done), staying 3.4s, then Follow
+[ai] Done looking around, switching to Follow mode
 [ai] Gave up on the route to (7.4, 1.0, 30.6) - the last waypoint could not be reached (the goto order is not done), switching to Follow mode
 ```
 

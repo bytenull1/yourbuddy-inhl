@@ -52,7 +52,7 @@ is tried after the airlock orders and before ordinary movement orders. "Come and
 starts tidying; "come" by itself means Follow.
 
 "Status", "how are you", and "what are you doing" report the current state without giving an
-order. "Stop following" and "stop moving" mean Stay. Requests containing "don't", "dont", "do not", "not", "no" or
+order; asked of a group, each reply starts with that buddy's name. "Stop following" and "stop moving" mean Stay. Requests containing "don't", "dont", "do not", "not", "no" or
 "never" ask for a positive instruction instead of executing the action being forbidden.
 
 | Word | Console | Effect |

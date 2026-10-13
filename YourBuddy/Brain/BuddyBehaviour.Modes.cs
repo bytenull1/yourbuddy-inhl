@@ -120,8 +120,17 @@ namespace YourBuddy
             bool ordered = orderedMode == BuddyMode.Route;
             if (ordered) orderedMode = null;
             mode = ModeAfterTask;
+            lingerUntil = 0f;
 
             decideAt = 0f;
+            if (ordered && !abandoned && mode == BuddyMode.Follow)
+            {
+                // It looks around where it was sent before coming back. docs/behaviour.md#1-an-order-is-not-a-mode
+                mode = BuddyMode.Stay;
+                lingerUntil = Time.time + Random.Range(GotoLingerMin, GotoLingerMax);
+                YourBuddyPlugin.Log.LogInfo($"[ai] Route finished (the goto order is done), staying {lingerUntil - Time.time:0.0}s, then Follow");
+                return;
+            }
             if (abandoned)
             {
                 YourBuddyPlugin.Log.LogWarning(
@@ -132,6 +141,25 @@ namespace YourBuddy
 
             YourBuddyPlugin.Log.LogInfo("[ai] Route finished" + (ordered ? " (the goto order is done)" : "") +
                                         ", switching to " + mode + " mode");
+        }
+
+        // How long an arrived goto stands before Follow. Ended by any SetMode.
+        private const float GotoLingerMin = 3f;
+        private const float GotoLingerMax = 4f;
+        private float lingerUntil = 0f;
+
+        private bool Lingering => mode == BuddyMode.Stay && lingerUntil > 0f;
+
+        private Vector3 UpdateStay(Player player, out bool wantMove)
+        {
+            if (Lingering && Time.time >= lingerUntil)
+            {
+                SetMode(BuddyMode.Follow);
+                decideAt = 0f;
+                YourBuddyPlugin.Log.LogInfo("[ai] Done looking around, switching to Follow mode");
+                return UpdateFollow(player, out wantMove);
+            }
+            return agent.Stay(out wantMove);
         }
 
         /// <summary>
@@ -171,6 +199,9 @@ namespace YourBuddy
             // A flee resumes a terminal route; anything else ends it, and a snack or an item task ends even then. docs/snacks.md §2
             bool endsOnFlee = reachTask is { EndsOnFlee: true };
             if (newMode == BuddyMode.Flee && endsOnFlee && modeBeforeFlee == BuddyMode.Route) modeBeforeFlee = ModeAfterTask;
+            // A flee resumes Follow, not the linger it cut short.
+            if (newMode == BuddyMode.Flee && lingerUntil > 0f && modeBeforeFlee == BuddyMode.Stay) modeBeforeFlee = BuddyMode.Follow;
+            lingerUntil = 0f;
             if (newMode != BuddyMode.Flee || endsOnFlee) DropReachTask();
             agent.DropPlan();
         }

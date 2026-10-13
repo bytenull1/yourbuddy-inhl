@@ -71,7 +71,10 @@ namespace YourBuddy
 
             if (Has(lower, "status", "how are you", "what are you doing"))
             {
-                return ForAll(targets, b => b.Name + ": " + b.ConversationStatus);
+                // Only a group's replies need a name each to tell them apart.
+                return targets.Count > 1
+                    ? ForAll(targets, b => b.Name + ": " + b.ConversationStatus)
+                    : ForAll(targets, b => b.ConversationStatus);
             }
 
             // Do not turn a negated request into the action it forbids.
