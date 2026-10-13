@@ -113,8 +113,12 @@ leave saves intact ([NPC.Core's invariants](https://github.com/bytenull1/npc-cor
 
 ### Check harnesses
 
-Console programs in `tools/` that compile production files against hand-written engine stubs. They
-need no game assemblies. Run each with `dotnet run --project tools/<Name>/<Name>.csproj -c Release`.
+xUnit projects in `tools/` that run production files against hand-written engine stubs. They need no
+game assemblies. Run one with `dotnet test tools/<Name>/<Name>.csproj -c Release`.
+
+- `Subject/` compiles the linked production files with the stubs. When production code gains a member
+  a linked file uses, add it to the stub file there.
+- `Checks.cs` is the check script. It is one fact: the checks share static state and run in order.
 
 | Harness | Covers |
 |---|---|
@@ -123,7 +127,13 @@ need no game assemblies. Run each with `dotnet run --project tools/<Name>/<Name>
 | `ResourceJobChecks` | Loader eligibility, cell fetch, eject and store, buying, one plan a frame, HUD states, the drain command |
 
 They do not exercise Unity physics, navigation or game events; those still need a check in the game.
-When production code gains a member a linked file uses, add it to the harness's stub file.
+After a game update, NPC.Core's [GameCompat](https://github.com/bytenull1/npc-core-inhl/blob/main/tools/GameCompat/README.md)
+checks YourBuddy's references, `GameInternals` lookups and patch targets against the new game.
+
+For mutation testing, run `dotnet tool restore` once, then `dotnet stryker` in a harness folder. Stryker
+changes the production files in `Subject/` one small edit at a time and reports each edit no check
+notices (a surviving mutant) in `StrykerOutput/`. Each survivor is a bug the checks would miss.
+ResourceChecks mutates only the resource files; the command parser it links is CommandChecks' to test.
 
 ---
 

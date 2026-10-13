@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ResourceJobChecks" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceErrand.cs" Link="ResourceErrand.cs" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceErrand.Storage.cs" Link="ResourceErrand.Storage.cs" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceDutySettings.cs" Link="ResourceDutySettings.cs" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceKinds.cs" Link="ResourceKinds.cs" />
+    <Compile Include="../../../YourBuddy/Commands/BuddyResourceDebug.cs" Link="BuddyResourceDebug.cs" />
+  </ItemGroup>
+</Project>

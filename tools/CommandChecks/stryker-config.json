@@ -1,0 +1,8 @@
+{
+  "stryker-config": {
+    "project": "CommandChecks.Subject.csproj",
+    "configuration": "Release",
+    "mutate": ["!**/Stubs.cs"],
+    "reporters": ["progress", "html", "json"]
+  }
+}

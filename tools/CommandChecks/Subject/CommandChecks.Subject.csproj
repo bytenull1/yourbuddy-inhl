@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CommandChecks" />
+    <Compile Include="../../../YourBuddy/Commands/BuddyDialogCommands.cs" Link="BuddyDialogCommands.cs" />
+    <Compile Include="../../../YourBuddy/Brain/BuddyBehaviour.Conversation.cs" Link="BuddyBehaviour.Conversation.cs" />
+    <Compile Include="../../../YourBuddy/Brain/BuddyMode.cs" Link="BuddyMode.cs" />
+  </ItemGroup>
+</Project>

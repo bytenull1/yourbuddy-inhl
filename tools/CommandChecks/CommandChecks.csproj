@@ -1,14 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>12</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../YourBuddy/Commands/BuddyDialogCommands.cs" Link="BuddyDialogCommands.cs" />
-    <Compile Include="../../YourBuddy/Brain/BuddyBehaviour.Conversation.cs" Link="BuddyBehaviour.Conversation.cs" />
-    <Compile Include="../../YourBuddy/Brain/BuddyMode.cs" Link="BuddyMode.cs" />
+    <Compile Remove="Subject/**" />
+    <ProjectReference Include="Subject/CommandChecks.Subject.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" PrivateAssets="all" />
   </ItemGroup>
 </Project>

@@ -1,21 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>12</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceDutySettings.cs" Link="ResourceDutySettings.cs" />
-    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceDutyMenu.cs" Link="ResourceDutyMenu.cs" />
-    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceKinds.cs" Link="ResourceKinds.cs" />
-    <Compile Include="../../YourBuddy/Commands/BuddyDialogCommands.cs" Link="BuddyDialogCommands.cs" />
-    <Compile Include="../../YourBuddy/Brain/BuddyBehaviour.Conversation.cs" Link="BuddyBehaviour.Conversation.cs" />
-    <Compile Include="../../YourBuddy/Brain/BuddyMode.cs" Link="BuddyMode.cs" />
-    <Compile Include="../CommandChecks/Stubs.cs" Link="CommandStubs.cs" />
-    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceDuty.cs" Link="ResourceDuty.cs" />
-    <Compile Include="../../YourBuddy/Errands/ResourceDuty/ResourceProbeBudget.cs" Link="ResourceProbeBudget.cs" />
+    <Compile Remove="Subject/**" />
+    <ProjectReference Include="Subject/ResourceChecks.Subject.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" PrivateAssets="all" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 </Project>

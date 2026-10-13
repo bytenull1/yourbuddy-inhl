@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ResourceChecks" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceDutySettings.cs" Link="ResourceDutySettings.cs" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceDutyMenu.cs" Link="ResourceDutyMenu.cs" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceKinds.cs" Link="ResourceKinds.cs" />
+    <Compile Include="../../../YourBuddy/Commands/BuddyDialogCommands.cs" Link="BuddyDialogCommands.cs" />
+    <Compile Include="../../../YourBuddy/Brain/BuddyBehaviour.Conversation.cs" Link="BuddyBehaviour.Conversation.cs" />
+    <Compile Include="../../../YourBuddy/Brain/BuddyMode.cs" Link="BuddyMode.cs" />
+    <Compile Include="../../CommandChecks/Subject/Stubs.cs" Link="CommandStubs.cs" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceDuty.cs" Link="ResourceDuty.cs" />
+    <Compile Include="../../../YourBuddy/Errands/ResourceDuty/ResourceProbeBudget.cs" Link="ResourceProbeBudget.cs" />
+  </ItemGroup>
+</Project>

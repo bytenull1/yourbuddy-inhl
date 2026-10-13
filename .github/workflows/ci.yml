@@ -33,5 +33,5 @@ jobs:
       - name: Check harnesses
         run: |
           for p in CommandChecks ResourceChecks ResourceJobChecks; do
-            dotnet run --project "yourbuddy-inhl/tools/$p/$p.csproj" -c Release
+            dotnet test "yourbuddy-inhl/tools/$p/$p.csproj" -c Release --logger "console;verbosity=detailed"
           done

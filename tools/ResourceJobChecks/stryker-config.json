@@ -1,0 +1,8 @@
+{
+  "stryker-config": {
+    "project": "ResourceJobChecks.Subject.csproj",
+    "configuration": "Release",
+    "mutate": ["!**/Stubs.cs"],
+    "reporters": ["progress", "html", "json"]
+  }
+}
