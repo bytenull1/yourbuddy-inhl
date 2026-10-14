@@ -44,8 +44,9 @@ namespace YourBuddy
             out List<NPC.Core.Navigation.StationRooms.Entry>? several)
         {
             room = text.Contains("workshop", StringComparison.Ordinal) ? new() : null;
-            several = null;
-            return room != null;
+            // Two docks: the name alone is ambiguous.
+            several = text.Contains("dock", StringComparison.Ordinal) ? [new(), new()] : null;
+            return room != null || several != null;
         }
         internal static string Join(IEnumerable<NPC.Core.Navigation.StationRooms.Entry> entries) => "rooms";
         internal static string Prompt() => "Where to?";

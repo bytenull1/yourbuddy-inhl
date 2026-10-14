@@ -65,8 +65,10 @@ public class Grabbable : Component
 {
     public bool IsGrabbed, restrictGrab;
     public int BuyPrice = 50;
-    public void SetParent(Transform t) { }
-    public void SavePosition() { }
+    public Transform? Parent;
+    public int Saves;
+    public void SetParent(Transform t) { Parent = t; }
+    public void SavePosition() { Saves++; }
 }
 public class ResourceContainer : Component
 {
@@ -134,7 +136,11 @@ namespace NPC.Core.World
 }
 namespace NPC.Core.Navigation
 {
-    public struct NavPath { public int Count => 0; public Vector3 this[int i] => default; }
+    public struct NavPath(Vector3[]? points)
+    {
+        public int Count => points?.Length ?? 0;
+        public Vector3 this[int i] => points![i]; // Indexed below Count only.
+    }
     public static class NavGraph { public const string ShipOwner = "ship"; }
     public static class NavProbe { public static bool WalkLos(Vector3 a, Vector3 b, float c) => true; }
 }
@@ -145,11 +151,14 @@ namespace NPC.Core.Agents
     {
         public Grabbable? Item;
         public Vector3 Extents;
-        public void PutDown(Vector3 p, Vector3 r) { Item = null; }
+        public Vector3? Placed;
+        public void PutDown(Vector3 p, Vector3 r) { Item = null; Placed = p; }
         public void Release() { Item = null; }
         public bool PickUp(Grabbable item) { Item = item; return true; }
         public void ReachTo(Vector3 p) { }
-        public static bool ColliderBounds(GameObject o, out Bounds b) { b = new(); return false; }
+        // Measured items, by GameObject; others have no collider.
+        public static Dictionary<GameObject, Bounds> Measured = new();
+        public static bool ColliderBounds(GameObject o, out Bounds b) => Measured.TryGetValue(o, out b);
     }
 }
 namespace YourBuddy
@@ -161,17 +170,28 @@ namespace YourBuddy
         public bool IsOutside;
         public ErrandLeg? Leg;
         public bool OnRoute => Leg != null;
-        public bool IsAboardPlayerShip() => true;
+        public bool Aboard = true;
+        public bool IsAboardPlayerShip() => Aboard;
         public bool TakenByAnother(Transform t) => false;
         // Rooms whose content LoadRoomOf switches on.
         public List<Room> Rooms = [];
         public void LoadRoomOf(Transform t) { foreach (Room room in Rooms) if (room.ContentParent == t) room.ContentEnabled = true; }
         public void StandFacing(Vector3 p) { }
         public bool Near = true;
+        // Per leg, when set: in reach, the plan's failure, and its route.
+        public Func<ErrandLeg, bool>? NearAt;
+        public Func<ErrandLeg, string?>? FailAt;
+        public Func<ErrandLeg, Vector3[]>? RouteAt;
         public int Plans, PlannedFrame = -1;
-        public bool InReach(ErrandLeg leg) => Near;
+        public bool InReach(ErrandLeg leg) => NearAt != null ? NearAt(leg) : Near;
         public bool PlannedThisFrame => PlannedFrame == Time.frameCount;
-        public string? PlanReach(ErrandLeg leg, out NavPath p) { Plans++; PlannedFrame = Time.frameCount; p = new(); return null; }
+        public string? PlanReach(ErrandLeg leg, out NavPath p)
+        {
+            Plans++;
+            PlannedFrame = Time.frameCount;
+            p = new(RouteAt?.Invoke(leg));
+            return FailAt?.Invoke(leg);
+        }
         public void Walk(ErrandLeg leg, NavPath? p) { Leg = leg; }
         public void FinishRoute() { var old = Leg; Leg = null; old?.End(); }
         public bool StepIntoReach(ErrandLeg leg, out Vector3 move, out bool wantMove) { move = new(); wantMove = false; return true; }
@@ -236,7 +256,8 @@ namespace YourBuddy
     {
         internal static bool Loadable(Component c) => c.isActiveAndEnabled;
         internal static float FlatDistanceSq(Vector3 a, Vector3 b) => (a-b).sqrMagnitude;
-        internal static string? TakeBlocker(Grabbable item, Grabbable? held) => null;
+        internal static Func<Grabbable, string?> Blocker = item => null;
+        internal static string? TakeBlocker(Grabbable item, Grabbable? held) => Blocker(item);
         internal static Vector3 ItemTop(Grabbable item) => item.transform.position;
     }
     internal static class GameInternals
@@ -274,15 +295,25 @@ namespace YourBuddy
         internal static List<Vector3> Spots = [];
         internal static Func<Vector3, BoxCollider?> Floor = p => null;
         internal static bool IsClear;
-        internal static void Candidates(Vector3 p, List<Vector3> result) { result.Clear(); result.AddRange(Spots); }
-        internal static bool MayProbe() => true;
+        // Per point, when set; the last clearance asked and the item it ignores.
+        internal static Func<Vector3, Transform?, bool>? ClearAt;
+        internal static Vector3 LastHalf;
+        internal static Transform? LastIgnored;
+        internal static int Scans, Probes = int.MaxValue;
+        internal static void Candidates(Vector3 p, List<Vector3> result) { Scans++; result.Clear(); result.AddRange(Spots); }
+        internal static bool MayProbe() => Probes-- > 0;
         internal static bool FindFloor(Vector3 p, out RaycastHit hit, bool shipOnly = true)
         {
             BoxCollider? floor = Floor(p);
             hit = floor != null ? new RaycastHit { collider = floor, point = p } : new();
             return floor != null;
         }
-        internal static bool Clear(Vector3 p, Vector3 half, Transform? item, bool shipOnly = true) => IsClear;
+        internal static bool Clear(Vector3 p, Vector3 half, Transform? item, bool shipOnly = true)
+        {
+            LastHalf = half;
+            LastIgnored = item;
+            return ClearAt != null ? ClearAt(p, item) : IsClear;
+        }
     }
     internal static class YourBuddyPlugin { internal static Logger Log = new(); internal static Setting ConfigAutonomy = new(); }
     internal class Logger { internal void LogInfo(string t) { } internal void LogWarning(string t) { } }

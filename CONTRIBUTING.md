@@ -123,8 +123,8 @@ game assemblies. Run one with `dotnet test tools/<Name>/<Name>.csproj -c Release
 | Harness | Covers |
 |---|---|
 | `CommandChecks` | Dialog command parsing, group orders, conversation status, command lists |
-| `ResourceChecks` | Resource settings across save, new game and scene reset; spending rules; the Resources page |
-| `ResourceJobChecks` | Loader eligibility, cell fetch, eject and store, buying, one plan a frame, HUD states, the drain command |
+| `ResourceChecks` | Resource settings across save, new game and scene reset; spending rules; report throttling; the Resources page |
+| `ResourceJobChecks` | Loader eligibility, cell choice, eject and store, the storage search and delivery, buying, one plan a frame, HUD states, the drain command |
 
 They do not exercise Unity physics, navigation or game events; those still need a check in the game.
 After a game update, NPC.Core's [GameCompat](https://github.com/bytenull1/npc-core-inhl/blob/main/tools/GameCompat/README.md)

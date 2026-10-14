@@ -37,7 +37,10 @@ public sealed class Checks(ITestOutputHelper output)
             ("concealed", "hide"), ("notes follow", "follow"), ("nobody follow", "follow"),
             ("cleanliness", "unchanged"), ("eatingly", "unchanged"),
             ("monkey", "unchanged"), ("don't follow me", "unchanged"),
-            ("don\u2019t go outside", "unchanged"), ("do not sell", "unchanged"), ("never eat", "unchanged")
+            ("don\u2019t go outside", "unchanged"), ("do not sell", "unchanged"), ("never eat", "unchanged"),
+            // A last consonant doubles only after a single short vowel: jobbing, binned, but not waitting or holdding.
+            ("jobbing", "wander"), ("binned", "tidy"), ("waitting", "unchanged"), ("holdding", "unchanged"),
+            ("followwing", "unchanged"), ("come inning", "follow"), ("go to the dock", "unchanged")
         })
         {
             buddy.LastOrder = "unchanged";
@@ -46,6 +49,9 @@ public sealed class Checks(ITestOutputHelper output)
         }
         Check(BuddyDialogCommands.Run(buddy, "password 1423") == "code:1423", "password");
         Check(BuddyDialogCommands.Run(buddy, "1423") == "code:1423", "bare code");
+        Check(BuddyDialogCommands.Run(buddy, "1423 is the code") == "code:1423", "code digits first");
+        Check(BuddyDialogCommands.Run(buddy, "the password").StartsWith("Give me the digits", StringComparison.Ordinal), "password without digits");
+        Check(BuddyDialogCommands.Run(buddy, "go to the dock").StartsWith("Which one?", StringComparison.Ordinal), "ambiguous room asks which");
         BuddyBehaviour other = new() { Name = "Buddy 2" };
         BuddyBehaviour sleeping = new() { Asleep = true };
         BuddyBehaviour dead = new() { IsDead = true };
@@ -65,7 +71,8 @@ public sealed class Checks(ITestOutputHelper output)
             !BuddyDialogCommands.NamesFor(buddy).Contains("Climate on"), "omit terminal shortcuts");
         buddy.SetState(BuddyMode.Stay);
         string status = BuddyDialogCommands.Run(buddy, "what are you doing?");
-        Check(status.Contains("wait here", StringComparison.Ordinal), "status reflects stay");
+        Check(status.Contains("wait here", StringComparison.Ordinal) && !status.StartsWith(buddy.Name, StringComparison.Ordinal),
+            "status reflects stay, unnamed for one buddy");
         buddy.Lingering = true;
         Check(buddy.ConversationStatus.Contains("having a look", StringComparison.Ordinal), "lingering stay has its own status");
         buddy.Lingering = false;
@@ -83,6 +90,7 @@ public sealed class Checks(ITestOutputHelper output)
         buddy.IsOutside = true;
         Check(!BuddyDialogCommands.NamesFor(buddy).Contains("Fetch suit"), "outside omits inside tasks");
         Check(BuddyDialogCommands.NamesFor(buddy).First() == "Status", "outside status button");
+        Check(BuddyDialogCommands.NamesFor(buddy).Contains("Goto"), "walking outside keeps goto");
         buddy.Floating = true;
         Check(BuddyDialogCommands.NamesFor(buddy).First() == "Status" && !BuddyDialogCommands.NamesFor(buddy).Contains("Goto"), "floating commands");
         buddy.Hiding = true;

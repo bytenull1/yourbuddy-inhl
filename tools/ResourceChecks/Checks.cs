@@ -88,6 +88,70 @@ public sealed class Checks(ITestOutputHelper output)
         for(int i = 0; i < 4; i++) Check(budget.Take(100), "bounded storage candidate allowed");
         Check(!budget.Take(100) && !budget.Take(100), "same-frame searches share exhausted budget");
         Check(budget.Take(101), "storage search continues next frame");
+        ResourceErrand ticking = new();
+        ResourceDuty.Owner = ticking;
+        NpcEvents.Frame();
+        Check(ticking.Ticks == 1, "each frame ticks the running job");
+        ResourceDuty.Status = "busy";
+        ResourceDuty.Load(new ResourceDutySettings());
+        Check(ticking.Cancelled && ResourceDuty.Owner == null && ResourceDuty.Status.StartsWith("Waiting", StringComparison.Ordinal),
+            "loading a save ends the run and resets the status");
+        ResourceDuty.Load(JsonConvert.DeserializeObject<ResourceDutySettings>("{\"Fuel\":{\"Enabled\":true},\"Energy\":{\"Enabled\":true}}"));
+        Check(ResourceDuty.Settings.Fuel.Enabled && ResourceDuty.Settings.Energy.Enabled, "normalizing keeps saved fuel and energy rules");
+
+        // The duties are on with any one rule enabled, and off while paused.
+        foreach (int only in new[] { 0, 1, 2 })
+        {
+            ResourceDuty.Load(new ResourceDutySettings());
+            ResourceDuty.Settings.Rule(only).Enabled = true;
+            Check(ResourceDuty.Enabled, "one enabled rule turns the duties on");
+            ResourceDuty.Settings.Paused = true;
+            Check(!ResourceDuty.Enabled, "a pause turns them off");
+        }
+        settings = ResourceDuty.Settings;
+        Check(settings.Energy.NeedsRefill(0, false), "an empty reserve needs a refill");
+        settings.Buying = true;
+        settings.Budget = 100;
+        Check(!settings.CanBuy(settings.Energy, 50, 100), "nothing is bought while paused");
+        settings.Paused = false;
+        Check(settings.CanBuy(settings.Energy, 50, 100) && !settings.CanBuy(settings.Oxygen, 50, 100), "nothing is bought for a disabled rule");
+
+        // A repeated report is logged once per subject in fifteen seconds.
+        int lines = YourBuddyPlugin.Log.Lines;
+        ResourceDuty.Report("same", "loader");
+        ResourceDuty.Report("same", "loader");
+        Check(YourBuddyPlugin.Log.Lines == lines + 1 && ResourceDuty.Status == "same", "a repeated report is logged once");
+        ResourceDuty.Report("same", "storage");
+        ResourceDuty.Report("changed", "loader");
+        Check(YourBuddyPlugin.Log.Lines == lines + 3, "another subject or text is logged");
+        UnityEngine.Time.time += 14.9f;
+        ResourceDuty.Report("changed", "loader");
+        Check(YourBuddyPlugin.Log.Lines == lines + 3, "within fifteen seconds it stays quiet");
+        UnityEngine.Time.time += .2f;
+        ResourceDuty.Report("changed", "loader");
+        Check(YourBuddyPlugin.Log.Lines == lines + 4, "after fifteen seconds it is logged again");
+
+        // The page shows each setting as it is; a button lifts a pause; a label from an older drawing is no button.
+        ResourceDuty.Load(new ResourceDutySettings());
+        settings = ResourceDuty.Settings;
+        menu.Answer("resources");
+        var page = menu.Commands(flat);
+        Check(page[0] == "oxygen: off" && page[3] == "Buying: off" && page[4] == "Limit: 0", "the page shows each rule, Buying and the limit");
+        settings.Paused = true;
+        Check(menu.Answer("oxygen: off") == "oxygen duty on." && settings.Oxygen.Enabled && !settings.Paused, "a rule toggles on and lifts a pause");
+        Check(menu.Commands(flat)[0] == "oxygen: on", "the redrawn page shows the change");
+        Check(menu.Answer("oxygen: off") == null && settings.Oxygen.Enabled && !menu.Open, "a label from the older drawing is no button");
+        menu.Answer("resources");
+        menu.Commands(flat);
+        settings.Paused = true;
+        Check(menu.Answer("Buying: off") == "Buying allowed within the limit." && settings.Buying && !settings.Paused, "Buying toggles on and lifts a pause");
+        menu.Commands(flat);
+        Check(menu.Answer("Buying: on") == "Buying off." && !settings.Buying, "Buying toggles off");
+        menu.Commands(flat);
+        Check(menu.Answer("Limit: 0") == "Spending limit: 1500." && settings.Budget == 1500, "Limit steps to the next preset");
+        menu.Commands(flat);
+        Check(menu.Answer("oxygen: on") == "oxygen duty off." && !settings.Oxygen.Enabled, "a rule toggles off");
+        menu.Reset();
         output.WriteLine($"Passed {checks} resource lifecycle, policy, menu and probe-budget checks.");
     }
 }

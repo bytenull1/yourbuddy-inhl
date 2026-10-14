@@ -1,5 +1,6 @@
 using System;
 using NPC.Core;
+using NPC.Core.Agents;
 using NPC.Core.World;
 using Space.Enums;
 using UnityEngine;
@@ -328,6 +329,10 @@ public sealed class Checks(ITestOutputHelper output)
             ResourceDuty.Settings.Buying = false;
             ResourceStorage.Floor = p => null;
             ResourceStorage.IsClear = false;
+            ResourceStorage.ClearAt = null;
+            ResourceStorage.Spots = [];
+            ResourceStorage.Probes = int.MaxValue;
+            Items.Blocker = item => null;
             ship.OxygenController.Value = 20;
             loader.Current = null;
             loader.Loading = false;
@@ -527,6 +532,536 @@ public sealed class Checks(ITestOutputHelper output)
         interrupted.Job.Cancel("check done");
         Check(!ResourceDuty.Settings.Buying && ResourceDuty.Status.Contains("Buying off: check the interrupted purchase"),
             "a run ended between paying and finding the cell switches Buying off");
+        // Storage: a restock carries a station cell at x -2 to the shortest of the first four reachable spots.
+        BoxCollider shelf = new() { transform = new() };
+        Room hold = new() { transform = new() };
+        shelf.Components[typeof(Room)] = hold;
+        shelf.transform.Components[typeof(Room)] = hold; // The stub's transform has its own components.
+        // Every clearance check must ignore the carried or prospective cell.
+        void Store(params Vector3[] spots)
+        {
+            Calm();
+            ResourceStorage.Spots = [.. spots];
+            ResourceStorage.Floor = p => shelf;
+            ResourceStorage.ClearAt = (p, item) => item != null;
+            ResourceStorage.Scans = 0;
+        }
+        // Steps frame by frame until Buddy walks to storage or the run ends; the frames it took.
+        int ToStorage(IErrandBody walker)
+        {
+            for (int frames = 0; frames < 12; frames++)
+            {
+                if (walker.Leg == null || ResourceDuty.Owner == null || walker.Leg.Name == "ship storage") return frames;
+                Time.frameCount++;
+                Step(walker);
+            }
+            throw new InvalidOperationException("storage search did not settle");
+        }
+        // A restock for a station cell at x -2 measured as `size`, tried on up to `tries` frames.
+        ResourceErrand Restocking(IErrandBody walker, out Grabbable item, Bounds? size = null, int tries = 4, ResourceErrand? job = null)
+        {
+            item = new() { transform = new() { position = new(-2, 0, 0) } };
+            if (size.HasValue) NpcHands.Measured[item.gameObject] = size.Value;
+            ResourceContainer stationCell = new() { transform = item.transform, Type = ResourceType.Oxygen };
+            stationCell.Components[typeof(Grabbable)] = item;
+            NpcVessels.Owners[item.transform] = "station";
+            SceneScan.Snapshot<ResourceContainer>.Items = [stationCell];
+            ship.OxygenController.Value = 100;
+            ResourceDuty.Settings.Buying = true;
+            ResourceDuty.Settings.Budget = 1500;
+            NpcPlayer.Pilot = new Player();
+            if (walker.Hands.Extents.x == 0) walker.Hands.Extents = Vector3.one * .15f;
+            ResourceErrand run = job ?? new(walker);
+            for (int n = 0; n < tries && !run.TryStart(out _); n++)
+            {
+                Time.frameCount++;
+                Time.time += .3f;
+            }
+            return run;
+        }
+        // The restock has started and Buddy carries the cell aboard.
+        (ResourceErrand Job, IErrandBody Body, Grabbable Item) Restock(IErrandBody walker, Bounds? size = null)
+        {
+            ResourceErrand run = Restocking(walker, out Grabbable item, size);
+            // A storage check spanning frames waits on a search leg first.
+            for (int n = 0; n < 4 && walker.Leg?.Name == "ship loader"; n++)
+            {
+                Time.frameCount++;
+                Step(walker);
+            }
+            Check(walker.Leg?.Name == "resource cell", "setup: the restock fetches the station cell");
+            Time.frameCount++;
+            Step(walker);
+            Check(walker.Hands.Item == item, "setup: Buddy carries the station cell");
+            NpcVessels.Owners.Remove(item.transform); // Aboard from here on.
+            return (run, walker, item);
+        }
+        float Spot(IErrandBody walker) => walker.Leg?.TargetPoint.x ?? float.NaN;
+
+        Store(new(5, 0, 0), new(3, 0, 0), new(4, 0, 0), new(6, 0, 0), new(1, 0, 0));
+        var shortest = Restock(new IErrandBody { Near = false });
+        int plansBefore = shortest.Body.Plans;
+        ToStorage(shortest.Body);
+        Check(Spot(shortest.Body) == 3 && shortest.Body.Plans == plansBefore + 3 && ResourceStorage.Scans == 1,
+            "the cell goes to the shortest of the first four reachable spots, one plan a frame, from one scan");
+        Check(MathF.Abs(shortest.Body.Leg!.TargetPoint.y - .18f) < .001f && ResourceStorage.LastHalf.x == .15f &&
+            ResourceStorage.LastIgnored == shortest.Item.transform, "the spot sits the held cell's half-height above the floor, clear of the cell itself");
+        Step(shortest.Body);
+        Check(shortest.Body.Hands.Placed?.x == 3 && shortest.Item.Parent == hold.ContentParent && shortest.Item.Saves == 1 &&
+            ResourceDuty.Owner == null && ResourceDuty.Status.Contains("restock complete; 1 usable cells aboard"),
+            "the stored cell is put down, parented to its room and saved, and the restock completes");
+
+        Store(new Vector3(3, 0, 0));
+        var stray = Restock(new IErrandBody());
+        ToStorage(stray.Body);
+        NpcVessels.Owners[stray.Item.transform] = "station";
+        Step(stray.Body);
+        Check(stray.Body.Hands.Placed != null && ResourceDuty.Owner == null && ResourceDuty.Settings.Paused &&
+            ResourceDuty.Status.Contains("not registered aboard"), "a stored cell the ship does not own pauses the duties");
+        NpcVessels.Owners.Remove(stray.Item.transform);
+
+        Store(new Vector3(3, 0, 0));
+        var blocked = Restock(new IErrandBody());
+        ToStorage(blocked.Body);
+        ResourceStorage.ClearAt = (p, item) => p.x < 2; // Only beside Buddy, where the run sets the cell down.
+        Step(blocked.Body);
+        Check(blocked.Body.Hands.Placed?.x < 2 && ResourceDuty.Owner == null && ResourceDuty.Status.Contains("ship storage became blocked"),
+            "a spot blocked by the time Buddy arrives is not used; with no other the cell is set down beside him");
+
+        Store(new Vector3(3, 0, 0));
+        var shifted = Restock(new IErrandBody());
+        ToStorage(shifted.Body);
+        shelf.transform.position = new(0, 0, .5f);
+        ResourceStorage.ClearAt = (p, item) => p.x < 2;
+        Step(shifted.Body);
+        shelf.transform.position = Vector3.zero;
+        Check(shifted.Body.Hands.Placed?.x < 2 && ResourceDuty.Owner == null && ResourceDuty.Status.Contains("ship storage moved"),
+            "a floor that moved since planning is searched again, not put down on");
+
+        // A spot Buddy cannot get to is dropped and the next best is walked to, up to three walks a run.
+        Store(new(5, 0, 0), new(3, 0, 0), new(4, 0, 0), new(6, 0, 0));
+        var detour = Restock(new IErrandBody());
+        ToStorage(detour.Body);
+        Check(Spot(detour.Body) == 5 && detour.Body.Leg!.Recover("stuck") && ResourceDuty.Owner == detour.Job, "setup: Buddy walks to the first spot in reach");
+        ToStorage(detour.Body);
+        Check(detour.Body.Leg?.Name == "ship storage" && Spot(detour.Body) == 3, "a spot Buddy got stuck on is dropped for the next");
+        Check(detour.Body.Leg!.Recover("stuck") && ResourceDuty.Owner == detour.Job && Spot(detour.Body) == 4, "a second stuck spot is dropped too");
+        Check(detour.Body.Leg!.Recover("stuck") && ResourceDuty.Owner == null && ResourceDuty.Status.Contains("stuck"),
+            "after three storage walks the run ends");
+
+        Store(new(5, 0, 0), new(3, 0, 0));
+        var back = Restock(new IErrandBody { Near = false });
+        ToStorage(back.Body);
+        Check(Spot(back.Body) == 3 && back.Body.Leg!.Recover("stuck"), "setup: Buddy walks to the shorter, second spot");
+        ToStorage(back.Body);
+        Check(Spot(back.Body) == 5 && ResourceDuty.Owner == back.Job, "a dropped spot falls back to a longer one found before it");
+        back.Job.Cancel("check done");
+
+        // Without a spot the restock does not start, and says whether storage is missing or out of reach.
+        Store(new Vector3(3, 0, 0));
+        ResourceStorage.ClearAt = (p, item) => false;
+        Restocking(new IErrandBody(), out _);
+        Check(ResourceDuty.Owner == null && ResourceDuty.Status.Contains("no clear floor storage found"), "with no clear floor the restock waits for room");
+        Store(new Vector3(3, 0, 0));
+        IErrandBody shut = new() { Near = false, FailAt = leg => leg.Name == "ship storage" ? "door shut" : null };
+        Restocking(shut, out _, tries: 1);
+        Check(ResourceDuty.Owner == null && shut.Plans == 1 && ResourceDuty.Status.Contains("Buddy cannot reach it"),
+            "clear storage out of reach is reported as such");
+
+        // A spot with no floor is skipped; a spot's switched-off room is loaded.
+        Store(new(3, 0, 0), new(4, 0, 0));
+        Room closet = new() { transform = new(), ContentEnabled = false };
+        BoxCollider closetFloor = new() { transform = new() };
+        closetFloor.Components[typeof(Room)] = closet;
+        ResourceStorage.Floor = p => p.x < 3.5f ? null : closetFloor;
+        var floorless = Restock(new IErrandBody { Rooms = [closet], Transform = new() { position = new(1, 0, 1) } });
+        ToStorage(floorless.Body);
+        Check(Spot(floorless.Body) == 4 && closet.ContentEnabled, "a spot with no floor is skipped and the chosen spot's room is loaded");
+        Check(floorless.Body.Leg!.StandPoint.x == 1 && floorless.Body.Leg.StandPoint.z == 1, "a spot in reach is put down from where Buddy stands");
+
+        // A spot in reach ends the scan: nothing beyond it is planned.
+        Store(new(3, 0, 0), new(4, 0, 0));
+        IErrandBody reacher = new() { Near = false, NearAt = leg => leg.Name == "ship storage" && leg.TargetPoint.x == 3 };
+        Restock(reacher);
+        Check(Spot(reacher) == 3 && reacher.Plans == 1, "a spot in reach is taken without planning the others");
+
+        // A spot found unreachable lately is passed over without planning it again.
+        Store(new(3, 0, 0), new(4, 0, 0));
+        IErrandBody recall = new() { Near = false, FailAt = leg => leg.Name == "ship storage" && leg.TargetPoint.x == 3 ? "door shut" : null };
+        var recalled = Restock(recall, new Bounds { size = Vector3.one * .5f, extents = Vector3.one * .25f });
+        Check(Spot(recall) == 4 && ResourceStorage.Scans == 2, "after a rescan the spot remembered unreachable is skipped, and the next walked to at once");
+        NpcHands.Measured.Clear();
+
+        // The walk is measured along the route, not in a straight line.
+        Store(new(3, 0, 0), new(0, 0, -4));
+        var winding = Restock(new IErrandBody
+        {
+            Near = false,
+            RouteAt = leg => leg.Name == "ship storage" && leg.TargetPoint.x == 3 ? [new(3, 0, 3)] : []
+        });
+        ToStorage(winding.Body);
+        Check(Spot(winding.Body) == 0, "a spot near in a straight line but far by its route loses to a shorter walk");
+        Store(new(0, 0, -4), new(3, 0, 0));
+        var tail = Restock(new IErrandBody
+        {
+            Near = false,
+            RouteAt = leg => leg.Name != "ship storage" ? [] : leg.TargetPoint.x == 3 ? [new(3, 0, .5f)] : [new(0, 0, -.5f)]
+        });
+        ToStorage(tail.Body);
+        Check(Spot(tail.Body) == 3, "the route's last stretch to the spot counts");
+
+        // Switched-off rooms under the route are loaded and the spot is planned again before walking.
+        Room hallA = new() { transform = new(), ContentEnabled = false }, hallB = new() { transform = new(), ContentEnabled = false };
+        BoxCollider hallFloorA = new() { transform = new() }, hallFloorB = new() { transform = new() };
+        hallFloorA.Components[typeof(Room)] = hallA;
+        hallFloorB.Components[typeof(Room)] = hallB;
+        BoxCollider HallFloor(Vector3 p) =>
+            p.x == 2 && MathF.Abs(p.z) < .01f ? hallFloorA : p.x == 2 && MathF.Abs(p.z - 2.25f) < .1f ? hallFloorB : shelf;
+        Func<ErrandLeg, Vector3[]> viaHall = leg => leg.Name == "ship storage" && leg.TargetPoint.x == 2 ? [new(2, 0, 0)] : [];
+        Store(new Vector3(2, 0, 3));
+        ResourceStorage.Floor = HallFloor;
+        IErrandBody hallWalker = new() { Near = false, Rooms = [hallA, hallB], RouteAt = viaHall };
+        Restock(hallWalker);
+        int hallPlans = hallWalker.Plans;
+        int hallFrames = ToStorage(hallWalker);
+        Check(hallA.ContentEnabled && hallB.ContentEnabled && Spot(hallWalker) == 2 && hallFrames == 1 && hallWalker.Plans == hallPlans + 1,
+            "both rooms under the route load, and the spot is planned again on the next frame");
+        Store(new Vector3(2, 0, 3));
+        ResourceStorage.Floor = HallFloor; // Both rooms are loaded now.
+        IErrandBody litWalker = new() { Near = false, RouteAt = viaHall };
+        Restock(litWalker);
+        int litPlans = litWalker.Plans;
+        Check(ToStorage(litWalker) == 0 && litWalker.Plans == litPlans && Spot(litWalker) == 2, "a route over loaded rooms is walked at once");
+
+        // A spot blocked once its route's rooms load is dropped, and the search goes on without it.
+        hallA.ContentEnabled = hallB.ContentEnabled = false;
+        Store(new(2, 0, 3), new(0, 0, -6));
+        ResourceStorage.Floor = HallFloor;
+        ResourceStorage.ClearAt = (p, item) => item != null && !(hallA.ContentEnabled && p.x == 2);
+        var dropped = Restock(new IErrandBody { Near = false, Rooms = [hallA, hallB], RouteAt = viaHall });
+        int droppedFrames = ToStorage(dropped.Body);
+        Check(Spot(dropped.Body) == 0 && ResourceDuty.Owner == dropped.Job && droppedFrames == 2,
+            "a spot blocked after its rooms load gives way to the next, walked to on the re-check's frame");
+        hallA.ContentEnabled = hallB.ContentEnabled = false;
+        Store(new(2, 0, 3), new(0, 0, -6));
+        ResourceStorage.Floor = HallFloor;
+        var unplanned = Restock(new IErrandBody
+        {
+            Near = false,
+            Rooms = [hallA, hallB],
+            RouteAt = viaHall,
+            FailAt = leg => leg.Name == "ship storage" && leg.TargetPoint.x == 2 && hallA.ContentEnabled ? "furniture" : null
+        });
+        ToStorage(unplanned.Body);
+        Check(Spot(unplanned.Body) == 0, "a spot that cannot be planned once its rooms load is dropped too");
+
+        // The footprint is the cell's: a prospective cell's collider, else the held cell's extents.
+        Store(new Vector3(3, 0, 0));
+        IErrandBody measured = new();
+        measured.Hands.Extents = Vector3.one * .2f;
+        Restocking(measured, out Grabbable bigCell, new Bounds { size = Vector3.one * .5f, extents = Vector3.one * .25f });
+        Check(ResourceStorage.LastHalf.x == .25f && ResourceStorage.Scans == 1, "a shop or station cell is checked with its own footprint");
+        Time.frameCount++;
+        Step(measured);
+        Check(measured.Hands.Item == bigCell && ResourceStorage.LastHalf.x == .2f && ResourceStorage.Scans == 2,
+            "a held cell's different footprint scans the spots again");
+        Store(new Vector3(3, 0, 0));
+        IErrandBody unmeasured = new();
+        unmeasured.Hands.Extents = Vector3.one * .2f;
+        Restocking(unmeasured, out _, new Bounds());
+        Check(ResourceStorage.LastHalf.x == .15f, "a cell with no measurable collider gets the default footprint");
+        NpcHands.Measured.Clear();
+
+        // A search spanning frames scans again once its spots are half a minute old.
+        Store(new(3, 0, 0), new(4, 0, 0));
+        var stale = Restock(new IErrandBody { Near = false });
+        Check(stale.Body.Leg?.Name == "ship loader" && ResourceStorage.Scans == 1, "setup: the walk's search waits for the next frame's plan");
+        Time.time += 30f;
+        ResourceStorage.ClearAt = (p, item) => item != null && p.x != 3;
+        ToStorage(stale.Body);
+        Check(ResourceStorage.Scans == 2 && Spot(stale.Body) == 4, "spots older than half a minute are scanned again, forgetting the old choice");
+
+        // An interrupted search leaves nothing pending: the next try with nothing to fetch does not wait on it.
+        Store(new(3, 0, 0), new(4, 0, 0));
+        var pending = Restock(new IErrandBody { Near = false });
+        Check(pending.Body.Leg?.Name == "ship loader", "setup: the walk's search waits for the next frame's plan");
+        pending.Job.Cancel("interrupted");
+        ResourceDuty.Settings.Paused = false;
+        SceneScan.Snapshot<ResourceContainer>.Items = [];
+        Time.frameCount++;
+        Check(!pending.Job.TryStart(out _) && ResourceDuty.Owner == null, "an interrupted search does not hold the next try");
+
+
+        // Which cells a refill takes: every cell below sorts before the good one and has one reason to be passed over.
+        ResourceContainer MakeCell(Vector3 at, int value = 5, ResourceType type = ResourceType.Oxygen, bool grabbable = true)
+        {
+            Grabbable handle = new() { transform = new() { position = at } };
+            ResourceContainer made = new() { transform = handle.transform, Type = type, Value = value };
+            if (grabbable) made.Components[typeof(Grabbable)] = handle;
+            return made;
+        }
+        Grabbable HandleOf(ResourceContainer c) => c.GetComponent<Grabbable>();
+        Calm();
+        ResourceContainer good = MakeCell(new(9, 0, 0), 10);
+        ResourceContainer dataless = MakeCell(new(1, 0, 0)), fuelCell = MakeCell(new(1, 0, 0), type: ResourceType.Fuel), drained = MakeCell(new(1, 0, 0), 0);
+        ResourceContainer off = MakeCell(new(1, 0, 0)), skipped = MakeCell(new(1, 0, 0)), grabbed = MakeCell(new(1, 0, 0));
+        ResourceContainer restricted = MakeCell(new(1, 0, 0)), queued = MakeCell(new(1, 0, 0)), bare = MakeCell(new(1, 0, 0), grabbable: false);
+        ResourceContainer oversized = MakeCell(new(1, 0, 0));
+        dataless.Data = null;
+        off.isActiveAndEnabled = false;
+        SkipList.Skipped.Add(skipped.transform);
+        HandleOf(grabbed).IsGrabbed = true;
+        HandleOf(restricted).restrictGrab = true;
+        oversized.LoadingSpeed = 90;
+        ItemDetector elsewhere = new() { transform = new() };
+        elsewhere.Items.Add(HandleOf(queued));
+        SceneScan.Snapshot<ItemDetector>.Items = [null!, slot, elsewhere];
+        SceneScan.Snapshot<ResourceContainer>.Items = [null!, dataless, fuelCell, drained, off, skipped, grabbed, restricted, queued, bare, oversized, good];
+        IErrandBody picker = new();
+        Check(new ResourceErrand(picker).TryStart(out _) && picker.Leg?.Own == good.transform,
+            "a refill passes over dataless, other-kind, empty, inactive, skipped, held, restricted, queued, handle-less and oversized cells");
+        Calm();
+
+        ResourceContainer lowCharge = MakeCell(new(9, 0, 0), 5), fullFar = MakeCell(new(1, 0, 0), 10);
+        SceneScan.Snapshot<ResourceContainer>.Items = [fullFar, lowCharge];
+        IErrandBody saver = new();
+        Check(new ResourceErrand(saver).TryStart(out _) && saver.Leg?.Own == lowCharge.transform, "a partly spent cell is used before a full one");
+        Calm();
+        ResourceContainer nearer = MakeCell(new(9, 0, 0), 10), farther = MakeCell(new(2, 0, 0), 10);
+        SceneScan.Snapshot<ResourceContainer>.Items = [farther, nearer];
+        IErrandBody chooser = new() { Transform = new() { position = new(10, 0, 0) } };
+        Check(new ResourceErrand(chooser).TryStart(out _) && chooser.Leg?.Own == nearer.transform, "of equal cells the nearer to Buddy is taken");
+        Calm();
+        ResourceContainer opposite = MakeCell(new(-10, 0, 0), 10);
+        SceneScan.Snapshot<ResourceContainer>.Items = [opposite, nearer];
+        IErrandBody facing = new() { Transform = new() { position = new(10, 0, 0) } };
+        Check(new ResourceErrand(facing).TryStart(out _) && facing.Leg?.Own == nearer.transform, "distance is measured from Buddy, whichever side a cell lies");
+        Calm();
+
+        // At most eight cells are tried a run, one plan a frame.
+        ResourceContainer[] row = new ResourceContainer[9];
+        for (int i = 0; i < row.Length; i++) row[i] = MakeCell(new(i + 1, 0, 0), 10);
+        SceneScan.Snapshot<ResourceContainer>.Items = row;
+        IErrandBody tryer = new() { Near = false, FailAt = leg => leg.Name == "resource cell" && leg.Own.position.x < 8.5f ? "blocked" : null };
+        ResourceErrand tryJob = new(tryer);
+        for (int n = 0; n < 12 && !tryJob.TryStart(out _); n++)
+        {
+            Time.frameCount++;
+            Time.time += .3f;
+        }
+        Check(tryer.Leg == null && tryer.Plans == 9, "after eight unreachable cells the ninth is not tried");
+        Calm();
+
+        // Queued cells are looked up afresh each try.
+        ResourceContainer queuedAgain = MakeCell(new(1, 0, 0), 10);
+        elsewhere.Items.Clear();
+        elsewhere.Items.Add(HandleOf(queuedAgain));
+        SceneScan.Snapshot<ItemDetector>.Items = [slot, elsewhere];
+        SceneScan.Snapshot<ResourceContainer>.Items = [queuedAgain];
+        IErrandBody waiter = new();
+        ResourceErrand waitJob = new(waiter);
+        Check(!waitJob.TryStart(out _) && waitJob.DueAt > Time.time + 29f, "a cell queued in another slot is not taken; the next check is in half a minute");
+        elsewhere.Items.Clear();
+        Time.frameCount++;
+        Check(waitJob.TryStart(out _) && waiter.Leg?.Own == queuedAgain.transform, "once it leaves that slot it is taken");
+        Calm();
+
+        // Ship stock: only usable cells of the kind aboard count against a restock.
+        ship.OxygenController.Value = 100;
+        ResourceDuty.Settings.Buying = true;
+        ResourceContainer stockDataless = MakeCell(new(1, 0, 0)), stockFuel = MakeCell(new(1, 0, 0), type: ResourceType.Fuel);
+        ResourceContainer stockEmpty = MakeCell(new(1, 0, 0), 0), stockOff = MakeCell(new(1, 0, 0)), stockStation = MakeCell(new(1, 0, 0));
+        stockDataless.Data = null;
+        stockOff.isActiveAndEnabled = false;
+        NpcVessels.Owners[stockStation.transform] = "station";
+        SceneScan.Snapshot<ResourceContainer>.Items = [null!, stockDataless, stockFuel, stockEmpty, stockOff, stockStation];
+        ResourceErrand stockJob = new(new IErrandBody());
+        Check(stockJob.Count(out _) == 1, "dataless, other-kind, empty, inactive and station cells are no stock");
+        SceneScan.Snapshot<ResourceContainer>.Items = [stockOff, MakeCell(new(1, 0, 0))];
+        Check(stockJob.Count(out _) == 0, "a usable cell aboard is stock");
+        loader.Current = stockOff;
+        SceneScan.Snapshot<ResourceContainer>.Items = [stockOff];
+        Check(stockJob.Count(out _) == 0, "a cell inside the loader is stock");
+        NpcVessels.Owners.Remove(stockStation.transform);
+        Calm();
+
+        // A try starts only for a free, enabled buddy indoors with empty hands, aboard or at the docked station.
+        Room loaderRoom = new() { transform = new(), ContentEnabled = false, ContentParent = slot.transform };
+        IErrandBody StartBody() => new() { Rooms = [loaderRoom] };
+        void OneCell() => SceneScan.Snapshot<ResourceContainer>.Items = [MakeCell(new(1, 0, 0), 10)];
+        OneCell();
+        ResourceDuty.Owner = new ResourceErrand(new IErrandBody());
+        Check(!new ResourceErrand(StartBody()).TryStart(out _), "no start while another buddy runs the duties");
+        Calm();
+        OneCell();
+        ResourceDuty.Settings.Paused = true;
+        Check(!new ResourceErrand(StartBody()).TryStart(out _), "no start while the duties are paused");
+        Calm();
+        OneCell();
+        Check(!new ResourceErrand(new IErrandBody { IsOutside = true }).TryStart(out _), "no start outside");
+        Calm();
+        OneCell();
+        IErrandBody busyHands = StartBody();
+        busyHands.Hands.Item = new Grabbable { transform = new() };
+        Check(!new ResourceErrand(busyHands).TryStart(out _), "no start with something in hand");
+        Calm();
+        OneCell();
+        ship.Autopilot.DockedStation = "";
+        Check(!new ResourceErrand(new IErrandBody { Aboard = false }).TryStart(out _) && ResourceDuty.Status.Contains("must be aboard"),
+            "no start off the ship while undocked");
+        IErrandBody onBoard = StartBody();
+        Check(new ResourceErrand(onBoard).TryStart(out _) && loaderRoom.ContentEnabled, "aboard while undocked a try starts, with the loader's room loaded");
+        Calm();
+        OneCell();
+        ship.Autopilot.DockedStation = "station";
+        Check(new ResourceErrand(new IErrandBody { Aboard = false }).TryStart(out _), "at the docked station a try starts");
+        Calm();
+
+        // Kinds take turns: after an oxygen run the next try goes on from fuel, then energy.
+        ResourceDuty.Settings.Fuel.Enabled = ResourceDuty.Settings.Energy.Enabled = true;
+        ship.FuelController.Value = 20;
+        ship.ElectricityController.Value = 20;
+        SceneScan.Snapshot<ResourceContainer>.Items =
+            [MakeCell(new(1, 0, 0), 10), MakeCell(new(2, 0, 0), 10, ResourceType.Fuel), MakeCell(new(3, 0, 0), 10, ResourceType.Energy)];
+        IErrandBody turns = new();
+        ResourceErrand turnJob = new(turns);
+        Check(turnJob.TryStart(out _) && turns.Leg?.Describe() == "refilling oxygen", "setup: oxygen first");
+        turnJob.Cancel("check done");
+        Time.frameCount++;
+        Check(turnJob.TryStart(out _) && turns.Leg?.Describe() == "refilling fuel", "the next try starts with fuel");
+        turnJob.Cancel("check done");
+        ship.FuelController.Value = 100;
+        Time.frameCount++;
+        Check(turnJob.TryStart(out _) && turns.Leg?.Describe() == "refilling energy", "with fuel full, the next after fuel is energy, not oxygen");
+        turnJob.Cancel("check done");
+        ResourceDuty.Settings.Fuel.Enabled = ResourceDuty.Settings.Energy.Enabled = false;
+        ship.ElectricityController.Value = 100;
+        Calm();
+
+        // A cell Buddy could not set down is held, duties paused, until a later try finds floor for it.
+        var held = Refill();
+        held.Job.Cancel("interrupted");
+        Check(held.Body.Hands.Item == held.Item && ResourceDuty.Settings.Paused && ResourceDuty.Status.Contains("no clear floor nearby"),
+            "with no floor nearby Buddy keeps the cell and pauses the duties");
+        ResourceDuty.Settings.Paused = false;
+        Check(held.Job.Count(out _) == 1 && !held.Job.TryStart(out _) && held.Body.Hands.Item == held.Item && ResourceDuty.Settings.Paused,
+            "the held cell is due first, and stays held while there is still no floor");
+        ResourceDuty.Settings.Paused = false;
+        ResourceStorage.Floor = p => shelf;
+        ResourceStorage.IsClear = true;
+        Check(!held.Job.TryStart(out _) && held.Body.Hands.Item == null && held.Body.Hands.Placed != null && ResourceDuty.Owner == null,
+            "once there is floor the held cell is set down, and that try starts nothing");
+
+        // More of the delivery: not aboard, a restock short of its goal, and Recover off other legs.
+        Store(new Vector3(3, 0, 0));
+        var ashore = Restock(new IErrandBody());
+        ToStorage(ashore.Body);
+        ashore.Body.Aboard = false;
+        Step(ashore.Body);
+        Check(ResourceDuty.Owner == null && ashore.Body.Hands.Placed?.x != 3 && ResourceDuty.Status.Contains("cannot deliver the cell aboard"),
+            "off the ship the cell is not stored");
+        Store(new Vector3(3, 0, 0));
+        var shortOne = Restock(new IErrandBody());
+        SkipList.Skipped.Add(shortOne.Item.transform); // The stored cell will not count as stock.
+        ToStorage(shortOne.Body);
+        Step(shortOne.Body);
+        Check(shortOne.Body.Hands.Placed?.x == 3 && ResourceDuty.Owner == null && ResourceDuty.Status.Contains("restock stopped; 0 usable cells aboard"),
+            "a restock short of its goal with nothing more to get stops and says so");
+        Store(new Vector3(3, 0, 0));
+        var goOn = Restock(new IErrandBody());
+        SkipList.Skipped.Add(goOn.Item.transform);
+        ResourceContainer second = MakeCell(new(-3, 0, 0), 10);
+        NpcVessels.Owners[second.transform] = "station";
+        SceneScan.Snapshot<ResourceContainer>.Items = [.. SceneScan.Snapshot<ResourceContainer>.Items, second];
+        ToStorage(goOn.Body);
+        Step(goOn.Body);
+        Check(ResourceDuty.Owner == goOn.Job && goOn.Body.Leg?.Own == second.transform, "a restock short of its goal goes on to the next cell");
+        goOn.Job.Cancel("check done");
+        NpcVessels.Owners.Remove(second.transform);
+        var lost = Refill(carry: false);
+        ResourceStorage.Spots = [new(3, 0, 0)];
+        ResourceStorage.Floor = p => shelf;
+        ResourceStorage.ClearAt = (p, item) => true;
+        Check(lost.Body.Leg!.Recover("stuck") && ResourceDuty.Owner == null && !ResourceDuty.Settings.Paused && ResourceDuty.Status.Contains("stuck"),
+            "a fetch Buddy got stuck on ends the run unpaused; it is no storage walk");
+
+        // A spot dropped in one run is tried again in the next.
+        Store(new Vector3(3, 0, 0));
+        var retry = Restock(new IErrandBody());
+        ToStorage(retry.Body);
+        Check(retry.Body.Leg!.Recover("stuck") && ResourceDuty.Owner == null, "setup: the only spot is dropped and the run ends");
+        ResourceDuty.Settings.Paused = false;
+        Time.time += 31f;
+        Restocking(retry.Body, out _, job: retry.Job);
+        Check(ResourceDuty.Owner == retry.Job, "a spot dropped in one run is tried again in a later one");
+        retry.Job.Cancel("check done");
+
+        // A storage check spanning frames holds the restock on a search leg; nothing is fetched yet.
+        Store(new(3, 0, 0), new(4, 0, 0));
+        IErrandBody slowStore = new() { Near = false, FailAt = leg => leg.Name == "ship storage" && leg.TargetPoint.x == 3 ? "door shut" : null };
+        ResourceErrand slowJob = Restocking(slowStore, out _, tries: 1);
+        Check(ResourceDuty.Owner == slowJob && slowStore.Leg?.Name == "ship loader" && slowStore.Plans == 1,
+            "a storage check spanning frames holds the restock on a search leg, with no fetch planned");
+        slowJob.Cancel("check done");
+
+        // More of FindCell: a blocked cell is passed over; a cell's switched-off room is loaded.
+        Calm();
+        ResourceContainer pinned = MakeCell(new(1, 0, 0), 5), loose = MakeCell(new(2, 0, 0), 10);
+        Items.Blocker = item => item == HandleOf(pinned) ? "under a box" : null;
+        SceneScan.Snapshot<ResourceContainer>.Items = [pinned, loose];
+        IErrandBody unpinner = new();
+        Check(new ResourceErrand(unpinner).TryStart(out _) && unpinner.Leg?.Own == loose.transform, "a cell something else blocks is passed over");
+        Calm();
+        ResourceContainer roomed = MakeCell(new(1, 0, 0), 10);
+        Room cellRoom = new() { transform = new(), ContentEnabled = false, ContentParent = roomed.transform };
+        SceneScan.Snapshot<ResourceContainer>.Items = [roomed];
+        Check(new ResourceErrand(new IErrandBody { Rooms = [cellRoom] }).TryStart(out _) && cellRoom.ContentEnabled,
+            "a cell's switched-off room is loaded before planning to it");
+
+        // More of TryStartDuty: each kind starts clean, reports why nothing started, and restocks only when it may.
+        Calm();
+        ship.OxygenController.Value = 100;
+        ResourceDuty.Settings.Fuel.Enabled = true;
+        ship.FuelController.Value = 20;
+        ResourceDuty.Settings.Buying = true;
+        ResourceDuty.Settings.Budget = 1500;
+        NpcPlayer.Pilot = new Player();
+        SceneScan.Snapshot<ResourceContainer>.Items = [MakeCell(new(1, 0, 0), 10, ResourceType.Fuel)];
+        IErrandBody fueler = new();
+        Check(new ResourceErrand(fueler).TryStart(out _) && fueler.Leg?.Describe() == "refilling fuel",
+            "a failed oxygen restock leaves nothing behind for the fuel refill");
+        ResourceDuty.Settings.Fuel.Enabled = false;
+        ship.FuelController.Value = 100;
+        Calm();
+        ship.OxygenController.Value = 100;
+        ResourceDuty.Settings.Buying = true;
+        NpcPlayer.Pilot = new Player();
+        SceneScan.Snapshot<ResourceContainer>.Items = [];
+        Check(!new ResourceErrand(new IErrandBody()).TryStart(out _) && ResourceDuty.Status.Contains("no reachable oxygen supply") &&
+            !ResourceDuty.Status.Contains("Buying is off"), "a restock with nothing to fetch or buy says so");
+        Calm();
+        SceneScan.Snapshot<ResourceContainer>.Items = [];
+        Check(!new ResourceErrand(new IErrandBody()).TryStart(out _) && ResourceDuty.Status.Contains("Buying is off"),
+            "a due refill with no cell says when Buying is off");
+        Calm();
+        loader.Current = MakeCell(new(0, 0, 0), 10);
+        loader.Loading = true;
+        ResourceDuty.Status = "";
+        Check(!new ResourceErrand(new IErrandBody()).TryStart(out _) && ResourceDuty.Status.Contains("loader occupied"),
+            "a try for a due refill names the busy loader");
+        Store(new Vector3(3, 0, 0));
+        ship.OxygenController.Value = 100;
+        ResourceDuty.Settings.Buying = true;
+        ResourceDuty.Settings.Budget = 1500;
+        NpcPlayer.Pilot = new Player();
+        ResourceContainer ashoreCell = MakeCell(new(2, 0, 0), 10);
+        NpcVessels.Owners[ashoreCell.transform] = "station";
+        SceneScan.Snapshot<ResourceContainer>.Items = [MakeCell(new(1, 0, 0), 10), ashoreCell];
+        Check(!new ResourceErrand(new IErrandBody()).TryStart(out _), "one usable cell aboard is stock enough: no restock");
+        ResourceDuty.Settings.Buying = false;
+        SceneScan.Snapshot<ResourceContainer>.Items = [ashoreCell];
+        Check(!new ResourceErrand(new IErrandBody()).TryStart(out _), "with Buying off there is no restock, even with a station cell at hand");
+        NpcVessels.Owners.Remove(ashoreCell.transform);
         Calm();
         NpcVessels.Owners.Clear();
         GameManager.Instance.PlayerShip = null;

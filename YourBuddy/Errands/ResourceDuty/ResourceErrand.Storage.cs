@@ -18,7 +18,8 @@ namespace YourBuddy
             private enum Stage { Scanning, Chosen, Recheck }
 
             private readonly List<Vector3> points = [];
-            // The next spot to settle; one waiting for a probe or a plan is tried again.
+            // The next spot to settle; one waiting for a probe or a plan is tried again. A walk sets it back
+            // to the first spot, so a later search in the run can fall back to a longer one.
             private int cursor;
             private float refreshAt;
             private Vector3 half;
@@ -26,7 +27,7 @@ namespace YourBuddy
             private Leg? best;
             private NavPath? bestRoute;
             private float bestLength;
-            private int bestIndex, found;
+            private int found;
             private int walks;
 
             // Spots dropped this run, also by the delivery leg.
@@ -146,7 +147,6 @@ namespace YourBuddy
                         best = leg;
                         bestRoute = route;
                         bestLength = length;
-                        bestIndex = cursor;
                     }
                     if (++found >= StorageChoices || length <= 0f) stage = Stage.Chosen;
                 }
@@ -191,7 +191,7 @@ namespace YourBuddy
                     }
                     route = replanned;
                 }
-                cursor = bestIndex;
+                cursor = 0;
                 ResetChoice();
                 job.Body.Walk(leg, route);
                 walks++;

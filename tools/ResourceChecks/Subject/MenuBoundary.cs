@@ -26,12 +26,13 @@ namespace YourBuddy
     internal sealed class ResourceErrand
     {
         internal bool Cancelled;
+        internal int Ticks;
         internal void Cancel(string why) { Cancelled = true; ResourceDuty.Owner = null; }
-        internal void Tick() { }
+        internal void Tick() { Ticks++; }
     }
     internal static class YourBuddyPlugin
     {
         internal static readonly Logger Log = new();
-        internal sealed class Logger { internal void LogInfo(string text) { } }
+        internal sealed class Logger { internal int Lines; internal void LogInfo(string text) { Lines++; } }
     }
 }

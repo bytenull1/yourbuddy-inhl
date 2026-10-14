@@ -81,7 +81,8 @@ checked again on arrival.
 Of the first four reachable spots, Buddy carries the cell to the one with the shortest walk;
 the nearest by straight line can lie behind the airlock wall. Before setting off he loads the
 switched-off ship rooms under that route, so their furniture is seen. A spot that is then
-blocked or unreachable is dropped and the search goes on.
+blocked or unreachable is dropped and the search goes on. So does one he gets stuck on or finds
+blocked on arrival; the next search starts from the first spot, so a longer one found earlier is used.
 
 Cells are placed on supported clear floor, outside airlocks and restricted item zones.
 Storage does not put cells inside cupboards or create paths through furniture. If no safe
