@@ -475,7 +475,7 @@ public sealed class Checks(ITestOutputHelper output)
             NpcVessels.Owners[sold.transform] = "station";
             Grabbable product = new() { BuyPrice = 750 };
             product.Components[typeof(ResourceContainer)] = new ResourceContainer { Type = ResourceType.Oxygen };
-            Shop shop = new() { transform = new(), Outlet = new(), Items = [product], Sells = soldCell };
+            Shop shop = new() { transform = new() { forward = new(0, 0, -1) }, Outlet = new(), Items = [product], Sells = soldCell };
             SceneScan.Snapshot<Shop>.Items = [shop];
             SceneScan.Snapshot<ResourceContainer>.Items = [];
             NpcPlayer.Pilot = new Player();
@@ -491,6 +491,13 @@ public sealed class Checks(ITestOutputHelper output)
             if (NpcPlayer.Pilot == null) throw new InvalidOperationException("no pilot");
             return NpcPlayer.Pilot;
         }
+
+        var front = Shopping();
+        Check(front.Body.Leg?.StandAllowed(new(0, 0, 1)) == true && front.Body.Leg?.StandAllowed(new(.6f, 0, 1)) == true,
+            "a purchase may stand in front of the shop, up to 45 degrees off");
+        Check(front.Body.Leg?.StandAllowed(new(1, 0, .5f)) == false && front.Body.Leg?.StandAllowed(new(0, 0, -1)) == false,
+            "a purchase is not made from the shop's side or back");
+        front.Job.Cancel("check done");
 
         var busy = Shopping();
         Pilot().Controller.IsControlling = true;

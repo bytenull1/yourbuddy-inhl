@@ -27,6 +27,7 @@ namespace YourBuddy
         private const float ReachMemoSeconds = 10f;
         private const float ResumeSeconds = 1f;
         private const float LegReachBelow = 0.5f;
+        private const float ShopFrontCos = 0.7f;
         // Squared distances.
         private const float MovedSqr = 0.5f;
         private const float OutletSqr = 4f;
@@ -404,6 +405,8 @@ namespace YourBuddy
             a.Value != b.Value ? a.Value.CompareTo(b.Value) :
                 (a.transform.position - Here).sqrMagnitude.CompareTo((b.transform.position - Here).sqrMagnitude);
 
+        private static Vector3 Flat(Vector3 v) => new(v.x, 0f, v.z);
+
         private bool FindShop()
         {
             if (planLater) return false;
@@ -413,6 +416,7 @@ namespace YourBuddy
             {
                 if (shop == null || !Items.Loadable(shop) || Skips.Has(shop.transform)) continue;
                 Grabbable[]? stock = GameInternals.ShopAccess.Stock(shop);
+                Transform? outlet = GameInternals.ShopAccess.Outlet(shop);
                 if (stock == null) continue;
                 for (int i = 0; i < stock.Length; i++)
                 {
@@ -425,6 +429,7 @@ namespace YourBuddy
                             cheapestOverLimit = product.BuyPrice;
                         continue;
                     }
+                    if (outlet == null) break;
                     Body.LoadRoomOf(shop.transform);
                     if (NeedsStorage)
                     {
@@ -432,7 +437,10 @@ namespace YourBuddy
                         if (room == StorageResult.Pending) return false;
                         if (room == StorageResult.None) continue;
                     }
-                    if (Plan(new Leg(this, shop.transform.position, shop.transform, Phase.Buy) { Shop = shop, Product = i }, true)) return true;
+                    // The prefab faces its local -z: the buttons and the outlet sit there.
+                    Leg buy = new(this, outlet.position, shop.transform, Phase.Buy)
+                        { Shop = shop, Product = i, Front = Flat(shop.transform.forward * -1f) };
+                    if (Plan(buy, true)) return true;
                     if (planLater) return false;
                 }
             }
@@ -764,16 +772,15 @@ namespace YourBuddy
         {
             Player? player = NpcPlayer.Pilot;
             Shop? shop = leg.Shop;
-            if (player == null || shop == null || !shop.isActiveAndEnabled ||
-                (shop.transform.position - leg.TargetPoint).sqrMagnitude > MovedSqr || player.Controller.IsControlling)
+            Transform? outlet = shop != null ? GameInternals.ShopAccess.Outlet(shop) : null;
+            if (player == null || shop == null || outlet == null || !shop.isActiveAndEnabled ||
+                (outlet.position - leg.TargetPoint).sqrMagnitude > MovedSqr || player.Controller.IsControlling)
                 return Stop("shop or player is busy");
             Grabbable[]? stock = GameInternals.ShopAccess.Stock(shop);
             if (stock == null || leg.Product < 0 || leg.Product >= stock.Length) return Stop("shop stock changed");
             Grabbable product = stock[leg.Product];
             if (product == null || !product.TryGetComponent(out ResourceContainer prefab) || prefab.Type != ResourceKinds.Type(kind) || (!restocking && !Fits(prefab)) ||
                 !ResourceDuty.Settings.CanBuy(Rule, product.BuyPrice, player.CashSystem.Cash)) return Stop("purchase permission or funds changed");
-            Transform? outlet = GameInternals.ShopAccess.Outlet(shop);
-            if (outlet == null) return Stop("shop outlet unavailable");
             if (restocking && (ShipStock(kind) >= stockGoal || PurchasesLeft <= 0)) return Stop("restock quantity reached");
             // A cell may have appeared while Buddy walked to the shop; recheck before spending.
             stagedRefresh = 0f;
@@ -867,10 +874,20 @@ namespace YourBuddy
             internal float InsertUntil;
             internal Transform? Floor;
             internal Vector3 FloorPoint;
+            // The shop's front, flat: a purchase is made from in front of it.
+            internal Vector3 Front;
             public override string Name => Stage == Phase.Buy ? "resource shop" : Stage == Phase.Fetch ? "resource cell" : Stage == Phase.Deliver ? "ship storage" : "ship loader";
             public override float ReachBelow => LegReachBelow;
             public override bool StandAllowed(Vector3 point) =>
-                base.StandAllowed(point) && (Stage is not (Phase.Insert or Phase.Clear) || job.InLoaderRoom(point, TargetPoint));
+                base.StandAllowed(point) && (Stage is not (Phase.Insert or Phase.Clear) || job.InLoaderRoom(point, TargetPoint)) &&
+                (Stage != Phase.Buy || InFront(point));
+            // Within 45 degrees of the shop's front, so the walk up does not run into its side.
+            internal bool InFront(Vector3 point)
+            {
+                Vector3 off = Flat(point - TargetPoint);
+                float along = Vector3.Dot(off, Front);
+                return along > 0f && along * along >= ShopFrontCos * ShopFrontCos * off.sqrMagnitude * Front.sqrMagnitude;
+            }
             public override bool Waits => Stage == Phase.Search || Stage == Phase.Settle || InsertUntil > 0 || job.startedLoading || job.purchaseFrame >= 0;
             public override Vector3 Approach(out bool wantMove) => job.Approach(this, out wantMove);
             public override string Describe() =>

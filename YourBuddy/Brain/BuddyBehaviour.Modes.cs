@@ -92,6 +92,12 @@ namespace YourBuddy
         {
             wantMove = false;
 
+            if (RouteLostItsDock())
+            {
+                FinishRoute();
+                return Vector3.zero;
+            }
+
             if (agent.TryStepOff(out Vector3 stepOff))
             {
                 wantMove = true;
@@ -108,6 +114,52 @@ namespace YourBuddy
 
             return agent.SimpleAdvance(out wantMove);
         }
+
+        /// <summary>
+        /// The station the route was planned under has undocked, and what is left of it lies off the
+        /// vessel the buddy stands on. docs/invariants.md#an-undock-ends-a-route-off-the-ship
+        /// </summary>
+        private bool RouteLostItsDock()
+        {
+            string? dock = DockedStation();
+            if (routeDock == null || dock == routeDock) return false;
+
+            string undocked = routeDock;
+            routeDock = dock;
+            NpcVessels.FloorOwner(agent.transform.position, out string? vessel, out _);
+            if (vessel != null && RouteStaysOn(vessel)) return false;
+
+            YourBuddyPlugin.Log.LogInfo($"[ai] Ending the route: {undocked} undocked and the way on is not on {vessel ?? "a floor"}");
+            return true;
+        }
+
+        private bool RouteStaysOn(string vessel)
+        {
+            if (agent.Plan is { } plan)
+            {
+                for (int i = agent.PlanIndex; i < plan.Count; i++)
+                {
+                    if (!OnVessel(plan[i], vessel)) return false;
+                }
+            }
+            return OnVessel(reachTask != null ? reachTask.StandPoint : routeGoal, vessel);
+        }
+
+        private static bool OnVessel(Vector3 point, string vessel)
+        {
+            NpcVessels.FloorOwner(point, out string? owner, out _);
+            return owner == vessel;
+        }
+
+        private static string? DockedStation()
+        {
+            GameManager gm = GameManager.Instance;
+            string? station = gm != null && gm.PlayerShip != null ? gm.PlayerShip.Autopilot.DockedStation : null;
+            return string.IsNullOrEmpty(station) ? null : station;
+        }
+
+        // The station docked when the route began, or null.
+        private string? routeDock;
 
         private void FinishRoute()
         {
@@ -182,6 +234,7 @@ namespace YourBuddy
 
             agent.CommitPlan(plan, true);
             routeGoal = goal;
+            routeDock = DockedStation();
             mode = BuddyMode.Route;
             YourBuddyPlugin.Log.LogInfo($"[ai] Walking path ({plan.Count} waypoints)");
         }

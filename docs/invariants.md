@@ -189,6 +189,18 @@ too ("no sell station within 80m" of four boxes).
 
 **Enforced in.** `SellErrand.ConfirmSale`, `TryNextBox`, `FetchBlocker`, `StationBlocker`; `Items.InUnloadedRoom`.
 
+### an-undock-ends-a-route-off-the-ship
+
+**Rule.** When the station a route was planned under undocks, the route is checked once. If any
+waypoint left, or the leg's stand point, is not on the floor of the vessel the buddy stands on, the
+route ends. A route that stays aboard goes on.
+
+**Why.** A plan is world points. After an undock, the waypoints through the station lead to the shut
+outer airlock door. The buddy walked into it for good: bouncing off the door counted as progress, so
+no stall recovery fired.
+
+**Enforced in.** `BuddyBehaviour.RouteLostItsDock` (Modes.cs), called from `UpdateRoute`.
+
 ## Anomalies
 
 ### an-anomaly-puts-back-what-it-changed

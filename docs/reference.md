@@ -185,6 +185,7 @@ are in `ResourceDutySettings.cs`.
 | `SettleSeconds` | 1.5 s | an ejected cell comes to rest before it is fetched |
 | `InsertSeconds` / `SlotOffSeconds` | 5 s / 2 s | a released cell must enter the loader within; the slot is off after an eject |
 | `LegReachBelow` | 0.5 m | how far below the floor probe a leg's target may be |
+| `ShopFrontCos` | 0.7 | a purchase stands within about 45 degrees of the shop's front |
 
 ### Idle play - `PlayErrand.cs`
 

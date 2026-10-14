@@ -156,6 +156,7 @@ namespace YourBuddy
             {
                 agent.DropPlan();
                 routeGoal = leg.Node;
+                routeDock = DockedStation();
                 mode = BuddyMode.Route;
             }
             reachTask = leg;

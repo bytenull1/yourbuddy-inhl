@@ -22,6 +22,8 @@ not room atmosphere. The game's fixed transfer increments can overshoot the targ
 With Buying on and fewer than one usable matching cell aboard, Buddy recovers a loose
 station cell or buys one. A cell aboard he failed to reach in the last minute does not count. A shop cell priced over the allowance or your cash is named in the
 report with its price. Existing supplies are preferred; closed containers are not opened.
+Buddy buys from in front of the shop: he walks up to its outlet and does not stand at its side
+or back, where he would run into the machine.
 When a refill is due, the cell it recovers or buys goes straight into the loader; otherwise
 it is stored aboard as a spare.
 A run brings back one cell. Every purchase must fit both the remaining allowance and the
