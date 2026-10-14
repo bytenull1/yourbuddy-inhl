@@ -11,6 +11,7 @@ namespace UnityEngine
     public class Component
     {
         public Transform transform = null!;
+        public string name = "";
         public GameObject gameObject = new();
         public bool isActiveAndEnabled = true;
         public Dictionary<Type, object> Components = new();
@@ -229,6 +230,7 @@ namespace YourBuddy
         public abstract bool TryStart(out string report);
         public virtual string Describe() => "scheduled";
         public virtual bool Resuming => false;
+        protected virtual string? WhyIdle => null;
         protected bool MayPlanNow => !Body.PlannedThisFrame;
         protected enum SetOffResult { InReach, Walking, NoPlan, NoPlansLeft, Later }
         protected SetOffResult SetOff<T>(T leg, Action<T, NavPath?> begin, ref int plans, int max, ref string? failure, bool onePlanPerFrame = false) where T: ErrandLeg

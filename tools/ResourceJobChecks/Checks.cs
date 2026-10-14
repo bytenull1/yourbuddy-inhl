@@ -44,10 +44,16 @@ public sealed class Checks(ITestOutputHelper output)
             loader.Current = new ResourceContainer { Value = value };
             Check(job.Count(out _) == 1, "a spent cell does not block refilling");
         }
-        loader.Current = new ResourceContainer { Value = 10 };
+        loader.Current = new ResourceContainer { Value = 10, name = "Energy_Cell", transform = new() };
+        loader.Current.gameObject.activeInHierarchy = false;
         loader.Loading = true;
         Check(job.Count(out _) == 0, "a loader that is loading is not a refill candidate");
-        Check(ResourceDuty.Status.Contains("loader occupied"), "occupied diagnostic is precise");
+        Check(ResourceDuty.Status.Contains("loader occupied: it is loading 'Energy_Cell'") && !ResourceDuty.Status.Contains("lies at"),
+            "occupied diagnostic names the cell");
+        loader.Current.gameObject.activeInHierarchy = true;
+        job.Count(out _);
+        Check(ResourceDuty.Status.Contains("which also lies at"), "a held cell that is active in the world is called out");
+        loader.Current.gameObject.activeInHierarchy = false;
         job.DueAt = 0;
         Check(!job.TryStart(out string report) && report.Contains("loader occupied"), "start agrees with count and reports loader");
         Check(loader.Ejections == 0, "player cell left untouched");

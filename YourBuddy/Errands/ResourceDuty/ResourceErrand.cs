@@ -165,8 +165,29 @@ namespace YourBuddy
             // Only a cell that is loading blocks; a spent or idle one is dealt with at the loader.
             // docs/invariants.md#resource-duties-own-only-their-cell
             ResourceContainer? inserted = loader != null ? GameInternals.ResourceAccess.Current(loader) : null;
-            return inserted == null || inserted.Value <= 0 || !GameInternals.ResourceAccess.IsLoading(loader!)
-                ? null : "loader occupied: it is loading a cell";
+            if (inserted == null || inserted.Value <= 0 || !GameInternals.ResourceAccess.IsLoading(loader!)) return null;
+
+            // An inserted cell is inactive; an active one lies in the world while the loader still holds it.
+            return inserted.gameObject.activeInHierarchy
+                ? $"loader occupied: it is loading '{inserted.name}', which also lies at {inserted.transform.position:0.0}"
+                : $"loader occupied: it is loading '{inserted.name}'";
+        }
+
+        // For the HUD while due and idle: what blocks a refill, else each enabled level.
+        protected override string? WhyIdle
+        {
+            get
+            {
+                if (ship == null || loader == null) return null;
+                string levels = "";
+                for (int i = 0; i < ResourceKinds.Count; i++)
+                {
+                    if (ResourceDuty.Settings.Rule(i).Enabled) levels += $"{(levels.Length > 0 ? ", " : "")}{ResourceKinds.Label(i)} {Percent(i):0}%";
+                }
+                if (levels.Length == 0) return "no duty enabled";
+                return RefillBlocked() is { } blocked ? $"waiting: {blocked} ({levels})"
+                    : $"nothing to refill: {levels}, refills at {ResourceRule.Start}%";
+            }
         }
 
         // Whether a duty is due now; the decider's readiness does the scheduling. Waiting() keeps the
