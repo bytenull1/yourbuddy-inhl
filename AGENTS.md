@@ -9,6 +9,16 @@ Human contributors: see [CONTRIBUTING.md](CONTRIBUTING.md). The rules below appl
 
 ## 1. Where knowledge lives
 
+**Docs for where and why, code for what.**
+
+- To find code: `docs/architecture.md`, or the topic doc from `docs/README.md` (from a symptom:
+  `docs/troubleshooting.md`), then grep and read only the methods you need. Don't read whole files
+  or whole docs to orient yourself.
+- Before changing behaviour: read the topic doc and the `invariants.md` entries it links. Code does
+  not show why; a deliberate choice looks like a bug.
+- Code is the truth for what happens now, docs for what should. When they disagree, say so: code
+  that breaks an invariant is a bug; a description that drifted gets fixed in the same change (§4).
+
 - **[docs/README.md](docs/README.md)** - map of every doc. Load only the ones your task needs.
 - **[docs/architecture.md](docs/architecture.md)** - which two or three files matter. Start there
   instead of reading the codebase.
@@ -18,6 +28,11 @@ Human contributors: see [CONTRIBUTING.md](CONTRIBUTING.md). The rules below appl
   them, and how to read the scene (`tools/unityscene.py`).
 - **`LAST_SESSION.md`** - local, uncommitted hand-off: what the last session changed and what is
   still unverified.
+- **[NPC.Core](https://github.com/bytenull1/npc-core-inhl)** - navigation, probes, doors and the
+  walking agent. A separate repo with its own `AGENTS.md`. When a change spans both, push NPC.Core
+  first: YourBuddy links to it.
+- **Evidence in the game folder:** the log `BepInEx/LogOutput.log`, the player's node graph
+  `BepInEx/config/NPC.Core/nodegraph.json`, the shipped one `nodegraph.bundled.json` next to it.
 
 **One fact, one home.** Each rule is stated once, in `docs/invariants.md`. Code and other docs link
 to it. If you are about to explain something that already exists, link it instead.
@@ -51,6 +66,9 @@ For non-trivial investigations, answer with: **Verdict**, **Evidence**, **Root c
 **Validation** (expected and falsifying signal), **Docs to update**. Short questions and small edits
 don't need this.
 
+**Replies are short.** Lead with the answer, then the evidence that carries it. Offer more detail
+instead of writing it.
+
 ---
 
 ## 3. Code conventions
@@ -67,11 +85,25 @@ don't need this.
 - **Physics buffers** are pre-allocated and shared; use `NonAlloc` overloads.
 - **Nullable reference types** are on and warnings are errors. Each `!` carries a one-line comment
   naming the guard the compiler can't see; never silence a warning with `?.` or `??`.
+- **Mod code never breaks the game.** A failure, for example a member gone after a game update, is
+  logged; the game keeps running
+  ([NPC.Core invariants](https://github.com/bytenull1/npc-core-inhl/blob/main/docs/invariants.md#mod-code-never-throws-into-the-game)).
+- **One-off tools stay out of the repo.** A script used once to make an asset or fix data is not
+  committed; commit only tools someone will run again.
+- **Editing from a shell:** files are UTF-8 without BOM, LF in the repo; never
+  `Set-Content`, which re-encodes the file. Long Python goes into a script file, not a bash heredoc, which often fails to parse.
 
-**Build:** `dotnet build YourBuddy/YourBuddy.csproj -c Release` (and Debug) - both must build;
-`TreatWarningsAsErrors` is on. Then `python tools/doccheck.py`, which CI also runs: it fails on a
-broken doc link or anchor, or a `reference.md` constant that no longer matches the code. To test in game, copy `YourBuddy/bin/Release/netstandard2.1/YourBuddy.dll` to
-`BepInEx/plugins/`; the copy fails while the game is running.
+**Before you call a change safe**, run all of these; CI runs the same:
+
+1. `dotnet build YourBuddy/YourBuddy.csproj -c Release`, then `-c Debug`. Warnings are errors.
+2. The [check harnesses](CONTRIBUTING.md#check-harnesses): `dotnet test tools/<Name>/<Name>.csproj -c Release`.
+   A change to code a harness covers needs a check for it.
+   Stryker takes minutes per harness. Run it only when the work is about the checks themselves
+   (adding checks, judging their strength), not after every change.
+3. `python tools/doccheck.py`: broken doc links and anchors, `reference.md` constants out of date.
+
+To test in game, copy `YourBuddy/bin/Release/netstandard2.1/YourBuddy.dll` to `BepInEx/plugins/`;
+the copy fails while the game is running.
 
 ---
 
@@ -108,3 +140,7 @@ When you change behaviour:
 4. Keep anchors stable; code links to them. If you must rename a heading, update every link
    (`grep -r "old-anchor"`).
 5. Update `LAST_SESSION.md` (local): what changed, what is unverified, what to look for next.
+
+**`LAST_SESSION.md`** opens with a self-contained prompt for the next session: what to read, what
+is done (commit ids), what is next, the rules that still apply. Newest section first. Shrink a
+section to one line once it is committed and tested in game, and drop it when nothing in it is open.

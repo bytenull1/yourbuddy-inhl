@@ -1,7 +1,9 @@
 # YourBuddy Mod
 
-A BepInEx 5 plugin that adds a player-like NPC companion to Isolated Inhale - a fun stand-in for the
-multiplayer the game does not have.
+A BepInEx 5 plugin that adds a player-like NPC companion to Isolated Inhale.
+
+It was primarily created as a fun alternative to multiplayer, as the game's creator has
+no plans to add it anytime soon.
 
 In theory it should make you less anxious. In practice, after a long time alone, someone always nearby is a
 bit unnerving. Try it yourself.

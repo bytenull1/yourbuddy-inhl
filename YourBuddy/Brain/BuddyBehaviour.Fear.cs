@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using NPC.Core;
 using NPC.Core.Agents;
 using NPC.Core.Navigation;
