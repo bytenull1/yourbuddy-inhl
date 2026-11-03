@@ -35,11 +35,13 @@ bit unnerving. Try it yourself.
 
 ## Installation
 
-1. Install **[BepInEx 5](https://github.com/BepInEx/BepInEx/releases)** (Windows x64,
-   `BepInEx_win_x64_5.x.x.zip`), extracted next to `Isolated Inhale.exe`.
+1. Install **[BepInEx 5](https://github.com/BepInEx/BepInEx/releases)** next to the game's executable:
+   `BepInEx_win_x64_5.x.x.zip` on Windows, `BepInEx_linux_x64_5.x.x.zip` on Linux,
+   `BepInEx_macos_universal_5.x.x.zip` on macOS (next to the `.app`).
 2. Download the zip from [Releases](https://github.com/bytenull1/yourbuddy-inhl/releases) (contains
    `YourBuddy.dll` and `NPC.Core.dll`) and extract it into `BepInEx/plugins/`.
-3. Launch the game.
+3. Launch the game. On Linux and macOS, start it through `run_bepinex.sh`, with `executable_name` set to
+   the game's `.x86_64` file or `.app` folder.
 
 > To see the log while playing, set `Enabled = true` under `[Logging.Console]` in `BepInEx/config/BepInEx.cfg`.
 
