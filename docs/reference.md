@@ -88,6 +88,7 @@ See [behaviour.md §3](behaviour.md#3-the-decider).
 |---|---|---|
 | `OxygenDangerBelow` | 1950 | oxygen (1/100 %) below which it acts |
 | `ColdDangerBelow` / `HeatDangerAbove` | 1400 / 3200 | temperature (1/100 °C) bounds |
+| `OxygenRichAbove` | 3200 | oxygen (1/100 %) above which the air counts as bad for anomalies |
 | `TerminalRetryDelay` | 60 s | per unit, after a flip |
 | `TerminalVerifyDelay` | 1.5 s | then it checks the unit runs |
 

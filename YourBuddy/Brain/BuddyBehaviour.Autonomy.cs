@@ -164,8 +164,6 @@ namespace YourBuddy
             if (!YourBuddyPlugin.ConfigAutonomy.Value) return;
 
             ExpireOrder();
-            // Deadly air outranks an anomaly as it does an order. docs/invariants.md#survival-outranks-an-order
-            if (anomaly.HasValue && !vanished && !AnomalyInBackground && lifeSupport.AirIsDangerous()) EndAnomaly("the air is dangerous");
             if (!suit.Suited && lifeSupport.AirIsDangerous()) resources.Cancel("the air needs attention");
             if (TrySaveOwnLife()) return;
             if (ResumeChoice(player)) return;

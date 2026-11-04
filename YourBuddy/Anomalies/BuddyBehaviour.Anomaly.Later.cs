@@ -53,6 +53,8 @@ namespace YourBuddy
             Player? player = NpcPlayer.Pilot;
             if (player == null || player.Controller == null) return;
 
+            if (AirStopsAnomaly(player)) return;
+
             if (FlatDistance(player.Controller.CachedTransform.position, transform.position) > LaterLineDist) return;
 
             if (PlayerView.SeesBody(transform, agent.FloorUnderNpc())) return;
