@@ -210,7 +210,7 @@ namespace YourBuddy
             public bool StructureOff()
             {
                 CustomRoom room = Root.GetComponentInParent<CustomRoom>(true);
-                return room != null && !room.EnabledStructure;
+                return room != null && !room.Enabled;
             }
         }
 

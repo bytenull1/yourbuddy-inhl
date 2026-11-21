@@ -158,7 +158,8 @@ namespace YourBuddy
         {
             AddNames();
             GameInternals.PropAccess.ClearId(item);
-            GrabbableData data = new(_nextId++, item.name) { parentName = parent.name };
+            uint roomId = parent.parent != null && parent.parent.TryGetComponent(out Room room) ? room.EditorID : 0u;
+            GrabbableData data = new(_nextId++, roomId, item.name);
             data.GameObjectData.Position = parent.InverseTransformPoint(at);
             data.GameObjectData.Rotation = Quaternion.Inverse(parent.rotation) * rotation;
             item.Data = data;

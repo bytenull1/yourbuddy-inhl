@@ -99,12 +99,12 @@ namespace YourBuddy
             // Danger as the buddy feels it; the log shows the room.
             int temperature = body.FeltTemperature(env);
             if (oxygen < OxygenDangerBelow &&
-                TryStartTerminal(TerminalKind.Oxygen, ship.OxygenController, $"oxygen at {oxygen / 100f:0.0}%", false, out _))
+                TryStartTerminal(TerminalKind.Oxygen, FindTerminal<OxygenController>(ship), $"oxygen at {oxygen / 100f:0.0}%", false, out _))
             {
                 return true;
             }
             return (temperature < ColdDangerBelow || temperature > HeatDangerAbove) &&
-                   TryStartTerminal(TerminalKind.Climate, ship.ClimatController, $"temperature at {env.Data.Temperature / 100f:0.0}C", false, out _);
+                   TryStartTerminal(TerminalKind.Climate, FindTerminal<ClimateController>(ship), $"temperature at {env.Data.Temperature / 100f:0.0}C", false, out _);
         }
 
         /// <summary>
@@ -125,7 +125,7 @@ namespace YourBuddy
 
             // IsAboardPlayerShip is false without a player ship.
             SpaceShip ship = GameManager.Instance.PlayerShip!;
-            Controller? controller = kind == TerminalKind.Oxygen ? ship.OxygenController : ship.ClimatController;
+            Controller? controller = kind == TerminalKind.Oxygen ? FindTerminal<OxygenController>(ship) : FindTerminal<ClimateController>(ship);
             return TryStartTerminal(kind, controller, "you asked", true, out string report)
                 ? body.Name + " " + report
                 : "Not switching on the " + TerminalName(kind) + ": " + report;
@@ -134,6 +134,9 @@ namespace YourBuddy
         /// <summary>
         /// `forced` skips the retry timer and the blocker trace. `report` finishes a sentence either way.
         /// </summary>
+        private static T? FindTerminal<T>(SpaceShip ship) where T : Controller =>
+            ship.TryGetComponentInRooms(out T terminal) ? terminal : null;
+
         private bool TryStartTerminal(TerminalKind kind, Controller? controller, string why, bool forced, out string report)
         {
             string? blocker = TerminalBlocker(controller, out Switch? powerSwitch);
@@ -225,7 +228,7 @@ namespace YourBuddy
             if (controller == null || controller.Data == null) return "this ship has none";
 
             CustomRoom room = controller.GetComponentInParent<CustomRoom>(true);
-            if (room != null && !room.EnabledStructure) return "its room is not built";
+            if (room != null && !room.Enabled) return "its room is not built";
 
             if (controller.Data.broken) return "it is broken and needs a repair";
 

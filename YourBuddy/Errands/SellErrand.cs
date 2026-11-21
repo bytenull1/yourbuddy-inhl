@@ -99,12 +99,28 @@ namespace YourBuddy
         /// <summary>
         /// A sell station, read once. Where items go, who would be caught inside, its gate and button.
         /// </summary>
-        private sealed class SellStationParts(SellStation station, ItemDetector detector, BoxCollider zone,
+        private sealed class SellStationParts(SellStation station, InstantItemDetector detector, DetectionBox zone,
                                               InstantItemDetector? catchZone, Gate gate, Space.Button button)
         {
             public readonly SellStation Station = station;
-            public readonly ItemDetector Detector = detector;
-            public readonly BoxCollider Zone = zone;
+            public readonly InstantItemDetector Detector = detector;
+            private readonly DetectionBox Zone = zone;
+
+            public Bounds ZoneBounds
+            {
+                get
+                {
+                    Transform t = Detector.transform;
+                    Vector3 size = Zone.size;
+                    Vector3 right = t.right * size.x;
+                    Vector3 up = t.up * size.y;
+                    Vector3 forward = t.forward * size.z;
+                    return new Bounds(LoadPoint, new Vector3(
+                        Mathf.Abs(right.x) + Mathf.Abs(up.x) + Mathf.Abs(forward.x),
+                        Mathf.Abs(right.y) + Mathf.Abs(up.y) + Mathf.Abs(forward.y),
+                        Mathf.Abs(right.z) + Mathf.Abs(up.z) + Mathf.Abs(forward.z)));
+                }
+            }
             /// <summary>
             /// A player inside when the gate closes dies (SellStation.Sell). Null on a SellTerminal.
             /// </summary>
@@ -112,17 +128,17 @@ namespace YourBuddy
             public readonly Gate Gate = gate;
             public readonly Space.Button Button = button;
 
-            public bool Usable => Station != null && Station.isActiveAndEnabled && Zone != null && Button != null && Gate != null;
+            public bool Usable => Station != null && Station.isActiveAndEnabled && Detector != null && Button != null && Gate != null;
 
             /// <summary>
             /// Off only with its room's content, which StationBlocker loads again. Not an undocked station.
             /// </summary>
-            public bool Loadable => Station != null && Station.enabled && Zone != null && Items.Loadable(Station);
+            public bool Loadable => Station != null && Station.enabled && Detector != null && Items.Loadable(Station);
 
             /// <summary>
-            /// From the zone's transform, since a switched-off collider has empty bounds.
+            /// The center of the volume the game scans.
             /// </summary>
-            public Vector3 LoadPoint => Zone.transform.TransformPoint(Zone.center);
+            public Vector3 LoadPoint => Detector.transform.position + Detector.transform.TransformDirection(Zone.centerOffset);
 
             public Vector3 ButtonPoint => ColliderBounds(Button.gameObject, out Bounds bounds) ? bounds.center : Button.transform.position;
 
@@ -131,14 +147,14 @@ namespace YourBuddy
             /// </summary>
             public bool Covers(Vector3 point)
             {
-                Bounds bounds = Zone.bounds;
+                Bounds bounds = ZoneBounds;
                 const float clearance = SellPens.SellStationClearance;
                 return point.x > bounds.min.x - clearance && point.x < bounds.max.x + clearance &&
                        point.z > bounds.min.z - clearance && point.z < bounds.max.z + clearance &&
                        point.y > bounds.min.y - ReachTask.ReachHeight && point.y < bounds.max.y;
             }
 
-            public bool Holds(Grabbable item) => Detector.Items.Contains(item);
+            public bool Holds(Grabbable item) => Detector.GetItemsInZone().Contains(item);
 
             /// <summary>
             /// Boxes per press. SellMaxBoxes at the Shipyard, fewer at the transit stations, whose stations live
@@ -149,7 +165,7 @@ namespace YourBuddy
             /// <summary>
             /// Boxes still to fetch before the next press, MaxBoxes less what the zone already holds.
             /// </summary>
-            public int Room() => Mathf.Min(MaxBoxes, SellZoneMaxItems - Detector.Items.Count);
+            public int Room() => Mathf.Min(MaxBoxes, SellZoneMaxItems - Detector.GetItemsInZone().Count);
 
             private bool InShipyard()
             {
@@ -161,28 +177,27 @@ namespace YourBuddy
             }
 
             /// <summary>
-            /// The box stands in the cage whether or not the ItemDetector noticed it. Its list only
-            /// grows on a trigger crossing, and SellStation.Sell clears it outright. docs/items.md §4
+            /// Whether the center of the box is inside the cage. docs/items.md §4
             /// </summary>
-            private bool Encloses(Grabbable item)
+            public bool Encloses(Grabbable item)
             {
                 if (item == null) return false;
 
                 Vector3 point = ColliderBounds(item.gameObject, out Bounds bounds) ? bounds.center : item.transform.position;
-                return Zone.bounds.Contains(point);
+                return Detector.Contains(point);
             }
 
             /// <summary>
             /// Already the station's business, so never something to fetch. docs/items.md §4
             /// </summary>
-            public bool HasBox(Grabbable item) => Holds(item) || Encloses(item);
+            public bool HasBox(Grabbable item) => Encloses(item) || Holds(item);
 
             /// <summary>
             /// Something SellStation.Sell would sell that is not a trash box, i.e. the player's own things.
             /// </summary>
             public Grabbable? OtherSellable()
             {
-                foreach (Grabbable item in Detector.Items)
+                foreach (Grabbable item in Detector.GetItemsInZone())
                 {
                     if (item != null && item is { CanSell: true, Enabled: true } && item.Signature != TrashBoxSignature) return item;
                 }
@@ -191,12 +206,17 @@ namespace YourBuddy
 
             public static SellStationParts? Read(SellStation station)
             {
-                ItemDetector? detector = GameInternals.SellStationAccess.GetItemDetector(station);
+                InstantItemDetector? detector = GameInternals.SellStationAccess.GetItemDetector(station);
                 Gate? gate = GameInternals.SellStationAccess.GetGate(station);
                 Space.Button? button = GameInternals.SellStationAccess.GetSellButton(station);
-                if (detector == null || gate == null || button == null || !detector.TryGetComponent(out BoxCollider zone)) return null;
+                if (detector == null || gate == null || button == null ||
+                    GameInternals.SellStationAccess.GetDetectionBoxes(detector) is not { Count: 1 } boxes) return null;
 
-                return new SellStationParts(station, detector, zone, GameInternals.SellStationAccess.GetInstantDetector(station), gate, button);
+                Vector3 forward = detector.transform.forward;
+                if (detector.transform.up.y < 0.9999f ||
+                    Mathf.Max(Mathf.Abs(forward.x), Mathf.Abs(forward.z)) < 0.9999f) return null;
+
+                return new SellStationParts(station, detector, boxes[0], GameInternals.SellStationAccess.GetInstantDetector(station), gate, button);
             }
         }
 
@@ -243,7 +263,7 @@ namespace YourBuddy
             public int Left => Queue.Count + (Current != null ? 1 : 0);
 
             /// <summary>
-            /// After a sale. Sell emptied the zone and its list, so the next load starts from nothing.
+            /// After a sale. The next load starts from an empty zone.
             /// </summary>
             public void NextLoad()
             {
@@ -258,9 +278,10 @@ namespace YourBuddy
             public int InZone()
             {
                 int count = 0;
+                List<Grabbable> detected = Parts.Detector.GetItemsInZone();
                 foreach (Grabbable box in Loaded)
                 {
-                    if (box != null && box.gameObject.activeInHierarchy && Parts.Holds(box)) count++;
+                    if (box != null && box.gameObject.activeInHierarchy && detected.Contains(box)) count++;
                 }
                 return count;
             }
@@ -556,16 +577,22 @@ namespace YourBuddy
             Vector3 here = Here;
             float floorY = Body.FloorUnderBuddy().y;
 
+            Dictionary<Grabbable, SellStationParts> detectedAt = [];
             // A station whose room is off counts, since its room is loaded when a run uses it. docs/items.md §4
             foreach (SellStation station in AllStations())
             {
                 SellStationParts? parts = station != null ? SellStationParts.Read(station) : null;
-                if (parts != null && (parts.Usable || parts.Loadable)) SellStations.Add(parts);
+                if (parts == null || (!parts.Usable && !parts.Loadable)) continue;
+
+                SellStations.Add(parts);
+                if (!parts.Usable) continue;
+
+                foreach (Grabbable item in parts.Detector.GetItemsInZone()) detectedAt[item] = parts;
             }
             CollectContainerContents(here, SellSearchRadius + ContainerMargin);
             foreach (ItemDetector detector in SceneScan.ThisFrame<ItemDetector>())
             {
-                if (SellStationOf(detector) == null) PutAwayItems.UnionWith(detector.Items);
+                PutAwayItems.UnionWith(detector.Items);
             }
 
             foreach (Grabbable item in SceneScan.ThisFrame<Grabbable>())
@@ -580,10 +607,12 @@ namespace YourBuddy
                     skipped++;
                     continue;
                 }
-                SellStationParts? loadedIn = null;
-                foreach (SellStationParts parts in SellStations)
+                if (!detectedAt.TryGetValue(item, out SellStationParts? loadedIn))
                 {
-                    if (parts.HasBox(item)) loadedIn = parts;
+                    foreach (SellStationParts parts in SellStations)
+                    {
+                        if (parts.Encloses(item)) loadedIn = parts;
+                    }
                 }
                 SellCandidates.Add(new SellCandidate(item, loadedIn));
             }
@@ -594,15 +623,6 @@ namespace YourBuddy
         }
 
         private static SellStation[] AllStations() => SceneSweeps.Cached(ref _allStations, ref _allStationsAt, SellStationRescan);
-
-        private static SellStationParts? SellStationOf(ItemDetector detector)
-        {
-            foreach (SellStationParts parts in SellStations)
-            {
-                if (parts.Detector == detector) return parts;
-            }
-            return null;
-        }
 
         private SellStationParts? NearestSellStation(Vector3 from, out string? failure)
         {
@@ -725,11 +745,9 @@ namespace YourBuddy
                     break;
                 case SellPhase.Hold:
                     Body.Hands.Turn(task.DropRotation);
-                    // Listed from the first touch of the zone's edge. Let go only at the drop point, or
-                    // the box can rest across the edge, under the closing gate's AntiCrasher.
-                    if (task.Parts.Holds(task.Box) && Body.Hands.DistanceTo(task.DropPoint) < SellDropArrival)
+                    // The live detector sees the item only after Release restores its colliders.
+                    if (task.Parts.Encloses(task.Box) && Body.Hands.DistanceTo(task.DropPoint) < SellDropArrival)
                     {
-                        // Its colliders are already on, so the zone keeps it.
                         Body.Hands.Release();
                         YourBuddyPlugin.Log.LogInfo("[ai] Loaded the trash box into the sell station");
                         task.Phase = SellPhase.Settle;
@@ -743,6 +761,12 @@ namespace YourBuddy
                     return Vector3.zero;
                 case SellPhase.Settle:
                     if (Time.time < task.PhaseUntil) break;
+
+                    if (!task.Parts.Holds(task.Box))
+                    {
+                        AbandonBox(task, "the trash box fell out of the sell station", SellRetrySeconds);
+                        return Vector3.zero;
+                    }
 
                     // Loaded. Fetch the next box, or press for the lot once the zone is full. docs/items.md §4
                     if (task.Run.Current != null) task.Run.Loaded.Add(task.Run.Current);
@@ -776,7 +800,7 @@ namespace YourBuddy
                            MovedBlocker(ItemTop(task.Box), task.TargetPoint);
                 case SellLeg.Load:
                     // Settling, it has been let go on purpose.
-                    if (task.Phase == SellPhase.Settle) return task.Parts.Holds(task.Box) ? null : "it fell out of the sell station";
+                    if (task.Phase == SellPhase.Settle) return null;
 
                     return NotInHands(task.Box);
                 default:
@@ -795,7 +819,7 @@ namespace YourBuddy
         /// </summary>
         private bool LoadPlacement(SellTask task, out Vector3 point, out Quaternion rotation)
         {
-            Bounds zone = task.Parts.Zone.bounds;
+            Bounds zone = task.Parts.ZoneBounds;
             Vector3 size = BoxSize(task.Box);
             // Long side along x (yaw 0) or z (yaw 90), whichever fits more boxes in the zone.
             int cellsX = Mathf.FloorToInt((zone.size.x - 2f * SellSlotMargin + SellSlotGap) / (size.x + SellSlotGap));
@@ -814,7 +838,7 @@ namespace YourBuddy
             // Free of the boxes already in the zone, nearest to the buddy first (lowest layer, then the short reach).
             List<Bounds> taken = [];
             foreach (Grabbable other in task.Run.Loaded) AddTaken(taken, other, task.Box);
-            foreach (Grabbable other in task.Parts.Detector.Items) AddTaken(taken, other, task.Box);
+            foreach (Grabbable other in task.Parts.Detector.GetItemsInZone()) AddTaken(taken, other, task.Box);
 
             float bestReach = float.MaxValue;
             bool found = false;
@@ -924,8 +948,7 @@ namespace YourBuddy
                           $"leaving {SellRun.Count(run.Loaded.Count)} loaded", SellRetrySeconds);
                 return;
             }
-            // In the cage, but the detector never listed it, and SellStation.Sell pays for its own list only.
-            // Each box is loaded again once; the loop drops the ones that will not list, so it ends.
+            // Reseat each box the live sale scan misses at most once.
             while (BoxUnlisted(run) is { } unlisted)
             {
                 if (run.Reseated.Add(unlisted))
@@ -1012,7 +1035,7 @@ namespace YourBuddy
         private static Grabbable? BoxAstray(SellRun run, out string astray)
         {
             astray = "";
-            Bounds zone = run.Parts.Zone.bounds;
+            Bounds zone = run.Parts.ZoneBounds;
             foreach (Grabbable candidate in run.Loaded)
             {
                 if (candidate == null || !ColliderBounds(candidate.gameObject, out Bounds box)) continue;
@@ -1029,8 +1052,7 @@ namespace YourBuddy
         }
 
         /// <summary>
-        /// The first loaded box standing in the zone that the ItemDetector does not list, so a press
-        /// would walk past it. Its list only grows on a trigger crossing and Sell clears it outright.
+        /// The first loaded box the station's live sale scan cannot see.
         /// </summary>
         private static Grabbable? BoxUnlisted(SellRun run)
         {
@@ -1048,7 +1070,7 @@ namespace YourBuddy
         /// </summary>
         private string GateSurroundings(SellTask task)
         {
-            Bounds zone = task.Parts.Zone.bounds;
+            Bounds zone = task.Parts.ZoneBounds;
             // UNT0007: a Unity object comparison, not a null-coalescing one.
             Grabbable? worst = BoxAstray(task.Run, out _);
             if (worst == null && task.Run.Loaded.Count > 0) worst = task.Run.Loaded[0];

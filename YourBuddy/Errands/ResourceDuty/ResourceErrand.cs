@@ -54,8 +54,8 @@ namespace YourBuddy
         private int kind;
         private int nextKind;
         private SpaceShip? ship;
-        private ResourceController? loader;
-        private ResourceController? gatesOf;
+        private RefillController? loader;
+        private RefillController? gatesOf;
         private Airlock? loaderAirlock;
         private readonly List<Gate> loaderGates = [];
         private ResourceContainer? cell;
@@ -116,7 +116,7 @@ namespace YourBuddy
         private bool PrepareLoader()
         {
             if (!GameInternals.ResourceAccess.Ready) return Waiting("loader support unavailable");
-            loader = ship != null ? ship.CellController : null;
+            loader = ship != null ? ship.RefillController : null;
             if (loader == null || !loader.Initialized) return Waiting("ship loader is not initialized");
             slot = GameInternals.ResourceAccess.Slot(loader);
             if (slot == null || !Items.Loadable(slot)) return Waiting("ship loader room is unavailable");
@@ -708,7 +708,7 @@ namespace YourBuddy
                 Room? destination = leg.Floor != null ? leg.Floor.GetComponentInParent<Room>() : null;
                 if (destination != null)
                 {
-                    item.SetParent(destination.ContentParent);
+                    item.SetParentRoom(destination);
                     item.SavePosition();
                 }
                 YourBuddyPlugin.Log.LogInfo($"[resources] Stored {Label} cell at {leg.TargetPoint}");

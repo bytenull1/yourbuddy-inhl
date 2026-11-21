@@ -8,13 +8,9 @@ Test command: `buddy_order terminal <oxygen|climate>`.
 
 ## 1. What the game has
 
-Two units aboard the player ship, both `Controller : Powerable`, reached through
-`SpaceShip.OxygenController` and `SpaceShip.ClimatController` (sic):
-
-| Unit | Scene path | Power switch |
-|---|---|---|
-| `OxygenController` | `SpaceShip/Rooms/Core_L13E/Core_L13EContent/OxygenController` | child `Switch` |
-| `ClimateController` | `SpaceShip/Rooms/Front_R03/Front_R03Content/ClimatController` | child `Switch` (`Switch CF`, the °C/°F toggle, is one level deeper) |
+The buddy looks up the oxygen generator and climate controller in the rooms installed under
+`SpaceShip.RoomsParent`. Both are `Controller : Powerable` and have a child `Switch`.
+The climate controller also has a deeper `Switch CF` for units.
 
 A unit regulates while `Enabled`. The power `Switch`'s UnityEvents are wired to the controller in the
 scene.

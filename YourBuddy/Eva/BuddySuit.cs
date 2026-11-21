@@ -240,7 +240,10 @@ namespace YourBuddy
                 suit.Enabled = true;
                 Vector3 landing = body.Transform.position + body.Transform.forward * 0.8f + Vector3.up * 0.5f;
                 Transform? room = body.ItemParentAt(landing);
-                if (room != null) suit.SetParent(room);
+                if (room != null && room.parent != null && room.parent.TryGetComponent(out Room owner) && owner.ContentParent == room)
+                {
+                    suit.SetParentRoom(owner);
+                }
                 suit.Teleport(landing);
                 suit.UseGravity = true;
                 suit.AwakePhysics();
@@ -482,7 +485,10 @@ namespace YourBuddy
             GameManager? gm = GameManager.Instance;
             if (gm == null || gm.PlayerShip == null) return "there is no ship";
 
-            return gm.IsStaticWorldPosition && gm.IsStaticWorldRotation ? null : "the ship is moving, and the airlock stays locked";
+            ShipMovementManager? movement = gm.PlayerShip != null ? gm.PlayerShip.ShipMovementManager : null;
+            return gm.IsStaticWorld && (movement == null || movement.TotalCurrentSteer == 0f)
+                ? null
+                : "the ship is moving, and the airlock stays locked";
         }
 
         /// <summary>
