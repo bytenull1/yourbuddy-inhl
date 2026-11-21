@@ -62,8 +62,8 @@ The decompile and exports are the game developer's work and must never be commit
 ## Making a change
 
 - **Keep changes small** and focused on one problem.
-- **Build clean.** Debug and Release must both build; every warning is an error. The SDK is pinned
-  in `global.json` and the language version in the project file.
+- **Build clean.** Debug and Release must both build; every warning is an error. `global.json` asks for
+  any .NET 10 SDK; the project file pins the language version.
 - **Run the checks** CI runs: `python tools/doccheck.py` (doc links, anchors, `reference.md`
   constants) and the [check harnesses](#check-harnesses).
 - **Test in the game.** Say in the pull request what you tried. For navigation, test stairs and doorways

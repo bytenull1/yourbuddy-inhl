@@ -15,6 +15,16 @@ carrying), for the game state behind them and for several NPC mods at once are N
 
 ## Fear and orders
 
+### no-anomaly-in-bad-air
+
+**Rule.** In bad air (`LifeSupport.Bad`) where you or the buddy stands, no anomaly starts, a running one
+ends, and nothing is said for one later. Bad air is low oxygen, too much oxygen, cold or heat, by the room's
+values, whatever suit either of you wears. `Move` only asks about your air, since it leaves its own behind.
+
+**Why.** Air that is killing you is scare enough, and the buddy has to be free to fix it.
+
+**Enforced in.** `AirStopsAnomaly`, from `TryStartAnomaly`, `UpdateAnomaly`, `TickLaterLine` and `TitleOverride`.
+
 ### fear-owns-the-buddy
 
 **Rule.** While fear is above Calm the decider does nothing. While Scared, only `UpdateFear` enters

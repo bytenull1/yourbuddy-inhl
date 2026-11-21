@@ -47,7 +47,8 @@ start conditions below) is dropped and the draw repeats. If none fits, the next 
 `RetrySeconds` (20 s).
 
 Never while the talk window is open, you are outside, the Breathless is within `MonsterClearance`
-(25 m) of you, or another buddy is acting one out.
+(25 m) of you, or another buddy is acting one out. Never in bad air either, which `buddy_anomaly <kind>` obeys too
+([no-anomaly-in-bad-air](invariants.md#no-anomaly-in-bad-air)).
 
 ---
 
@@ -93,8 +94,8 @@ listening), `Background` (those three and the blood), `Lasting` (counts unseen, 
 `OwnCue` (witnessed only at its own moment).
 
 Fear ends any of them but a vanish, the blood and those three
-([fear-owns-the-buddy](invariants.md#fear-owns-the-buddy)). So does deadly air
-([survival-outranks-an-order](invariants.md#survival-outranks-an-order)). A running anomaly keeps the
+([fear-owns-the-buddy](invariants.md#fear-owns-the-buddy)). Bad air ends every one of them, a vanish too:
+it comes back at once, out of your sight if it can. A running anomaly keeps the
 decider standing down, except those that live in the background (`AnomalyInBackground`: the blood before
 it runs off, and the three).
 

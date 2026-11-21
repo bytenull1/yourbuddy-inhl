@@ -17,6 +17,7 @@ namespace YourBuddy
         private const int OxygenDangerBelow = 1950;
         private const int ColdDangerBelow = 1400;
         private const int HeatDangerAbove = 3200;
+        private const int OxygenRichAbove = 3200;
         private const float TerminalRetryDelay = 60f;
         private const float TerminalVerifyDelay = 1.5f;
 
@@ -75,6 +76,12 @@ namespace YourBuddy
             return env.Data.Oxygen < OxygenDangerBelow ||
                    temperature < ColdDangerBelow || temperature > HeatDangerAbove;
         }
+
+        /// <summary>
+        /// Air no anomaly plays in: the dangerous bands and too much oxygen. docs/invariants.md#no-anomaly-in-bad-air
+        /// </summary>
+        public bool Bad(Environment? env) =>
+            env != null && env.Data != null && (Dangerous(env) || env.Data.Oxygen > OxygenRichAbove);
 
         /// <summary>
         /// From the decider, once life support has won the round. True when the buddy set off for a terminal.

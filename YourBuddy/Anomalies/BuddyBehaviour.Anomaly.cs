@@ -99,7 +99,7 @@ namespace YourBuddy
         internal bool IgnoresYou => vanished || Anomalies.Has(anomaly, AnomalyTraits.IgnoresYou);
 
         /// <summary>
-        /// It changes only its looks, or runs a set piece elsewhere, so the decider, orders, fear and bad air go on around it.
+        /// It changes only its looks, or runs a set piece elsewhere, so the decider, orders and fear go on around it.
         /// docs/anomalies.md#2-the-anomalies
         /// </summary>
         private bool AnomalyInBackground => Anomalies.Has(anomaly, AnomalyTraits.Background);
@@ -107,7 +107,8 @@ namespace YourBuddy
         /// <summary>
         /// The title the talk window shows instead of its name, once. docs/anomalies.md#wrongname
         /// </summary>
-        internal string? TitleOverride => wrongTitle != null && Time.time < wrongTitleUntil ? wrongTitle : null;
+        internal string? TitleOverride =>
+            wrongTitle != null && Time.time < wrongTitleUntil && !(NpcPlayer.Pilot is { } player && AirStopsAnomaly(player)) ? wrongTitle : null;
 
         // Starting
 
@@ -154,6 +155,8 @@ namespace YourBuddy
 
             if (NpcAgent.IsPlayerInSpace(player)) return "you are outside";
 
+            if (AirStopsAnomaly(player, kind)) return "the air is bad";
+
             Transform you = player.Controller.CachedTransform;
             Vector3 feet = agent.FloorUnderNpc();
             Vector3 toYou = you.position - transform.position;
@@ -198,6 +201,16 @@ namespace YourBuddy
             YourBuddyPlugin.Log.LogInfo($"[anomaly] {Name}: {info.Name} ({info.Severity.ToString().ToLowerInvariant()}, " +
                                         $"{dist:0.0}m from you{(seen ? ", in your view" : ", out of sight")})");
             return null;
+        }
+
+        /// <summary>
+        /// Bad air where you or it stands. Move leaves its old room's air behind. docs/invariants.md#no-anomaly-in-bad-air
+        /// </summary>
+        private bool AirStopsAnomaly(Player player, AnomalyKind? kind = null)
+        {
+            if (!NpcAgent.IsPlayerInSpace(player) && lifeSupport.Bad(player.CurrentEnvironment)) return true;
+
+            return kind != AnomalyKind.Move && lifeSupport.Bad(agent.Air);
         }
 
         /// <summary>
@@ -429,6 +442,13 @@ namespace YourBuddy
             if (player == null || player.Controller == null) return;
 
             Transform you = player.Controller.CachedTransform;
+            if (AirStopsAnomaly(player, anomaly))
+            {
+                // Gone, it comes back out of your sight if it can.
+                if (vanished && HiddenSpotNear(you) is { } spot) MoveTo(spot);
+                EndAnomaly("the air is bad");
+                return;
+            }
             float now = Time.time;
             if (now >= anomalySightAt)
             {
@@ -584,10 +604,10 @@ namespace YourBuddy
                 BuddySkin.ApplyTexture(transform, goreTexture);
                 YourBuddyPlugin.Log.LogWarning($"[anomaly] {Name}'s blood was lost (its materials changed) - applying it again");
             }
-            // The run gives way to the Breathless and to bad air. docs/invariants.md#fear-owns-the-buddy
+            // The run gives way to the Breathless. docs/invariants.md#fear-owns-the-buddy
             if (anomalyWalking)
             {
-                if (fearState == FearState.Calm && !lifeSupport.AirIsDangerous()) return;
+                if (fearState == FearState.Calm) return;
 
                 StopAnomalyWalk();
                 anomalyStep = 0;

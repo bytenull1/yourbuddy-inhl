@@ -19,7 +19,6 @@ namespace YourBuddy
     /// </summary>
     [BepInPlugin("com.bytenull1.yourbuddy", "YourBuddy Mod", "1.0.9")]
     [BepInDependency(NpcCorePlugin.Guid, NpcCorePlugin.Version)]
-    [BepInProcess("Isolated Inhale.exe")]
     public sealed class YourBuddyPlugin : BaseUnityPlugin
     {
         private static YourBuddyPlugin Instance { get; set; }
