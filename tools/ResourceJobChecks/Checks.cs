@@ -18,10 +18,10 @@ public sealed class Checks(ITestOutputHelper output)
         void Check(bool condition, string name) { if (!condition) throw new Exception(name); checks++; }
         ItemDetector slot = new() { transform = new() };
         slot.Components[typeof(BoxCollider)] = new BoxCollider { bounds = new Bounds { extents = Vector3.one * .5f } };
-        ResourceController loader = new() { transform = new(), Slot = slot };
-        SpaceShip ship = new() { CellController = loader };
+        RefillController loader = new() { transform = new(), Slot = slot };
+        SpaceShip ship = new() { RefillController = loader };
         GameManager.Instance.PlayerShip = ship;
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         ResourceDuty.Settings.Oxygen.Enabled = true;
         IErrandBody body = new();
         ResourceErrand job = new(body);
@@ -96,7 +96,7 @@ public sealed class Checks(ITestOutputHelper output)
         Check(body.Hands.Item == null && ResourceDuty.Owner == null, "newly staged cell is not picked up from another slot");
         foreach (string resource in new[] { "oxygen", "fuel", "energy" })
         {
-            Reserve reserve = resource == "oxygen" ? ship.OxygenController : resource == "fuel" ? ship.FuelController : ship.ElectricityController;
+            Reserve reserve = resource == "oxygen" ? ship.OxygenManager : resource == "fuel" ? ship.FuelManager : ship.EnergyManager;
             reserve.Value = 100;
             Check(BuddyResourceDebug.Drain([resource]).Contains("drained to 20%") && reserve.Value == 20 && reserve.LastAmount == 80, "drain uses selected game API");
             int calls = reserve.Calls;
@@ -115,10 +115,10 @@ public sealed class Checks(ITestOutputHelper output)
         Check(BuddyResourceDebug.Drain([]).StartsWith("Usage"), "missing argument rejected");
         Check(BuddyResourceDebug.Drain(["food"]).StartsWith("Usage"), "unknown resource rejected");
         Check(BuddyResourceDebug.Drain(["fuel", "extra"]).StartsWith("Usage"), "extra argument rejected");
-        ship.FuelController.Value = 100;
+        ship.FuelManager.Value = 100;
         Check(BuddyResourceDebug.Drain(["FUEL"]).Contains("drained"), "resource argument is case insensitive");
         // A spent cell is taken out once Buddy is at the loader with a charged one.
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         slot.Items.Clear();
         Grabbable freshItem = new() { transform = new() };
         ResourceContainer fresh = new() { transform = freshItem.transform };
@@ -141,14 +141,14 @@ public sealed class Checks(ITestOutputHelper output)
         spare.Components[typeof(Grabbable)] = spareItem;
         SceneScan.Snapshot<ResourceContainer>.Items = [spare];
         loader.Current = null;
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         IErrandBody spareBody = new();
         ResourceErrand spareJob = new(spareBody);
         Check(spareJob.TryStart(out _) && spareBody.Leg != null, "refill starts for the spare check");
         spareBody.Leg!.Approach(out _); // Fetch leg: picks up and plans the insert leg.
         loader.Current = spare;
         spareBody.Leg!.Approach(out _); // Insert leg: the loader holds the cell; loading starts.
-        ship.OxygenController.Value = 90;
+        ship.OxygenManager.Value = 90;
         ejections = loader.Ejections;
         spareBody.Leg!.Approach(out _); // Target reached.
         Check(loader.Ejections == ejections + 1 && ResourceDuty.Owner == spareJob && spareBody.Leg!.Describe().StartsWith("putting away"),
@@ -157,12 +157,12 @@ public sealed class Checks(ITestOutputHelper output)
         spareBody.Leg!.Approach(out _); // Settled: plans the fetch.
         Check(spareBody.Leg!.Name == "resource cell", "settled cell is fetched for storage");
         spareJob.Cancel("check done");
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         ResourceDuty.Settings.Paused = false;
         // An idle charged cell of the due kind is loaded where it is, not ejected.
         ResourceContainer idle = new() { transform = new(), Type = ResourceType.Oxygen };
         loader.Current = idle;
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         ejections = loader.Ejections;
         IErrandBody idleBody = new();
         ResourceErrand idleJob = new(idleBody);
@@ -216,7 +216,7 @@ public sealed class Checks(ITestOutputHelper output)
         stuck.Components[typeof(Grabbable)] = stuckItem;
         SkipList.Skipped.Add(stuckItem.transform);
         SceneScan.Snapshot<ResourceContainer>.Items = [stuck];
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         ResourceDuty.Settings.Buying = true;
         NpcPlayer.Pilot = new Player();
         ResourceDuty.Settings.Budget = 1500;
@@ -236,7 +236,7 @@ public sealed class Checks(ITestOutputHelper output)
         cylinder.Components[typeof(ResourceContainer)] = new ResourceContainer { Type = ResourceType.Oxygen };
         SceneScan.Snapshot<Shop>.Items = [new Shop { transform = new(), Items = [cylinder] }];
         SceneScan.Snapshot<ResourceContainer>.Items = [];
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         ResourceDuty.Settings.Buying = true;
         ResourceDuty.Settings.Budget = 100;
         ResourceErrand shopJob = new(new IErrandBody());
@@ -250,7 +250,7 @@ public sealed class Checks(ITestOutputHelper output)
         far.Components[typeof(Grabbable)] = farItem;
         SceneScan.Snapshot<ResourceContainer>.Items = [far];
         loader.Current = null;
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         IErrandBody farBody = new() { Near = false };
         ResourceErrand farJob = new(farBody);
         Check(!farJob.TryStart(out string parked) && farJob.Resuming && farBody.Plans == 1 && farBody.Leg == null && parked.Contains("one plan a frame"),
@@ -275,7 +275,7 @@ public sealed class Checks(ITestOutputHelper output)
         ResourceStorage.Floor = p => p.x < 2.5f ? routeFloor : storageFloor;
         ResourceStorage.IsClear = true;
         loader.Current = null;
-        ship.OxygenController.Value = 100;
+        ship.OxygenManager.Value = 100;
         ResourceDuty.Settings.Buying = true;
         ResourceDuty.Settings.Budget = 1500;
         NpcPlayer.Pilot = new Player();
@@ -313,7 +313,7 @@ public sealed class Checks(ITestOutputHelper output)
         SceneScan.Snapshot<ResourceContainer>.Items = [ejectedCell];
         SceneScan.Snapshot<ItemDetector>.Items = [slot];
         loader.Current = null;
-        ship.OxygenController.Value = 20;
+        ship.OxygenManager.Value = 20;
         IErrandBody ejectedBody = new();
         ResourceErrand ejectedJob = new(ejectedBody);
         Check(ejectedJob.TryStart(out _) && ejectedBody.Leg?.Name == "resource cell", "a cell the slot still lists after ejecting it is a candidate");
@@ -339,7 +339,7 @@ public sealed class Checks(ITestOutputHelper output)
             ResourceStorage.Spots = [];
             ResourceStorage.Probes = int.MaxValue;
             Items.Blocker = item => null;
-            ship.OxygenController.Value = 20;
+            ship.OxygenManager.Value = 20;
             loader.Current = null;
             loader.Loading = false;
             slot.isActiveAndEnabled = true;
@@ -414,10 +414,10 @@ public sealed class Checks(ITestOutputHelper output)
 
         var target = Loading();
         ejectedBefore = loader.Ejections;
-        ship.OxygenController.Value = 79;
+        ship.OxygenManager.Value = 79;
         Step(target.Body);
         Check(ResourceDuty.Owner == target.Job && loader.Ejections == ejectedBefore, "below the target the loading goes on");
-        ship.OxygenController.Value = 80;
+        ship.OxygenManager.Value = 80;
         Step(target.Body);
         Check(loader.Ejections == ejectedBefore + 1 && ResourceDuty.Status.Contains("target reached"), "at the target the cell comes out as a spare");
         target.Job.Cancel("check done");
@@ -434,7 +434,7 @@ public sealed class Checks(ITestOutputHelper output)
         var full = Refill();
         Step(full.Body); // Reaches into the slot.
         full.Cell.LoadingSpeed = 50;
-        ship.OxygenController.Value = 60;
+        ship.OxygenManager.Value = 60;
         loader.Current = full.Cell;
         ejectedBefore = loader.Ejections;
         Step(full.Body);
@@ -579,7 +579,7 @@ public sealed class Checks(ITestOutputHelper output)
             stationCell.Components[typeof(Grabbable)] = item;
             NpcVessels.Owners[item.transform] = "station";
             SceneScan.Snapshot<ResourceContainer>.Items = [stationCell];
-            ship.OxygenController.Value = 100;
+            ship.OxygenManager.Value = 100;
             ResourceDuty.Settings.Buying = true;
             ResourceDuty.Settings.Budget = 1500;
             NpcPlayer.Pilot = new Player();
@@ -880,7 +880,7 @@ public sealed class Checks(ITestOutputHelper output)
         Calm();
 
         // Ship stock: only usable cells of the kind aboard count against a restock.
-        ship.OxygenController.Value = 100;
+        ship.OxygenManager.Value = 100;
         ResourceDuty.Settings.Buying = true;
         ResourceContainer stockDataless = MakeCell(new(1, 0, 0)), stockFuel = MakeCell(new(1, 0, 0), type: ResourceType.Fuel);
         ResourceContainer stockEmpty = MakeCell(new(1, 0, 0), 0), stockOff = MakeCell(new(1, 0, 0)), stockStation = MakeCell(new(1, 0, 0));
@@ -932,8 +932,8 @@ public sealed class Checks(ITestOutputHelper output)
 
         // Kinds take turns: after an oxygen run the next try goes on from fuel, then energy.
         ResourceDuty.Settings.Fuel.Enabled = ResourceDuty.Settings.Energy.Enabled = true;
-        ship.FuelController.Value = 20;
-        ship.ElectricityController.Value = 20;
+        ship.FuelManager.Value = 20;
+        ship.EnergyManager.Value = 20;
         SceneScan.Snapshot<ResourceContainer>.Items =
             [MakeCell(new(1, 0, 0), 10), MakeCell(new(2, 0, 0), 10, ResourceType.Fuel), MakeCell(new(3, 0, 0), 10, ResourceType.Energy)];
         IErrandBody turns = new();
@@ -943,12 +943,12 @@ public sealed class Checks(ITestOutputHelper output)
         Time.frameCount++;
         Check(turnJob.TryStart(out _) && turns.Leg?.Describe() == "refilling fuel", "the next try starts with fuel");
         turnJob.Cancel("check done");
-        ship.FuelController.Value = 100;
+        ship.FuelManager.Value = 100;
         Time.frameCount++;
         Check(turnJob.TryStart(out _) && turns.Leg?.Describe() == "refilling energy", "with fuel full, the next after fuel is energy, not oxygen");
         turnJob.Cancel("check done");
         ResourceDuty.Settings.Fuel.Enabled = ResourceDuty.Settings.Energy.Enabled = false;
-        ship.ElectricityController.Value = 100;
+        ship.EnergyManager.Value = 100;
         Calm();
 
         // A cell Buddy could not set down is held, duties paused, until a later try finds floor for it.
@@ -1033,9 +1033,9 @@ public sealed class Checks(ITestOutputHelper output)
 
         // More of TryStartDuty: each kind starts clean, reports why nothing started, and restocks only when it may.
         Calm();
-        ship.OxygenController.Value = 100;
+        ship.OxygenManager.Value = 100;
         ResourceDuty.Settings.Fuel.Enabled = true;
-        ship.FuelController.Value = 20;
+        ship.FuelManager.Value = 20;
         ResourceDuty.Settings.Buying = true;
         ResourceDuty.Settings.Budget = 1500;
         NpcPlayer.Pilot = new Player();
@@ -1044,9 +1044,9 @@ public sealed class Checks(ITestOutputHelper output)
         Check(new ResourceErrand(fueler).TryStart(out _) && fueler.Leg?.Describe() == "refilling fuel",
             "a failed oxygen restock leaves nothing behind for the fuel refill");
         ResourceDuty.Settings.Fuel.Enabled = false;
-        ship.FuelController.Value = 100;
+        ship.FuelManager.Value = 100;
         Calm();
-        ship.OxygenController.Value = 100;
+        ship.OxygenManager.Value = 100;
         ResourceDuty.Settings.Buying = true;
         NpcPlayer.Pilot = new Player();
         SceneScan.Snapshot<ResourceContainer>.Items = [];
@@ -1063,7 +1063,7 @@ public sealed class Checks(ITestOutputHelper output)
         Check(!new ResourceErrand(new IErrandBody()).TryStart(out _) && ResourceDuty.Status.Contains("loader occupied"),
             "a try for a due refill names the busy loader");
         Store(new Vector3(3, 0, 0));
-        ship.OxygenController.Value = 100;
+        ship.OxygenManager.Value = 100;
         ResourceDuty.Settings.Buying = true;
         ResourceDuty.Settings.Budget = 1500;
         NpcPlayer.Pilot = new Player();

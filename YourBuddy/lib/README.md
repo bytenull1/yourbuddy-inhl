@@ -3,9 +3,10 @@
 Put the DLLs the project compiles against here. They are **not** redistributed with the
 mod (`*.dll` in this folder is gitignored) - copy them out of your own game install.
 
-The project references them by `HintPath` into this folder, marked `Private=false`, so
-they are only used to compile and never copied into the build output. That matches what
-BepInEx already provides at runtime.
+The project references are compile-only and are never copied to the output. Use the assemblies
+from the Isolated Inhale 0.9.0 Mono build. To build directly against the installed game, set
+the `GameManagedDir` environment variable to the absolute path of `Isolated Inhale_Data/Managed`
+before running `dotnet build`. The BepInEx references still come from `lib/`.
 
 From `BepInEx/core/`:
 

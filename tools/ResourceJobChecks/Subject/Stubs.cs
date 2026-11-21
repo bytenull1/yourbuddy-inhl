@@ -68,7 +68,7 @@ public class Grabbable : Component
     public int BuyPrice = 50;
     public Transform? Parent;
     public int Saves;
-    public void SetParent(Transform t) { Parent = t; }
+    public void SetParentRoom(Room room) { Parent = room.ContentParent; }
     public void SavePosition() { Saves++; }
 }
 public class ResourceContainer : Component
@@ -77,7 +77,7 @@ public class ResourceContainer : Component
     public ResourceType Type;
     public int Value = 10, LoadingSpeed = 1;
 }
-public class ResourceController : Component
+public class RefillController : Component
 {
     public bool Initialized = true, Loading;
     public ResourceContainer? Current;
@@ -100,15 +100,15 @@ public class Reserve
     public bool Accept = true;
     public bool Reduce(int amount) { Calls++; LastAmount = amount; if (Accept) Value -= amount; return Accept; }
 }
-public class OxygenController : Reserve { public int RemainingOxygen => Value; public bool TryReduceOxygen(int n) => Reduce(n); }
-public class FuelController : Reserve { public int Fuel => Value; public bool TryConsumeFuel(int n) => Reduce(n); }
-public class ElectricityController : Reserve { public int Energy => Value; public bool TryReduceEnergy(int n) => Reduce(n); }
+public class OxygenManager : Reserve { public int RemainingOxygen => Value; public bool TryReduceOxygen(int n) => Reduce(n); }
+public class FuelManager : Reserve { public int Fuel => Value; public bool TryConsumeFuel(int n) => Reduce(n); }
+public class EnergyManager : Reserve { public int Energy => Value; public bool TryReduceEnergy(int n) => Reduce(n); }
 public class SpaceShip
 {
-    public ResourceController? CellController;
-    public OxygenController OxygenController = new();
-    public FuelController FuelController = new();
-    public ElectricityController ElectricityController = new();
+    public RefillController? RefillController;
+    public OxygenManager OxygenManager = new();
+    public FuelManager FuelManager = new();
+    public EnergyManager EnergyManager = new();
     public Pilot Autopilot = new();
 }
 public class Pilot { public string DockedStation = "station"; }
@@ -267,9 +267,9 @@ namespace YourBuddy
         internal static class ResourceAccess
         {
             internal static bool Ready = true;
-            internal static ItemDetector? Slot(ResourceController c) => c.Slot;
-            internal static ResourceContainer? Current(ResourceController c) => c.Current;
-            internal static bool IsLoading(ResourceController c) => c.Loading;
+            internal static ItemDetector? Slot(RefillController c) => c.Slot;
+            internal static ResourceContainer? Current(RefillController c) => c.Current;
+            internal static bool IsLoading(RefillController c) => c.Loading;
         }
         internal static class ShopAccess
         {

@@ -26,7 +26,8 @@ a `Trash_Box` (signature `TRASH_BOX`, sellable).
 or something `TurnToTrash` changed: used-up or spoiled `Food`, an empty `SeedPack`, a broken
 `LootBox`. A partly drained `ResourceContainer` is left alone (it may still hold resources).
 
-**Machines load items through `ItemDetector` zones** (sell station, furnace, airlocks, elevators).
+**Machines detect items by zone.** Sell stations use live overlap boxes. Machines with
+`ItemDetector` (such as the refill controller) keep a trigger list.
 What is in one was put there.
 
 **The sell station** (`SellStation`; at the Fuel, Oxygen, Shipyard and Solar stations) is a 2 × 2 m
@@ -111,8 +112,8 @@ a `SellTask`.
 1. **Candidates.** A `Trash_Box` not in hands, within `SellSearchRadius` flat, reachable, on the
    buddy's vessel, not in a container or other machine. A box **already in a sell station** counts
    too - it just needs the button. "Already in" (`SellStationParts.HasBox`) means listed by the
-   `ItemDetector` **or** inside the zone bounds: the detector's list is cleared by every sale, so a
-   box can sit there unlisted. A loose box needs a station within `SellStationRadius` - one whose
+   station's live sale scan **or** centered inside the detection volume. A loose box needs a
+   station within `SellStationRadius` - one whose
    room is switched off counts (see Unloaded rooms).
 2. **The run** (`BuildSellRun`): the chosen box plus every other candidate for the same station.
    Boxes already inside go straight into `Loaded`. One load is capped by `SellMaxBoxes` (4;
@@ -126,8 +127,8 @@ a `SellTask`.
    item's own detector zone, so `WakeStackedOn` also wakes, body included, everything lying on the box's
    old place and on that in turn (`AwakePhysics` + `Rigidbody.WakeUp`).
 5. **Load leg:** stand points 1.35 / 1.6 m from the zone centre, reach 1.8 m, never within 0.35 m of
-   the zone. Wait for the gate to be fully open (up to 20 s). The box reaches into the zone until the
-   `ItemDetector` lists it (1.5 s max), is let go, and settles 1 s. Then fetch the next box
+   the zone. Wait for the gate to be fully open (up to 20 s). The box has 1.5 s to get to its drop
+   point. After release and 1 s of settling, the live sale scan must find it. Then fetch the next box
    (`TryNextBox`), or go to the button once the zone is full or the queue is empty. Every box
    `TryNextBox` leaves out is logged with the reason.
 6. **Button leg:** terminal reach (stand points 0.8–1.4 m, reach 1.6 m), outside the station. Press
@@ -144,7 +145,8 @@ a `SellTask`.
    lie from the station. Queue empty: `TryStart` looks for new boxes around the buddy, with no
    `SellCheckInterval` wait; none, or no way to them, ends the errand.
 
-**Placement** (`LoadPlacement`). The Oxygen, Solar and Fuel zones are a 0.5 m cube and a trash box is
+**Placement** (`LoadPlacement`). The buddy loads stations with a single upright detection box
+aligned to the world axes. The Oxygen, Solar and Fuel zones are a 0.5 m cube and a trash box is
 0.375 x 0.1875 x 0.25 m: one box per layer, two stacked. A box at an angle or across the edge is not sold,
 so each box is turned upright and square to the zone (yaw 0, or 90 where that takes more boxes) and put in
 the first free slot of a grid of box footprints - lowest layer first, then nearest the buddy - with 2 cm

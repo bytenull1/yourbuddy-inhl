@@ -50,13 +50,13 @@ namespace YourBuddy
         internal static class ResourceAccess
         {
             private const string Feature = "resource duties";
-            private static readonly FieldInfo? Cell = Field<ResourceContainer>(typeof(ResourceController), "currentCell", Feature);
-            private static readonly FieldInfo? Detector = Field<ItemDetector>(typeof(ResourceController), "itemDetector", Feature);
-            private static readonly FieldInfo? Loading = Field<bool>(typeof(ResourceController), "loading", Feature);
+            private static readonly FieldInfo? Cell = Field<ResourceContainer>(typeof(RefillController), "currentCell", Feature);
+            private static readonly FieldInfo? Detector = Field<ItemDetector>(typeof(RefillController), "itemDetector", Feature);
+            private static readonly FieldInfo? Loading = Field<bool>(typeof(RefillController), "loading", Feature);
             internal static bool Ready => Cell != null && Detector != null && Loading != null;
-            internal static ResourceContainer? Current(ResourceController controller) => Get<ResourceContainer>(Cell, controller);
-            internal static ItemDetector? Slot(ResourceController controller) => Get<ItemDetector>(Detector, controller);
-            internal static bool IsLoading(ResourceController controller) => GetValue<bool>(Loading, controller) == true;
+            internal static ResourceContainer? Current(RefillController controller) => Get<ResourceContainer>(Cell, controller);
+            internal static ItemDetector? Slot(RefillController controller) => Get<ItemDetector>(Detector, controller);
+            internal static bool IsLoading(RefillController controller) => GetValue<bool>(Loading, controller) == true;
         }
 
         internal static class ShopAccess
@@ -215,12 +215,15 @@ namespace YourBuddy
         internal static class SellStationAccess
         {
             private const string Feature = "the buddy selling trash boxes";
-            private static readonly FieldInfo? ItemDetector = Field<ItemDetector>(typeof(SellStation), "itemDetector", Feature);
+            private static readonly FieldInfo? ItemDetector = Field<InstantItemDetector>(typeof(SellStation), "itemDetector", Feature);
             private static readonly FieldInfo? InstantDetector = Field<InstantItemDetector>(typeof(SellStation), "instantDetector", Feature);
             private static readonly FieldInfo? StationGate = Field<Gate>(typeof(SellStation), "gate", Feature);
             private static readonly FieldInfo? SellButton = Field<Space.Button>(typeof(SellStation), "sellButton", Feature);
 
-            internal static ItemDetector? GetItemDetector(SellStation? station) => Get<ItemDetector>(ItemDetector, station);
+            private static readonly FieldInfo? DetectionBoxes = Field<List<DetectionBox>>(typeof(InstantItemDetector), "detectionBoxes", Feature);
+
+            internal static InstantItemDetector? GetItemDetector(SellStation? station) => Get<InstantItemDetector>(ItemDetector, station);
+            internal static List<DetectionBox>? GetDetectionBoxes(InstantItemDetector detector) => Get<List<DetectionBox>>(DetectionBoxes, detector);
             internal static InstantItemDetector? GetInstantDetector(SellStation? station) => Get<InstantItemDetector>(InstantDetector, station);
             internal static Gate? GetGate(SellStation? station) => Get<Gate>(StationGate, station);
             internal static Space.Button? GetSellButton(SellStation? station) => Get<Space.Button>(SellButton, station);

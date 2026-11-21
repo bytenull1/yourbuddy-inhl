@@ -30,22 +30,22 @@ namespace YourBuddy
             switch (kind)
             {
                 case 0:
-                    if (ship.OxygenController == null) return false;
+                    if (ship.OxygenManager == null) return false;
 
-                    capacity = ship.OxygenController.Capacity;
-                    value = ship.OxygenController.RemainingOxygen;
+                    capacity = ship.OxygenManager.Capacity;
+                    value = ship.OxygenManager.RemainingOxygen;
                     return true;
                 case 1:
-                    if (ship.FuelController == null) return false;
+                    if (ship.FuelManager == null) return false;
 
-                    capacity = ship.FuelController.Capacity;
-                    value = ship.FuelController.Fuel;
+                    capacity = ship.FuelManager.Capacity;
+                    value = ship.FuelManager.Fuel;
                     return true;
                 default:
-                    if (ship.ElectricityController == null) return false;
+                    if (ship.EnergyManager == null) return false;
 
-                    capacity = ship.ElectricityController.Capacity;
-                    value = ship.ElectricityController.Energy;
+                    capacity = ship.EnergyManager.Capacity;
+                    value = ship.EnergyManager.Energy;
                     return true;
             }
         }
@@ -53,9 +53,9 @@ namespace YourBuddy
         // The game's own drain, for buddy_dev drain.
         internal static bool Reduce(SpaceShip ship, int kind, int amount) => kind switch
         {
-            0 => ship.OxygenController.TryReduceOxygen(amount),
-            1 => ship.FuelController.TryConsumeFuel(amount),
-            _ => ship.ElectricityController.TryReduceEnergy(amount),
+            0 => ship.OxygenManager.TryReduceOxygen(amount),
+            1 => ship.FuelManager.TryConsumeFuel(amount),
+            _ => ship.EnergyManager.TryReduceEnergy(amount),
         };
     }
 }
