@@ -67,7 +67,7 @@ namespace YourBuddy
 
             private StorageResult Search(bool walk, Grabbable? prospective)
             {
-                ResourceController? loader = job.loader;
+                RefillController? loader = job.loader;
                 if (loader == null || walks >= MaxStorageWalks) return StorageResult.None;
                 NpcHands hands = job.Body.Hands;
                 Vector3 size = hands.Item != null ? hands.Extents : Vector3.one * .15f;

@@ -223,7 +223,7 @@ namespace YourBuddy
             if (!agent.OnMyVessel(spot.transform)) return "it is not on the deck I am riding";
 
             CustomRoom room = spot.GetComponentInParent<CustomRoom>(true);
-            if (room != null && !room.EnabledStructure) return "its room is not built";
+            if (room != null && !room.Enabled) return "its room is not built";
 
             Door[] doors = spot.GetComponentsInChildren<Door>();
             if (doors.Length == 0) return "it has no doors";

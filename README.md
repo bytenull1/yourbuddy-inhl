@@ -1,6 +1,6 @@
 # YourBuddy Mod
 
-A BepInEx 5 plugin that adds a player-like NPC companion to Isolated Inhale.
+A BepInEx 5 plugin that adds a player-like NPC companion to Isolated Inhale 0.9.0 (Mono).
 
 It was primarily created as a fun alternative to multiplayer, as the game's creator has
 no plans to add it anytime soon.
@@ -27,8 +27,8 @@ bit unnerving. Try it yourself.
   friend you woke up with. What it does, and when, is left for you to find out. Nothing it does happens twice
   in a save. Harmless difficulty has none; Normal and Expert grow darker as the story goes on.
 - **Mortal.** Deadly air or the Breathless can kill it; the body is a ragdoll you can carry.
-- **Navigation** on a bundled nav graph for the ship and every station, with doors, stairs and an in-game
-  node editor.
+- **Navigation** on a bundled station graph, with doors, stairs and an in-game node editor.
+  On editor-built ships the buddy uses local movement and ship node editing is disabled.
 - **Saves** go to a `.buddy` file next to your save, so removing the mod leaves the save untouched.
 
 ---
@@ -238,7 +238,7 @@ are in [docs/](docs/README.md).
 
 ## When will the mod be updated?
 
-- If major updates break something important (tested on version v0.8.9).
+- If major updates break something important.
 - If the map changes (AI node updates, such as when ObservingStation is released).
 - If enemy behavior changes or new enemies are added (aggro on the NPC).
 - If the AI needs improvement (the main focus is on navigation, the set of supported actions, and behavior).
